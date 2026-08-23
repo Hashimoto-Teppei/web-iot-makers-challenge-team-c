@@ -1,0 +1,21 @@
+{
+  "name": "web-iot-makers-challenge-team-c",
+  "private": true,
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "biome check . && turbo lint",
+    "lint:fix": "biome check --write . && turbo lint",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.10",
+    "turbo": "2.10.11",
+    "typescript": "7.0.2"
+  }
+}
