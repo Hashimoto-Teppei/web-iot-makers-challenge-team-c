@@ -8,10 +8,11 @@
   "files": {
     "includes": [
       "**",
-      "!**/apps/device/**",
-      "!**/dist/**",
-      "!**/.wrangler/**",
-      "!**/worker-configuration.d.ts"
+      "!**/apps/device",
+      "!**/dist",
+      "!**/.wrangler",
+      "!**/worker-configuration.d.ts",
+      "!**/drizzle/migrations"
     ]
   },
   "formatter": {
