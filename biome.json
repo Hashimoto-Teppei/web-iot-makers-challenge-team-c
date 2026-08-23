@@ -8,9 +8,9 @@
   "files": {
     "includes": [
       "**",
-      "!**/apps/device/**",
-      "!**/dist/**",
-      "!**/.wrangler/**",
+      "!**/apps/device",
+      "!**/dist",
+      "!**/.wrangler",
       "!**/worker-configuration.d.ts"
     ]
   },
