@@ -111,9 +111,13 @@ pnpm test
 ```sh
 git switch main
 git pull
-git branch -d <消すブランチ名>
 git fetch --prune   # 削除済みのリモートブランチを手元からも消す
+git branch -D <消すブランチ名>
 ```
+
+`-D`（大文字）を使います。squash merge は複数のコミットを1つにまとめ直すため、
+Git から見ると**手元のブランチのコミットは main に入っていない**扱いになり、`-d`（小文字）では
+`not fully merged` と言われて消せません。**PR がマージ済みであることを確認してから** `-D` を使ってください。
 
 ## 4. 困ったとき
 
