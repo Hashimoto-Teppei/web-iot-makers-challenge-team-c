@@ -61,7 +61,8 @@ Raspberry Pi Zero W を搭載した自転車同士が Wi-Fi メッシュネッ�
 - ランタイム（Node, Python, pnpm, uv）は **`mise.toml` が唯一の情報源**。`.node-version` / `.python-version` を併置しない。
 - **Node は 24 系**。Wrangler が `>=22`、Vite 8 が `>=22.12` を要求するため 20 系に落とさない。
 - **`apps/mobile` の依存は `npx expo install` で入れる**。Expo SDK が React / React Native のバージョンを固定するため、`pnpm add` で latest を入れると壊れる。`apps/mobile` だけ React のバージョンが他とずれるのは正常。
-- **TypeScript は 7 系**（Go 製ネイティブコンパイラ）。Expo/Metro 周辺で問題が出たら `apps/mobile` だけ 5 系に固定し、経緯を ADR に追記する。
+- **TypeScript は 7 系**（Go 製ネイティブコンパイラ）。ただし **`apps/mobile` だけ 6 系**。
+  Expo SDK 57 のテンプレートが固定しており、`npx expo install` もこの系統を入れる。揃えにいかない。
 - ハッカソン期間中に大きなメジャーアップデートを取り込まない。
 
 ## 開発コマンド
