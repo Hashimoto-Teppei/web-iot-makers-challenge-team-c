@@ -176,8 +176,10 @@ docs/
 
 速度を優先しつつレビューは省かない。運用の理由は `docs/adr/0002-development-lifecycle.md`。
 
-- **`main` に直接コミットしない**。ブランチを切って PR 経由でマージする（squash merge）。
+- **`main` に直接コミットしない**。ブランチを切って PR 経由でマージする。
   GitHub 側のブランチ保護は設定していないため、**仕組みではなく運用で守る**。
+- **マージ方法は squash merge に固定されている**（リポジトリ設定で他の方法を無効化済み）。
+  マージ時にリモートのブランチは自動削除される。
 - **ブランチ名は `<種別>/<内容>`**（`feat/mesh-protocol`、`docs/ble-gatt`、`fix/gps-parse`）。
 - **PR タイトルが履歴になる**。squash merge のため、PR タイトルをそのままコミットメッセージとして読める形にする。
   `<種別>: <何をしたか>` で書く（種別は `feat` / `fix` / `docs` / `chore` / `refactor` / `test`）。
