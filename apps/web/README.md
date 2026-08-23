@@ -30,9 +30,39 @@ CORS の設定や API の URL を環境変数で配線する必要はない。
 | `pnpm typecheck` | 3つの tsconfig をそれぞれ型チェック |
 | `pnpm test` | Vitest。実際の Workers ランタイム（workerd）上で実行する |
 | `pnpm cf-typegen` | `wrangler.jsonc` から `worker-configuration.d.ts`（`Env` の型）を再生成 |
+| `pnpm db:generate` | スキーマの変更から SQL のマイグレーションを生成 |
+| `pnpm db:migrate:local` | ローカルの D1 にマイグレーションを適用 |
+| `pnpm db:migrate:remote` | Cloudflare 上の D1 に適用（**デプロイ担当のみ**） |
 | `pnpm deploy` | Cloudflare へデプロイ（**デプロイ担当のみ**） |
 
 `wrangler.jsonc` にバインディングを足したら `pnpm cf-typegen` を実行して `Env` を更新する。
+
+## データベース（D1 + Drizzle）
+
+D1 は Cloudflare の SQLite。テーブルの定義は `src/worker/db/schema.ts` に TypeScript で書き、
+そこから SQL のマイグレーションを生成する。**SQL を手で書かない。**
+
+```
+# 1. src/worker/db/schema.ts を編集する
+# 2. 差分から SQL を生成する（drizzle/migrations/ に増える）
+pnpm db:generate
+# 3. 手元の D1 に適用する
+pnpm db:migrate:local
+```
+
+生成された SQL はコミットする。他のメンバーは pull 後に `pnpm db:migrate:local` を実行すれば追いつける。
+
+ローカルの D1 の実体は `.wrangler/` の下にあり、gitignore 済み。壊れたら消して作り直してよい。
+
+### まだ Cloudflare 上に作っていない
+
+`wrangler.jsonc` の `database_id` は仮の値（ゼロ）。ローカル開発とテストはこの値を使わないため、
+このままで開発できる。実際のデータベースの作成と差し替えはデプロイ担当が行う（Issue #19）。
+
+### 今あるテーブルは仮のもの
+
+`pings` は D1 が動くことを確かめるためだけのテーブル。本来のテーブル設計は Issue #7 で決める。
+**ここにカラムを足していかないこと。**
 
 ## 型をモバイルと共有する
 
