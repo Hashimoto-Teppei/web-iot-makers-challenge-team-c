@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "team-c-web",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-08-20",
+  "compatibility_flags": ["nodejs_compat"],
+  // SPA なので、未知のパスは index.html を返す。これがないとリロードで 404 になる。
+  // 配信するディレクトリは @cloudflare/vite-plugin がビルド出力から決めるため、ここには書かない。
+  "assets": {
+    "not_found_handling": "single-page-application"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Worker 上には DOM がない。worker-configuration.d.ts が実行環境の型と Env を提供する。
+    "lib": ["ES2023"],
+    "types": []
+  },
+  "include": ["src/worker", "src/shared", "worker-configuration.d.ts"]
+}
