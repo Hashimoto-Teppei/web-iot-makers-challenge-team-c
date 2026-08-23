@@ -40,8 +40,6 @@ GPS の位置情報を交換して3つの危険を検知する。
 | `apps/web` | 画面と API（1つの Worker） | React / Vite / Hono / D1 / Drizzle |
 | `apps/mobile` | モバイルアプリ | Expo (React Native) |
 
-> `apps/` 配下は未着手。現在はモノレポのルート構成と CI まで整備済み。
-
 ## 開発をはじめる
 
 [mise](https://mise.jdx.dev/) でランタイムを揃える。Windows / macOS どちらでも同じ手順で動く。

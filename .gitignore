@@ -30,7 +30,12 @@ __pycache__/
 .expo/
 apps/mobile/android/
 apps/mobile/ios/
+# 署名鍵。漏れると誰でも同じアプリ名で偽物を配れる
 *.keystore
+*.jks
+*.p12
+*.p8
+*.mobileprovision
 !debug.keystore
 
 # 実走行の記録（位置情報は個人情報）
