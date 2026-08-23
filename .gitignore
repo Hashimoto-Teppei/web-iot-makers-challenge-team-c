@@ -1,0 +1,44 @@
+# 依存
+node_modules/
+.pnpm-store/
+
+# ビルド成果物
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# Cloudflare / Wrangler
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# 環境変数（public リポジトリのため実値は一切コミットしない）
+.env
+.env.*
+!.env.example
+
+# Python / uv
+__pycache__/
+*.py[cod]
+.venv/
+.ruff_cache/
+.pytest_cache/
+
+# Expo / React Native
+.expo/
+apps/mobile/android/
+apps/mobile/ios/
+*.keystore
+!debug.keystore
+
+# 実走行の記録（位置情報は個人情報）
+*.gpx
+data/recordings/
+
+# エディタ / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

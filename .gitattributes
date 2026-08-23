@@ -1,0 +1,7 @@
+* text=auto eol=lf
+
+# バイナリ
+*.png binary
+*.jpg binary
+*.keystore binary
+*.apk binary

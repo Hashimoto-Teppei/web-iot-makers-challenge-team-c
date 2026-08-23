@@ -1,0 +1,7 @@
+# ランタイムのバージョンはこのファイルが唯一の情報源。
+# Windows では shims 経由で動作し、[env] は自動適用されないため env に依存しない。
+[tools]
+node = "24"
+pnpm = "11"
+python = "3.12"
+uv = "latest"

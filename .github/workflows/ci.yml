@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# 同じ PR に続けて push したとき、古い実行を打ち切って待ち時間を減らす
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # TypeScript 側（apps/web, apps/mobile）
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # ランタイムのバージョンは mise.toml が唯一の情報源。ここで値を重複させない
+      - uses: jdx/mise-action@v4
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint / Format
+        run: pnpm exec biome ci .
+
+      - name: Typecheck
+        run: pnpm turbo typecheck
+
+      - name: Test
+        run: pnpm turbo test
+
+      - name: Build
+        run: pnpm turbo build
+
+  # Python 側（apps/device）。スキャフォールド前は自動でスキップされる
+  device:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: exists
+        run: echo "found=${{ hashFiles('apps/device/pyproject.toml') != '' }}" >> "$GITHUB_OUTPUT"
+
+      - if: steps.exists.outputs.found == 'true'
+        uses: jdx/mise-action@v4
+
+      - if: steps.exists.outputs.found == 'true'
+        working-directory: apps/device
+        run: uv sync --locked
+
+      - name: Lint / Format
+        if: steps.exists.outputs.found == 'true'
+        working-directory: apps/device
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Typecheck
+        if: steps.exists.outputs.found == 'true'
+        working-directory: apps/device
+        run: uv run basedpyright
+
+      - name: Test
+        if: steps.exists.outputs.found == 'true'
+        working-directory: apps/device
+        run: uv run pytest

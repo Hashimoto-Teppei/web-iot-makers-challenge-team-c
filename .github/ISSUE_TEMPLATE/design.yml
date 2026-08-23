@@ -1,0 +1,28 @@
+name: 設計の相談
+description: インターフェースや方式を決めたいとき（実装の前に合意を取る）
+labels: ["type:design", "needs-design"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        コンポーネントの境界（BLE GATT、メッシュのメッセージ、API、検知の入出力）に関わる決定は、
+        実装を始める前にここで相談します。**合意した内容は `docs/` を変更する PR にして残します。**
+
+  - type: textarea
+    id: decide
+    attributes:
+      label: 決めたいこと
+    validations:
+      required: true
+
+  - type: textarea
+    id: options
+    attributes:
+      label: 案
+      description: 思いつく選択肢と、それぞれの良し悪し。1案しかなくても構いません
+
+  - type: textarea
+    id: affects
+    attributes:
+      label: 影響する範囲
+      description: どのコンポーネント / 誰の作業に影響するか
