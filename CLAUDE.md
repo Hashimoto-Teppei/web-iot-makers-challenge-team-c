@@ -7,9 +7,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Web×IoTメイカーズチャレンジ（ハッカソン）チームCの開発リポジトリ。
 お題は「岡山県の課題をWeb×IoTで解決する」。チームCは**自転車**に着目し、岡山県の自転車利用率の高さと、交通ルール改正による違反取り締まり強化を背景に、**事故と違反を未然に防ぐ**ソリューションを開発する。
 
-**現状**: モノレポのルート構成（mise / pnpm / Turborepo / Biome / CI）と `apps/web` のスキャフォールドまで完了。
-`apps/device` / `apps/mobile` は未着手。実装が進んだらこのファイルを実態に合わせて更新すること。
-
 ## コアアイデア
 
 Raspberry Pi Zero W を搭載した自転車同士が Wi-Fi メッシュネットワークを構成し、GPS の位置情報を交換して以下3つの危険をリアルタイム検知する。
