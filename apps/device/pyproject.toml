@@ -1,0 +1,46 @@
+[project]
+name = "device"
+version = "0.1.0"
+description = "自転車に載せるデバイス（Raspberry Pi Zero W）の危険検知プログラム"
+requires-python = ">=3.12,<3.13"
+# 実行時の依存はまだない。BLE や GPS のライブラリは必要になった時点で追加する。
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "pytest>=8.4",
+  "ruff>=0.14",
+  "basedpyright>=1.31",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/device"]
+
+[tool.ruff]
+# Biome（TypeScript 側）と揃える。片方だけ違うと読むときに引っかかる。
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle
+  "F",   # Pyflakes
+  "I",   # import の並び順
+  "UP",  # 古い書き方を新しい構文へ
+  "B",   # よくあるバグの型
+  "SIM", # 冗長な書き方
+]
+
+[tool.basedpyright]
+include = ["src", "tests"]
+# 既定の "recommended" は指摘が非常に多く、開発が初めての人が手を止めてしまう。
+# まずは "standard" で始め、必要になったら段階的に上げる。
+typeCheckingMode = "standard"
+pythonVersion = "3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

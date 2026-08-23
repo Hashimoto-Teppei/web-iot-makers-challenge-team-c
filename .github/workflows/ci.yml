@@ -25,14 +25,16 @@ jobs:
       - name: Lint / Format
         run: pnpm exec biome ci .
 
+      # apps/device は下の device ジョブが uv で検証する。
+      # ここで除外しないと、同じ pytest / basedpyright が2回走る。
       - name: Typecheck
-        run: pnpm turbo typecheck
+        run: pnpm turbo typecheck --filter='!device'
 
       - name: Test
-        run: pnpm turbo test
+        run: pnpm turbo test --filter='!device'
 
       - name: Build
-        run: pnpm turbo build
+        run: pnpm turbo build --filter='!device'
 
   # Python 側（apps/device）。スキャフォールド前は自動でスキップされる
   device:
