@@ -8,10 +8,14 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.client.json && tsc -p tsconfig.worker.json && tsc -p tsconfig.node.json",
     "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply team-c-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply team-c-db --remote",
     "cf-typegen": "wrangler types",
     "deploy": "vite build && wrangler deploy"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.2",
     "hono": "^4.13.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
@@ -23,6 +27,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
+    "drizzle-kit": "^0.31.10",
     "vite": "^8.2.2",
     "vitest": "^4.1.11",
     "wrangler": "^4.125.0"

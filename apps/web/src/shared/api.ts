@@ -8,3 +8,10 @@ export type HealthResponse = {
   /** ISO 8601 形式の応答時刻 */
   timestamp: string;
 };
+
+/** D1 の疎通確認用。テーブル設計が決まったら差し替える（Issue #7）。 */
+export type Ping = {
+  id: number;
+  message: string;
+  createdAt: string;
+};

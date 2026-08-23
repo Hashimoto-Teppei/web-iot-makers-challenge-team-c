@@ -11,7 +11,8 @@
       "!**/apps/device",
       "!**/dist",
       "!**/.wrangler",
-      "!**/worker-configuration.d.ts"
+      "!**/worker-configuration.d.ts",
+      "!**/drizzle/migrations"
     ]
   },
   "formatter": {
