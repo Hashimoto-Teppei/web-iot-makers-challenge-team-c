@@ -1,0 +1,10 @@
+{
+  // 画面 / Worker / ビルド設定は動く環境が違うため、tsconfig を分けている。
+  // このファイルはエディタが迷わないための入口で、型チェックは pnpm typecheck が3つを個別に実行する。
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.client.json" },
+    { "path": "./tsconfig.worker.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}
