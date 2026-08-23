@@ -187,6 +187,8 @@ docs/
 - **レビューは2段階**。①`docs/` だけを変える設計 PR で合意 → ②実装 PR。
   小さな変更で①は省いてよいが、**コンポーネントの境界に触れる変更では省かない**。
 - **CI を通してからレビューを依頼する**。整形漏れや型エラーの指摘に人の時間を使わない。
+- **PR を出す前に `/code-review` を回す**。`gh pr create` はフックで止まる（`.claude/hooks/require-code-review.mjs`）。
+  回したら `node .claude/hooks/require-code-review.mjs --mark` で印を付ける。印はコミットごとに必要。
 - PR は小さく1つの関心事に絞る。承認1人でマージしてよい。
 - **デプロイ担当は1人に固定**。Cloudflare のアカウントと秘密値は担当者が保持し、他のメンバーは
   ローカルで `wrangler dev` を使う。CI で回すのは lint / typecheck / test / build までで、自動デプロイはしない。
