@@ -62,6 +62,7 @@ pnpm install
 
 | | 内容 |
 | --- | --- |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | 環境構築から PR までの手順。**開発が初めての人はここから** |
 | [CLAUDE.md](./CLAUDE.md) | 開発上の決まりごと（AI エージェント向けだが、人が読んでも開発方針がわかる） |
 | [docs/adr/](./docs/adr/) | 技術選定・設計判断とその理由 |
 | [docs/interfaces.md](./docs/interfaces.md) | コンポーネント間のインターフェース仕様 |
@@ -70,8 +71,10 @@ pnpm install
 
 ## 開発の進め方
 
+- タスクは [Issues](../../issues) で管理する。着手するときに自分をアサインする
 - `main` には直接コミットせず、PR 経由でマージする
 - 境界（インターフェース）に関わる変更は、`docs/` だけの PR で先に合意してから実装する
 - 実機での確認は待たずに進める。未確認の前提は `docs/unverified.md` に記録する
 
-詳細は [docs/adr/0002-development-lifecycle.md](./docs/adr/0002-development-lifecycle.md)。
+手順は [CONTRIBUTING.md](./CONTRIBUTING.md)、決めた理由は
+[docs/adr/0002-development-lifecycle.md](./docs/adr/0002-development-lifecycle.md)。

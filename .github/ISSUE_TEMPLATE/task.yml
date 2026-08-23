@@ -1,0 +1,44 @@
+name: タスク
+description: 実装・調査などのやること
+labels: ["type:task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        着手する人が読んだだけで動き出せる状態を目指して書いてください。
+        分解しきれない場合は、わかる範囲で書いて `needs-design` ラベルを付けてください。
+
+  - type: textarea
+    id: what
+    attributes:
+      label: やること
+      description: 何をするか。箇条書きで構いません
+    validations:
+      required: true
+
+  - type: textarea
+    id: done
+    attributes:
+      label: 完了条件
+      description: |
+        これが満たせたら終わり、という状態を書きます。
+        「動くようにする」ではなく「`pnpm dev` で画面が表示され、CI が通る」のように、
+        自分で確認できる形で書いてください。
+      placeholder: |
+        - [ ] 
+        - [ ] CI が通っている
+    validations:
+      required: true
+
+  - type: textarea
+    id: hints
+    attributes:
+      label: 手がかり
+      description: 参考になるドキュメント、触るファイル、注意点など。初めて触る人向けに書けると理想的です
+
+  - type: input
+    id: size
+    attributes:
+      label: 想定の大きさ
+      description: 半日以上かかりそうなら、Issue を分けられないか検討してください
+      placeholder: 半日 / 1日
