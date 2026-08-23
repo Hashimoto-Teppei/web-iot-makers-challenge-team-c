@@ -1,2 +1,8 @@
 packages:
   - "apps/*"
+
+# 依存のインストール時にビルドスクリプトの実行を許可するパッケージ。
+# pnpm 10 以降は既定で全て無効なので、必要なものだけを true にする。
+allowBuilds:
+  esbuild: true
+  workerd: true
