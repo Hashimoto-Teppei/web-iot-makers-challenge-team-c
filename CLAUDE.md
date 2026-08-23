@@ -31,12 +31,13 @@ Raspberry Pi Zero W を搭載した自転車同士が Wi-Fi メッシュネッ�
        |
    Bluetooth
        |
-[モバイルアプリ] --HTTPS--> [API サーバー] <--> [Web アプリ]
+[モバイルアプリ] --HTTPS--> [Cloudflare Worker]
+                            画面 + API + D1
 ```
 
 - **デバイス（Raspberry Pi Zero W）**: 危険検知とユーザーへの即時通知。Python で実装。
-- **モバイルアプリ**: Bluetooth でデバイスから検知ログ・走行ログを収集し、Web へ同期。
-- **API サーバー / Web アプリ**: 収集データの蓄積と活用。ハッカソンなので「データを活かした面白い見せ方」を重視する。
+- **モバイルアプリ**: Bluetooth でデバイスから検知ログ・走行ログを収集し、Worker へ同期。
+- **Worker**: 画面と API を兼ねる。収集データの蓄積と活用。ハッカソンなので「データを活かした面白い見せ方」を重視する。
 
 ### CHIRIMEN について
 
@@ -47,9 +48,8 @@ Raspberry Pi Zero W を搭載した自転車同士が Wi-Fi メッシュネッ�
 | 領域 | 採用 |
 | --- | --- |
 | デバイス | Python 3.12 / uv / Ruff / basedpyright / pytest |
-| API | Hono / Cloudflare Workers / D1 / Drizzle / Wrangler |
-| モバイル | Expo (SDK 57, React Native) |
-| Web | React / Vite / TypeScript / Cloudflare Workers (Static Assets) |
+| Web + API | React / Vite / Hono / Cloudflare Workers / D1 / Drizzle / Wrangler |
+| モバイル | Expo (SDK 57, React Native) — Android 主 |
 | 共通 | pnpm workspaces / Turborepo / Biome / Vitest / Zod |
 | バージョン管理 | mise |
 
@@ -67,10 +67,11 @@ Raspberry Pi Zero W を搭載した自転車同士が Wi-Fi メッシュネッ�
 
 ```
 apps/
-  device/    Python + uv。危険検知・メッシュ通信・BLE ペリフェラル
-  api/       Hono + Workers + D1 + Drizzle
-  mobile/    Expo
-  web/       React + Vite → Workers (Static Assets)
+  device/    Python + uv。危険検知・メッシュ通信・BLE ペリフェラル（Raspberry Pi 上で動作）
+  web/       React + Hono。画面と API を1つの Worker で担う
+    src/client/   React (Vite)
+    src/worker/   Hono + D1 + Drizzle
+  mobile/    Expo。Android 主、iOS は Mac 保有者のみ
 docs/
   adr/            技術選定・設計判断の記録
   interfaces.md   コンポーネント間インターフェース仕様
@@ -78,26 +79,58 @@ docs/
 ```
 
 `packages/` はまだ作らない。共有したいものが出ても、**2つ目の利用者が現れるまでは利用者側に置く**
-（Zod スキーマは当面 `apps/api/src/schemas/`、共有 tsconfig はルートの `tsconfig.base.json`）。
+（共有 tsconfig はルートの `tsconfig.base.json`）。
 
 ### 構成上の約束
 
+- **Web と API は1つの Worker（`apps/web`）にまとめる**。独自ドメインを取らないため `*.workers.dev` で運用するが、
+  Workers をパスで振り分けるにはゾーン（独自ドメイン）が要る。**単一オリジンにする手段が統合しかない**ため、
+  分離すると CORS 設定と API URL の配線が必ず発生する。`@cloudflare/vite-plugin` で Vite の HMR と
+  D1 バインディングが同じ dev サーバーに乗るので、ローカル開発も1コマンドで済む。
+- **`src/client/` と `src/worker/` を混ぜない**。画面担当と API 担当が同じパッケージを触るため、
+  境界が曖昧になるとコンフリクトする。共有したい型は `src/shared/` に置く。
+- **型の共有は Hono RPC**。`apps/web` が `AppType` を export し、`apps/mobile` は
+  型のみの devDependency として参照して `hc<AppType>()` でクライアントを作る。
 - **`apps/device` も pnpm workspace に含める**。Turborepo は `pnpm-workspace.yaml` からパッケージを検出するため、
   含めないと lint/test を横断実行できない。中身は依存ゼロで、scripts が `uv run` を呼ぶだけの `package.json` を置く。
   Python のツールチェーン自体は uv が管理し、pnpm は関与しない。
-- **型の共有は Hono RPC**。`apps/api` が `AppType` を export し、`apps/web` / `apps/mobile` が
-  型のみの devDependency として参照して `hc<AppType>()` でクライアントを作る。
-  スキーマを別パッケージに切り出す際は、そこから `AppType` を再 export しないこと（循環する）。
 - **Python 側は TypeScript のスキーマを参照できない**。デバイスと他コンポーネントの境界は BLE GATT 仕様であり、
   その正本は `docs/interfaces.md`。変更時は Python 実装・TypeScript 実装・ドキュメントの3つを揃える。
-- **`apps/mobile` は Expo Go では動かない**（BLE のネイティブモジュールが必要）。`npx expo run:android` / `run:ios` で
-  Development Build をローカルに作る。各自 Android Studio（iOS なら Mac + Xcode）のセットアップが要る。
-- **`apps/web` も Cloudflare Workers にデプロイする**。Pages ではなく Workers Static Assets を使い、
-  `wrangler.jsonc` の `assets.directory` に Vite のビルド出力を指し、`not_found_handling` を
-  `"single-page-application"` にする（SPA なのでこれがないとリロードで 404 になる）。
-- **独自ドメインは取得しない**。`*.workers.dev` のサブドメインで運用するため、`apps/web` と `apps/api` は別オリジンになる。
-  API 側に CORS の許可設定が要る（Hono の `cors()` ミドルウェア）。オリジンをコードに直書きせず設定として外に出す。
+- **`apps/mobile` は Expo Go では動かない**（BLE のネイティブモジュールが必要）。`npx expo run:android` で
+  Development Build をローカルに作る。
 - Biome / Turborepo / tsconfig のベース設定はルートに置き、各アプリは差分だけを持つ。Biome の対象から `apps/device` を除外する。
+
+## 開発環境（Windows / macOS 混在）
+
+メンバーの開発機は Windows と macOS が混在する。**どちらでも同じ手順で開発できることを壊さない。**
+
+- **シェル依存のコマンドを書かない**。`package.json` の scripts に `rm -rf`、`cp`、`&&` 前提の環境変数指定
+  （`FOO=bar cmd`）を書かない。環境変数が必要なら `cross-env`、ファイル操作が必要なら Node のスクリプトにする。
+- **パス区切りをハードコードしない**。Node は `path`、Python は `pathlib` を使う。
+- **改行コードは LF に統一する**（`.gitattributes` で強制）。混在すると Biome と Ruff の整形結果が環境ごとに変わり、
+  差分がノイズだらけになる。
+- **mise は Windows でも使う**。ただし Windows では shims 経由で動くため `mise.toml` の `[env]` が
+  自動適用されない。**環境変数に依存する設計にしないこと**（必要なら `mise run` 経由で実行する）。
+
+### OS 依存で分担する作業
+
+| 作業 | 実行できる環境 | 担当 |
+| --- | --- | --- |
+| Web / API / モバイル(Android) の開発 | Windows / macOS どちらも | 全員 |
+| Cloudflare へのデプロイ | どちらも可（担当を1人に固定） | デプロイ担当 |
+| iOS ビルド | macOS + Xcode のみ | Mac 保有者 |
+| `apps/device` のハードウェア層の実行 | Raspberry Pi 上のみ | 実機を持つ担当 |
+
+`apps/device` の BLE（BlueZ）と GPIO は Linux 専用で、Windows / macOS では動かない。
+開発機で回せるのは検知ロジックの pytest だけになるため、**ロジックとハードウェア層の分離は必須**（後述）。
+
+### モバイルの配布
+
+ストアに提出せず、端末へ直接インストールする。
+
+- **Android**: APK を配って各自インストールする。Windows / macOS どちらでもビルドできる。
+- **iOS**: 署名とプロビジョニングが必要で Mac + Xcode 必須。無料の Apple ID で署名した場合
+  **7日で失効して起動しなくなる**ため、デモ当日の直前に再インストールできる体制を用意しておくこと。
 
 ## 機密情報の扱い（public リポジトリ）
 
@@ -121,8 +154,12 @@ docs/
 複数人での並行開発が前提。
 
 - `main` は保護ブランチとして扱い、直接コミットしない。作業はブランチを切って PR 経由でマージする。
-- コンポーネント（デバイス / モバイル / API / Web）ごとに担当が分かれるため、**コンポーネント間のインターフェース（BLE の GATT 仕様、API スキーマ、メッシュのメッセージフォーマット）を先に決めてドキュメント化する**。ここが暗黙のまま並行実装が進むと確実に破綻する。
-- インターフェースを変更する場合は、影響を受けるコンポーネントの担当に伝わる形（PR の説明・ドキュメント更新）で行う。
+- 担当が分かれるため、**境界のインターフェースを先に決めてドキュメント化する**（`docs/interfaces.md`）。
+  ここが暗黙のまま並行実装が進むと確実に破綻する。変更する場合は、影響を受ける担当に伝わる形（PR の説明・ドキュメント更新）で行う。
+- **デプロイ担当は1人に固定する**。Cloudflare のアカウントと秘密値は担当者が保持し、他のメンバーはローカルで
+  `wrangler dev` を使う。CI（GitHub Actions）で回すのは lint / typecheck / test までとし、自動デプロイはしない。
+- **3つの危険検知は担当を分けて並行開発する**。同じファイルを複数人が触るとコンフリクトするため、
+  検知アルゴリズムは1つ1ファイルに分け、共通のインターフェースを先に決める（`docs/interfaces.md`）。
 
 ## 段階的に育てる前提（重要）
 
@@ -148,5 +185,13 @@ docs/
 
 ## 実装上の注意
 
-- **ハードウェア非依存でテストできるようにする**。実機（GPS モジュール、複数台のラズパイ）が常に手元にあるとは限らないため、危険検知ロジックはセンサー入出力から分離し、位置情報のモックデータで検証できる構造にする。ハッカソン期間中のデバッグ効率に直結する。
+- **ハードウェア非依存でテストできるようにする**。開発機は Windows / macOS で、BLE と GPIO は Linux 専用のため
+  そもそも動かない。**確保できるラズパイの台数も未定**（`docs/hardware.md`）。
+  危険検知ロジックはセンサー入出力から分離し、位置情報のモックデータだけで pytest を回せる構造にすること。
+  これは「あると便利」ではなく、**実機なしでは開発が止まる**という前提から来る必須要件。
+- **複数台を模すシミュレータを最初に用意する**。メッシュの検証には最低2台の実機が要るが台数が読めないため、
+  PC 上で仮想ノードを複数起動し、位置情報を流し込んで検知が発火するかを確認できるようにする。
+  実機が揃ってからシミュレータを作るのでは間に合わない。
+- **検知アルゴリズムは1つ1ファイル**に分け、共通インターフェース（入力: 自車と周辺車両の状態 / 出力: 警告 or なし）に揃える。
+  3つを別々の担当が並行実装するための境界であり、部品追加で4つ目が増えたときの受け口でもある。
 - 検知アルゴリズムのしきい値（接近速度、減速度、距離）はコードに直書きせず設定として外出しし、実地調整できるようにする。

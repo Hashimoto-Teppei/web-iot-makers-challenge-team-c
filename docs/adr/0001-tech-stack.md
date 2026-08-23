@@ -28,7 +28,7 @@ Turborepo は `pnpm-workspace.yaml` からパッケージを検出するため�
 当初は `packages/contracts`（Zod スキーマ）と `packages/tsconfig` を置く想定だったが、初期構成から外した。
 
 - `packages/tsconfig` は中身が tsconfig 1枚で、ルートの `tsconfig.base.json` で足りる。
-- Zod スキーマの利用者は当面 `apps/api` だけ。Hono RPC が型を伝播するので、クライアントは独立したスキーマを必要としない。
+- Zod スキーマの利用者は当面 `apps/web` だけ。Hono RPC が型を伝播するので、クライアントは独立したスキーマを必要としない。
 
 「まだ1種類しかないものを共通化しない」という方針をドキュメントに書いた以上、構成でも守る。
 2つ目の利用者が実際に現れた時点（例: モバイルが BLE 受信データを同じスキーマで検証したくなった時）に切り出す。
@@ -49,68 +49,74 @@ GPS・GPIO・BLE いずれもライブラリの選択肢と実績が Python に�
 - basedpyright: pyright ベースで、より厳格な型チェックをデフォルトで有効にできる
 - pytest: 検知ロジックをモックデータで検証するため
 
-### API: Hono + Cloudflare Workers + D1 + Drizzle
+### Web + API: React + Vite + Hono + D1 + Drizzle を1つの Worker に
 
-Workers は無料枠で常時稼働でき、デプロイが速く、ハッカソンのデモに向く。
-D1 は Workers と同一プラットフォーム上の SQLite で、別途 DB をプロビジョニングする手間がない。
-Drizzle は D1 を公式サポートし、マイグレーションを SQL として出力するため `wrangler d1 migrations apply` にそのまま乗る。
+Vite は起動と HMR が速く、改良サイクルを回す回数が多いハッカソンに向く。SSR が要らないため Next.js は採用しない。
+Workers は無料枠で常時稼働でき、デプロイが速い。D1 は Workers と同一プラットフォーム上の SQLite で、
+別途 DB をプロビジョニングする手間がない。Drizzle は D1 を公式サポートし、マイグレーションを SQL として
+出力するため `wrangler d1 migrations apply` にそのまま乗る。
+
+**Pages ではなく Workers Static Assets を使う。** Pages は静的サイト向けの Git 連携が主眼で、
+Cloudflare 自身も新規のフルスタック用途は Workers に寄せている。バインディングを足すときも Workers の方が素直。
+
+**独自ドメインは取得しない**（ハッカソンのため）。`*.workers.dev` で運用する。
+
+#### Web と API を分離しない — 2026-08-23 に「分離する」から変更
+
+当初の分離理由は「Web 担当と API 担当のデプロイを独立させるため」だったが、
+**デプロイ担当を1人に固定する方針が決まり、この根拠が失効した**ため統合に変更した。
+
+独自ドメインを取らない以上、`*.workers.dev` では Worker をパスで振り分けられない（ルーティングにはゾーンが要る）。
+つまり**単一オリジンにする手段は統合しかなく**、分離すると CORS 設定と API URL のビルド時配線が必ず発生する。
+統合すればどちらも不要になり、デモで見せる URL も1つで済む。
+
+`@cloudflare/vite-plugin` により、React の HMR と Worker（D1 バインディング付き）が同一の dev サーバーで動く。
+ローカル開発が `pnpm dev` 1コマンドになる点も大きい。
+
+複数人が同じパッケージを触ることになるが、`src/client/` と `src/worker/` を分けて衝突を避ける。
+分離が必要になれば、Worker を切り出して CORS を足せば戻せる。
 
 ### 型共有: Hono RPC (hc) + Zod
 
 Hono のルート定義から型が自動で伝播し、コード生成のステップが不要。
-モノレポ内に API とクライアントが同居しているという前提を満たすため採用できる。
 
-依存の向きを次のように固定し、循環を避ける:
+Web の画面は API と同じ Worker 内にあるため、型共有はパッケージ内で完結する。
+`apps/mobile` だけが `apps/web` を型のみの devDependency として参照し、`hc<AppType>()` でクライアントを作る。
 
 ```
-packages/contracts  (Zod スキーマのみ、依存なし)
-        ↑
-    apps/api  (AppType を export)
+apps/web  (src/worker が AppType を export)
         ↑ type-only
-apps/web, apps/mobile
+   apps/mobile
 ```
 
-`packages/contracts` から `AppType` を再 export すると `contracts → api → contracts` の循環になるため禁止。
+将来 Zod スキーマを `packages/contracts` に切り出す場合、そこから `AppType` を再 export しないこと
+（`contracts → web → contracts` の循環になる）。
 
-### モバイル: Expo (React Native) / ローカルビルド
+### モバイル: Expo / ローカルビルド / Android 主
 
-BLE のネイティブモジュールが必要なため Development Build が要る。EAS Build（クラウド）ではなくローカルビルドを選んだのは、
-ビルド待ち時間とアカウント準備を避けるため。各自 Android Studio（iOS を触るなら Mac + Xcode）のセットアップが要る点は
-トレードオフとして受け入れる。配布が問題になれば後から EAS Build を併用できる。
+BLE のネイティブモジュールが必要なため Development Build が要る。EAS Build（クラウド）ではなく
+ローカルビルドを選んだのは、ビルド待ち時間とアカウント準備を避けるため。配布が問題になれば後から併用できる。
 
-### Web: React + Vite + TypeScript → Cloudflare Workers
+ストアに提出せず端末へ直接インストールする前提のため、配布のしやすさが対象 OS の選定を左右した。
+Android は APK を配れば誰でもインストールでき、ビルドも Windows / macOS 双方で通る。
+iOS は署名とプロビジョニングが必要で Mac + Xcode 必須、かつ無料の Apple ID による署名は7日で失効し、
+デモ当日に起動しなくなるリスクがある。したがって **Android を主ターゲットとして機能の検証を完結させ**、
+iOS は Mac 保有者が対応する副系統と位置づける。
 
-Vite は起動とHMRが速く、改良サイクルを回す回数が多いハッカソンに向く。
-SSR が要らないため Next.js のような統合フレームワークは採用しない。
+### 開発環境: Windows / macOS の混在を前提にする
 
-デプロイ先は Cloudflare で統一する方針のため Workers。**Pages ではなく Workers Static Assets を使う**。
-Pages は静的サイト向けの Git 連携が主眼で、Cloudflare 自身も新規のフルスタック用途は Workers に寄せている。
-D1 などのバインディングを後から足すときも Workers の方が素直に繋がる。
+メンバーの開発機が混在するため、どちらでも同じ手順で開発できることを制約として扱う。
 
-**独自ドメインは取得しない**（ハッカソンのため）。`*.workers.dev` で運用する。
+mise は Windows でもネイティブに動作する（shims 経由）ため、両 OS で共通のバージョン管理手段として使える。
+ただし Windows では `mise.toml` の `[env]` が自動適用されないため、環境変数に依存する設計を避ける。
 
-### `apps/web` と `apps/api` を1つの Worker にまとめない
+改行コードは `.gitattributes` で LF に統一する。混在すると Biome と Ruff の整形結果が環境ごとに変わり、
+中身のない差分でレビューが埋まる。
 
-Workers Static Assets の `run_worker_first` を使えば、静的アセットと API を1つの Worker に同居させ、
-同一オリジンにして CORS を不要にできる。実際ドメインを取らない構成ではこれが最も手数が少ない。
-
-それでも分けたのは、**Web 担当と API 担当のデプロイを独立させるため**。
-同居させると片方の変更が他方のデプロイを巻き込み、並行開発で待ちが発生する。
-CORS は Hono の `cors()` ミドルウェア1行で済むので、コストとしては小さいと判断した。
-
-デモ用に URL を1つにまとめたくなった場合は、後から同居構成に寄せられる。
-
-### Lint/Format: Biome（JS/TS）、Ruff（Python）
-
-ESLint + Prettier の二重管理を避ける。Biome は単体で lint と format を賄い、設定ファイルが1つで済む。
-
-### TypeScript 7
-
-Go 製ネイティブコンパイラ版が stable。typecheck が大幅に速い。
-
-**リスク**: リリースから日が浅く、Expo/Metro 周辺のツールが追随していない可能性がある。
-問題が出た場合は `apps/mobile` のみ 5 系に固定して回避する（アプリごとに別バージョンを持てる構成のため局所化できる）。
-実際に問題が起きたら、その内容と対処をこの ADR に追記すること。
+`apps/device` の BLE（BlueZ）と GPIO は Linux 専用で、開発機ではそもそも動かない。
+確保できるラズパイの台数も未定であるため、**検知ロジックをハードウェアから分離し、
+PC 上のシミュレータとモックデータだけで検証できる状態を最初に作る**。
+これは設計の好みではなく、実機なしでは開発が止まるという制約から来ている。
 
 ### 機密情報: public リポジトリ前提
 
@@ -127,3 +133,5 @@ Go 製ネイティブコンパイラ版が stable。typecheck が大幅に速い
 
 - **Cloudflare Pages**: Git 連携とプレビューデプロイは魅力だが、静的サイト向けの位置づけであり、バインディングを足していく前提では Workers が素直。
 - **OpenAPI + 型生成**: 仕様が可視化される利点はあるが、生成ステップの運用コストがハッカソンの速度に見合わない。可視化は `docs/interfaces.md` で代替する。
+- **EAS Build**: クラウドビルドは配布が楽だが、待ち時間とアカウント準備を避けてローカルビルドを選んだ。必要になれば後から併用できる。
+- **CI からの自動デプロイ**: デプロイ担当が1人でデプロイ頻度も低いため、GitHub Actions に Cloudflare の認証情報を持たせる必要はない。public リポジトリで秘密値の露出面を増やさない方を優先した。
