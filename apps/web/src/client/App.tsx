@@ -8,7 +8,11 @@ export function App() {
   useEffect(() => {
     // 画面と API は同じ Worker（＝同じオリジン）にあるので、相対パスで呼べる。
     fetch("/api/health")
-      .then((res) => res.json() as Promise<HealthResponse>)
+      .then((res) => {
+        // ステータスを見ないと、エラーの JSON をそのまま正常な応答として表示してしまう。
+        if (!res.ok) throw new Error(`API が ${res.status} を返しました`);
+        return res.json() as Promise<HealthResponse>;
+      })
       .then(setHealth)
       .catch((e: unknown) => setError(String(e)));
   }, []);

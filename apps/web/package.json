@@ -9,7 +9,7 @@
     "typecheck": "tsc -p tsconfig.client.json && tsc -p tsconfig.worker.json && tsc -p tsconfig.node.json",
     "test": "vitest run",
     "cf-typegen": "wrangler types",
-    "deploy": "wrangler deploy"
+    "deploy": "vite build && wrangler deploy"
   },
   "dependencies": {
     "hono": "^4.13.3",
