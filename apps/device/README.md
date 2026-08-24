@@ -37,6 +37,7 @@ uv sync
 | --- | --- |
 | `src/device/detect/` | **判断する層。** 検知アルゴリズム。1つの検知につき1ファイル |
 | `src/device/hw/` | **ハードウェアに触る層。** 1つの部品につき1ファイル（`gps.py` / `led.py` / `switch.py` …） |
+| `src/device/notify.py` | 検知の結果をどう出すかの調停（`../../docs/notifications.md`）。ハードには触らない |
 | `src/device/main.py` | 起動と配線。どの部品の値をどの検知に渡し、結果をどこに出すかを決める |
 | `src/device/config.py` | しきい値などの設定 |
 | `src/device/` 直下 | どの層からも使う共通の計算（`geo.py` の距離計算など） |
