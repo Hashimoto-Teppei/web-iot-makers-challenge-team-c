@@ -86,12 +86,15 @@ mise の公式ドキュメントは、Windows では `mise activate`（macOS 側
 `node` は見つかりません。
 
 ```powershell
-[Environment]::SetEnvironmentVariable(
-  "Path",
-  "$env:LOCALAPPDATA\mise\shims;" + [Environment]::GetEnvironmentVariable("Path", "User"),
-  "User"
-)
+$shims = "$env:LOCALAPPDATA\mise\shims"
+$path  = [Environment]::GetEnvironmentVariable("Path", "User")
+if ($path -notlike "*$shims*") {
+  [Environment]::SetEnvironmentVariable("Path", "$shims;$path", "User")
+}
 ```
+
+`if` で囲んでいるのは、**2回実行しても PATH が重複しないようにするため**です。
+うまくいかないときにもう一度実行しても壊れません。
 
 > **`winget install` が PATH に通すのは `mise` 本体だけで、shims は含まれません。**
 > 公式ドキュメントにある「winget なら PATH は自動設定される」は本体のことです。
@@ -105,7 +108,8 @@ mise doctor
 ```
 
 出力に **`shims_on_path: yes`** と出れば、PATH の設定は成功しています。
-`no` のままなら、PowerShell を開き直したか、上のコマンドを実行したかを確認してください。
+`no` のままなら、**まず PowerShell を開き直してください**（PATH の変更は新しく開いた
+ウィンドウにしか反映されません）。それでも `no` なら、上のコマンドをもう一度実行します。
 
 #### Windows でもう1つだけ設定すること
 
@@ -216,16 +220,16 @@ http://localhost:5173 を開いて画面が出れば完了です。止めると�
 | Expo Tools | `app.json` などの補完 |
 
 `.vscode/settings.json` に保存時整形の設定が入っているので、追加の設定は要りません。
+Pylance の無効化（BasedPyright と警告が二重に出るため）もこの中で済ませています。
 
-### Python の型チェックが効かないとき
+### `apps/device` を触る人だけ、1つ設定します
 
 コマンドパレット（`Ctrl/Cmd + Shift + P`）で **Python: Select Interpreter** を開き、
 `apps/device/.venv` の Python を選んでください。`uv sync` が作った仮想環境の場所を
 VS Code に教える操作です（OS ごとにパスが違うため、設定ファイルには書けません）。
 
-Pylance が入っていると BasedPyright と二重に警告が出ます。
-**BasedPyright の公式は Pylance を無効化するか削除することを推奨しています**（併用も設定次第で可能ですが、
-まずは Pylance を無効にするのが簡単です）。
+**この操作をして初めて、エディタの Ruff と BasedPyright が CI と同じバージョンで動きます。**
+選ばないと拡張機能に同梱された別バージョンが使われ、手元では整形済みなのに CI が落ちることがあります。
 
 ---
 

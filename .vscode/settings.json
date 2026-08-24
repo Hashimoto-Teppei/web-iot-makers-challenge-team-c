@@ -26,6 +26,18 @@
     }
   },
 
+  // 拡張機能に同梱された ruff / basedpyright ではなく、apps/device/.venv の
+  // （＝ uv.lock で固定され、CI が使うのと同じ）バージョンを使わせる。
+  // 既定の "useBundled" のままだと、拡張機能が新しくなった時点でエディタの整形結果が
+  // CI とずれ、保存しただけで CI が落ちるようになる。
+  "ruff.importStrategy": "fromEnvironment",
+  "basedpyright.importStrategy": "fromEnvironment",
+
+  // Pylance を止める。ms-python.python を入れると一緒に入るが、
+  // basedpyright と同じ型チェックを二重に行い、警告が2つずつ出る。
+  // 個人の設定ではなくここに書くことで、全員が同じ状態になる。
+  "python.languageServer": "None",
+
   // import の並べ替え。Biome の assist と同じ動作をエディタ側でも行う
   "editor.codeActionsOnSave": {
     "source.organizeImports.biome": "explicit"
