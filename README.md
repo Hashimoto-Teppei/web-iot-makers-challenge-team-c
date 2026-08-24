@@ -42,7 +42,9 @@ GPS の位置情報を交換して3つの危険を検知する。
 
 ## 開発をはじめる
 
-[mise](https://mise.jdx.dev/) でランタイムを揃える。Windows / macOS どちらでも同じ手順で動く。
+**セットアップの手順は [docs/setup.md](./docs/setup.md)。** Windows / macOS どちらでも同じ手順で動く。
+
+[mise](https://mise.jdx.dev/) がランタイムをまとめて用意するので、Node や Python を個別に入れる必要はない。
 
 ```sh
 mise install     # Node / pnpm / Python / uv を mise.toml のとおりに用意
@@ -60,7 +62,8 @@ pnpm install
 
 | | 内容 |
 | --- | --- |
-| [CONTRIBUTING.md](./CONTRIBUTING.md) | 環境構築から PR までの手順。**開発が初めての人はここから** |
+| [docs/setup.md](./docs/setup.md) | 環境構築の手順。**まずここから** |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | Issue から PR・レビューまでの進め方。開発が初めての人向け |
 | [CLAUDE.md](./CLAUDE.md) | 開発上の決まりごと（AI エージェント向けだが、人が読んでも開発方針がわかる） |
 | [docs/adr/](./docs/adr/) | 技術選定・設計判断とその理由 |
 | [docs/interfaces.md](./docs/interfaces.md) | コンポーネント間のインターフェース仕様 |

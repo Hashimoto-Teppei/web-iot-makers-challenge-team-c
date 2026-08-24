@@ -1,0 +1,60 @@
+{
+  // チーム共通のエディタ設定。個人の好み（テーマ・フォントなど）はここではなく
+  // VS Code のユーザー設定に書くこと。
+  //
+  // 整形と lint の設定そのものはここに書かない。
+  // TypeScript は biome.json、Python は apps/device/pyproject.toml が正本で、
+  // CI もそちらを見る。ここに書くとエディタと CI で結果がずれる。
+
+  "editor.formatOnSave": true,
+  // .gitattributes で LF に固定しているのに合わせる（Windows でも LF で保存する）
+  "files.eol": "\n",
+
+  "[javascript]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[javascriptreact]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[typescript]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[typescriptreact]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[json]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[jsonc]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[css]": { "editor.defaultFormatter": "biomejs.biome" },
+
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+
+  // 拡張機能に同梱された ruff / basedpyright ではなく、apps/device/.venv の
+  // （＝ uv.lock で固定され、CI が使うのと同じ）バージョンを使わせる。
+  // 既定の "useBundled" のままだと、拡張機能が新しくなった時点でエディタの整形結果が
+  // CI とずれ、保存しただけで CI が落ちるようになる。
+  "ruff.importStrategy": "fromEnvironment",
+  "basedpyright.importStrategy": "fromEnvironment",
+
+  // Pylance を止める。ms-python.python を入れると一緒に入るが、
+  // basedpyright と同じ型チェックを二重に行い、警告が2つずつ出る。
+  // 個人の設定ではなくここに書くことで、全員が同じ状態になる。
+  "python.languageServer": "None",
+
+  // import の並べ替え。Biome の assist と同じ動作をエディタ側でも行う
+  "editor.codeActionsOnSave": {
+    "source.organizeImports.biome": "explicit"
+  },
+
+  // wrangler.jsonc はコメント付き JSON。JSON として開くとコメントがエラーになる
+  "files.associations": {
+    "wrangler.jsonc": "jsonc"
+  },
+
+  // 検索とファイルツリーのノイズを減らす
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.venv": true,
+    "**/.wrangler": true,
+    "**/pnpm-lock.yaml": true,
+    "**/uv.lock": true
+  }
+}

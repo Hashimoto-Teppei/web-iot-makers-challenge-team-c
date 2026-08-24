@@ -1,0 +1,17 @@
+{
+  // このリポジトリを開いたときに VS Code が導入を提案する拡張機能。
+  // 保存時の自動整形が効くようになり、CI で「整形漏れ」だけで落ちるのを防げる。
+  "recommendations": [
+    // TypeScript / JSON の整形と lint（設定は biome.json）
+    "biomejs.biome",
+    // Python の整形と lint（設定は apps/device/pyproject.toml）
+    "charliermarsh.ruff",
+    // Python の型チェック
+    "detachhead.basedpyright",
+    // Python 本体のサポート。同時に入る Pylance は settings.json 側で止めている
+    // （basedpyright と型チェックが二重になるため）
+    "ms-python.python",
+    // app.json / app.config.ts の補完
+    "expo.vscode-expo-tools"
+  ]
+}

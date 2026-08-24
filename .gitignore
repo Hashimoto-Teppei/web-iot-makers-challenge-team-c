@@ -51,4 +51,6 @@ data/recordings/
 .DS_Store
 .idea/
 .vscode/*
+# エディタ設定はチームで共有する（保存時整形を全員に効かせるため）
 !.vscode/extensions.json
+!.vscode/settings.json
