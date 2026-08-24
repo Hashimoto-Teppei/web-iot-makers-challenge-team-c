@@ -93,11 +93,11 @@ apps/
     src/worker/   Hono + D1 + Drizzle
   mobile/    Expo。Android 主、iOS は Mac 保有者のみ
 docs/
-  adr/            技術選定・設計判断の記録
-  interfaces.md   コンポーネント間インターフェース仕様
-  hardware.md     配線の正本（ピン割り当て・I2C アドレス・消費電流）
+  adr/             技術選定・設計判断の記録
+  interfaces.md    コンポーネント間インターフェース仕様
+  hardware.md      配線の正本（ピン割り当て・I2C アドレス・消費電流）
   notifications.md 検知結果の伝え方（警告と表示）
-  unverified.md   実機で未確認の前提
+  unverified.md    実機で未確認の前提
 ```
 
 `packages/` はまだ作らない。共有したいものが出ても、**2つ目の利用者が現れるまでは利用者側に置く**
