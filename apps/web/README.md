@@ -37,6 +37,19 @@ CORS の設定や API の URL を環境変数で配線する必要はない。
 
 `wrangler.jsonc` にバインディングを足したら `pnpm cf-typegen` を実行して `Env` を更新する。
 
+**Cloudflare のアカウントは要らない。** `pnpm dev` / `pnpm test` / `pnpm db:migrate:local` は
+すべてローカルの workerd と SQLite で動く。ログインが要るのは下の2つだけ。
+
+### デプロイ担当だけがやること
+
+```sh
+pnpm --filter web exec wrangler login   # ブラウザが開いて Cloudflare の認証をする
+```
+
+`db:migrate:remote` と `deploy` はここを済ませた担当者のみが実行する。
+秘密値は `wrangler secret put` で登録し、`wrangler.jsonc` には書かない（このリポジトリは public）。
+ローカル用の値は `.dev.vars`（gitignore 済み）に置く。
+
 ## データベース（D1 + Drizzle）
 
 D1 は Cloudflare の SQLite。テーブルの定義は `src/worker/db/schema.ts` に TypeScript で書き、
@@ -72,7 +85,5 @@ pnpm db:migrate:local
 
 ## 注意
 
-- **秘密値を `wrangler.jsonc` に書かない**（このリポジトリは public）。
-  ローカル用は `.dev.vars`（gitignore 済み）、本番は `wrangler secret put`。
 - `compatibility_date` はローカルの workerd が対応している日付までしか上げられない。
   上げてテストが `newest date supported by this server binary` で落ちたら、まず `wrangler` を更新する。

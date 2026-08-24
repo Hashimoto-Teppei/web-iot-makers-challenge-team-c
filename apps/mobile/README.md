@@ -9,10 +9,89 @@
 
 **Expo Go では動きません。** BLE のネイティブモジュールを使うため、Development Build を各自で作ります。
 
-1. Android Studio をセットアップする（Windows / macOS どちらでも可）
-2. エミュレータを起動するか、開発者オプションを有効にした実機を USB でつなぐ
-3. リポジトリのルートで `pnpm install`
-4. `pnpm --filter mobile android`（＝ `expo run:android`）
+**このアプリは担当を固定しています。** 触らない人はここのセットアップは不要です
+（`pnpm install` は依存を入れますが、それだけならビルド環境は要りません）。
+共通の環境構築は [`docs/setup.md`](../../docs/setup.md) を先に済ませてください。
+
+手順は [Expo 公式の環境構築ガイド](https://docs.expo.dev/get-started/set-up-your-environment/?mode=development-build&platform=android)
+に沿っています（最終確認 2026-08-25）。
+
+### 1. JDK 17 を入れる
+
+Android のビルドは JDK 17 でないと通りません（新しすぎても失敗します）。
+
+```sh
+brew install --cask zulu@17          # macOS
+```
+
+```powershell
+winget install Microsoft.OpenJDK.17  # Windows
+```
+
+`java -version` で 17 が出ることを確認します。
+
+- **macOS は、17 を入れただけでは切り替わりません。** 別のプロジェクトで新しい JDK を入れていると
+  そちらが使われます。手順3で `JAVA_HOME` を明示してください。
+- **Windows は winget が `JAVA_HOME` と `Path` まで設定します**（パッケージが `FeatureJavaHome` /
+  `FeatureEnvironment` 付きでインストールするため）。あとから別の JDK を入れたときだけ、手順3で直します。
+
+> Expo 公式は Windows に `choco install -y microsoft-openjdk17` を案内していますが、
+> 中身は同じ Microsoft Build of OpenJDK 17 です。このリポジトリは他のツールも winget で入れるため、
+> Chocolatey を増やさず winget に揃えています。
+
+### 2. Android Studio と SDK を入れる
+
+[公式サイト](https://developer.android.com/studio)からインストールし、
+**Settings > Languages & Frameworks > Android SDK** を開きます。
+
+`SDK Platforms` タブで右下の **Show Package Details** にチェックを入れ、次を選んで適用します。
+
+- Android SDK Platform 36
+- Sources for Android 36
+
+`SDK Tools` タブでは **Android SDK Build-Tools** と **Android Emulator** を入れます。
+
+### 3. 環境変数を設定する
+
+```sh
+# macOS: ~/.zshrc に追記してターミナルを開き直す
+export JAVA_HOME=$(/usr/libexec/java_home -v 17)
+export PATH=$JAVA_HOME/bin:$PATH
+export ANDROID_HOME=$HOME/Library/Android/sdk
+export PATH=$PATH:$ANDROID_HOME/emulator
+export PATH=$PATH:$ANDROID_HOME/platform-tools
+```
+
+`JAVA_HOME` を書くのは、**新しい JDK が入っていても 17 を使わせるため**です。
+Gradle はこの変数を見ます。書いたら `java -version` が 17 になることを確認してください。
+
+`/usr/libexec/java_home -v 17` は macOS 標準のコマンドで、入っている JDK 17 の場所を返します。
+Expo 公式は `/Library/Java/JavaVirtualMachines/zulu-17.jdk/Contents/Home` を直接書く案内ですが、
+こちらのほうが Zulu 以外を入れた場合でも壊れません。
+
+Windows は「システム環境変数の編集」から、ユーザー環境変数に次を追加します。
+
+- `ANDROID_HOME` = `%LOCALAPPDATA%\Android\Sdk`
+- `Path` に `%LOCALAPPDATA%\Android\Sdk\platform-tools` を追加
+- `Path` に `%LOCALAPPDATA%\Android\Sdk\emulator` を追加（エミュレータを使う場合）
+- あとから 17 以外の JDK を入れた場合は、`JAVA_HOME` を JDK 17 のパスに戻す
+  （winget で入れた直後は設定済みです）
+
+さらに `git config --global core.longpaths true` を済ませておきます
+（React Native のビルドは Windows のパス長制限 260 文字を超えます）。
+
+### 4. 端末を用意してビルドする
+
+エミュレータを起動するか、実機を USB でつなぎます。実機の場合は
+設定 > デバイス情報 > **ビルド番号を7回タップ**して開発者オプションを出し、**USB デバッグ**をオンにします。
+
+```sh
+adb devices                      # 端末が一覧に出れば認識されている
+pnpm install                     # リポジトリのルートで
+pnpm --filter mobile android     # ＝ expo run:android
+```
+
+`adb devices` に出ないときは、USB デバッグがオンか、ケーブルが**充電専用でない**かを確認します。
 
 **初回のネイティブビルドは非常に時間がかかります。** C++ のコンパイル（reanimated / worklets /
 expo-modules-core）が大半で、開発機によっては数時間かかることがあります（M シリーズの Mac で約7時間の実測あり）。

@@ -64,7 +64,7 @@ Raspberry Pi Zero W を搭載した自転車同士が Wi-Fi メッシュネッ�
 
 ## 開発コマンド
 
-初回は `mise install` でランタイムを揃えてから `pnpm install`。
+初回は `mise install` でランタイムを揃えてから `pnpm install`。手順の詳細は `docs/setup.md`。
 
 | コマンド | 内容 |
 | --- | --- |
@@ -93,6 +93,7 @@ apps/
     src/worker/   Hono + D1 + Drizzle
   mobile/    Expo。Android 主、iOS は Mac 保有者のみ
 docs/
+  setup.md         環境構築の手順（入れるツール・OS 差・トラブル対処）
   adr/             技術選定・設計判断の記録
   interfaces.md    コンポーネント間インターフェース仕様
   hardware.md      配線の正本（ピン割り当て・I2C アドレス・消費電流）
@@ -138,7 +139,8 @@ docs/
 
 | 作業 | 実行できる環境 | 担当 |
 | --- | --- | --- |
-| Web / API / モバイル(Android) の開発 | Windows / macOS どちらも | 全員 |
+| Web / API / デバイス（検知ロジック）の開発 | Windows / macOS どちらも | 全員 |
+| モバイル(Android) の開発 | Windows / macOS どちらも（Android Studio + JDK 17 が要る） | モバイル担当 |
 | Cloudflare へのデプロイ | どちらも可（担当を1人に固定） | デプロイ担当 |
 | iOS ビルド | macOS + Xcode のみ | Mac 保有者 |
 | `apps/device` のハードウェア層の実行 | Raspberry Pi 上のみ | 実機を持つ担当 |
@@ -259,7 +261,8 @@ docs/
 | | 書くこと |
 | --- | --- |
 | `README.md` | **外部向けの入口**。何を作っているか、どう動かすか。審査員や他チームが最初に読む |
-| `CONTRIBUTING.md` | **チーム向けの手順**。環境構築から PR まで。開発が初めての人が読む前提で書く |
+| `CONTRIBUTING.md` | **チーム向けの手順**。Issue から PR・レビューまで。開発が初めての人が読む前提で書く |
+| `docs/setup.md` | **環境構築の手順。** 入れるツール・OS ごとのコマンド・つまずいたときの対処 |
 | `CLAUDE.md` | **守るべき制約**。理由は書かず、ADR を参照する |
 | `docs/adr/` | **なぜそう決めたか**。決定を見直すときに読む |
 | `docs/interfaces.md` | コンポーネント間の境界仕様。実装と同じ PR で更新する |

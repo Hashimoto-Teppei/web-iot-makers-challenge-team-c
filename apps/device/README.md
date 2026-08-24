@@ -8,7 +8,8 @@
 
 ## 準備
 
-リポジトリのルートで `mise install` を済ませてから、このディレクトリで:
+リポジトリのルートで `mise install` を済ませてから（[`docs/setup.md`](../../docs/setup.md)）、
+このディレクトリで:
 
 ```
 uv sync

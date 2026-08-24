@@ -8,21 +8,25 @@
 
 ## 1. 環境をつくる
 
-必要なもの（Node、Python など）のバージョンは [mise](https://mise.jdx.dev/) がまとめて用意します。
-**個別にインストールしないでください。** バージョンがずれると原因のわかりにくい不具合が起きます。
+**手順は [docs/setup.md](./docs/setup.md) にあります。** 何を入れるか、OS ごとのコマンド、
+つまずいたときの対処までひととおり書いてあるので、初回はそちらを見てください。
+
+すでに環境がある人向けの要約だけ置いておきます。
 
 ```sh
-# mise を入れる（初回のみ）
-# macOS: brew install mise
-# Windows: winget install jdx.mise
-
-git clone git@github.com:Hashimoto-Teppei/web-iot-makers-challenge-team-c.git
+gh repo clone Hashimoto-Teppei/web-iot-makers-challenge-team-c
 cd web-iot-makers-challenge-team-c
 
 mise install     # Node / pnpm / Python / uv を用意する
 pnpm install     # プロジェクトの依存を入れる
 pnpm lint        # 動作確認。エラーが出なければ成功
 ```
+
+Node や Python の**バージョンは [mise](https://mise.jdx.dev/) がまとめて用意します。
+個別にインストールしないでください。** バージョンがずれると原因のわかりにくい不具合が起きます。
+
+VS Code を使う場合は、**開いたときに出る「推奨拡張機能をインストールしますか」に「はい」と答えてください。**
+保存するたびに自動で整形され、CI が整形漏れで落ちなくなります。
 
 うまくいかないときは、**エラーメッセージ全文をコピーして** Issue かチームのチャットに貼ってください。
 「動きません」だけでは誰も助けられませんが、エラー全文があればだいたい解決します。
@@ -154,7 +158,7 @@ Git から見ると**手元のブランチのコミットは main に入って�
 
 | 状況 | どうするか |
 | --- | --- |
-| 環境構築で詰まった | エラー全文を貼って聞く |
+| 環境構築で詰まった | [docs/setup.md](./docs/setup.md) の「うまくいかないとき」を見る。載っていなければエラー全文を貼って聞く |
 | 30分考えてわからない | 聞く。これは推奨されている行動です |
 | Issue の内容が理解できない | Issue にコメントする。書いた人の説明不足かもしれません |
 | 実装の方針で迷う | Draft PR か「設計の相談」Issue を立てる |

@@ -1,0 +1,48 @@
+{
+  // チーム共通のエディタ設定。個人の好み（テーマ・フォントなど）はここではなく
+  // VS Code のユーザー設定に書くこと。
+  //
+  // 整形と lint の設定そのものはここに書かない。
+  // TypeScript は biome.json、Python は apps/device/pyproject.toml が正本で、
+  // CI もそちらを見る。ここに書くとエディタと CI で結果がずれる。
+
+  "editor.formatOnSave": true,
+  // .gitattributes で LF に固定しているのに合わせる（Windows でも LF で保存する）
+  "files.eol": "\n",
+
+  "[javascript]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[javascriptreact]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[typescript]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[typescriptreact]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[json]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[jsonc]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[css]": { "editor.defaultFormatter": "biomejs.biome" },
+
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+
+  // import の並べ替え。Biome の assist と同じ動作をエディタ側でも行う
+  "editor.codeActionsOnSave": {
+    "source.organizeImports.biome": "explicit"
+  },
+
+  // wrangler.jsonc はコメント付き JSON。JSON として開くとコメントがエラーになる
+  "files.associations": {
+    "wrangler.jsonc": "jsonc"
+  },
+
+  // 検索とファイルツリーのノイズを減らす
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.venv": true,
+    "**/.wrangler": true,
+    "**/pnpm-lock.yaml": true,
+    "**/uv.lock": true
+  }
+}
