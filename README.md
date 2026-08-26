@@ -53,24 +53,41 @@ mise install     # Node / pnpm / Python / uv を mise.toml のとおりに用意
 pnpm install
 ```
 
+この2行だけは [docs/setup.md](./docs/setup.md) と重複させている。
+**外部の人が最初に読むファイルで「動かし方が1行も無い」状態を避けるため**の意図的な例外で、
+これ以上の手順はここに書き写さない（増やすと必ず setup.md とずれる）。
+
 | コマンド | 内容 |
 | --- | --- |
 | `pnpm dev` | 開発サーバー起動 |
-| `pnpm lint` | Lint / フォーマット確認 |
+| `pnpm lint` / `pnpm lint:fix` | Lint / フォーマット（`:fix` は自動で直せるものを直す） |
 | `pnpm typecheck` | 型チェック |
 | `pnpm test` | テスト |
+| `pnpm build` | ビルド |
+
+**`apps/device`（Python）だけは pnpm ではなく [uv](https://docs.astral.sh/uv/) が管理する**
+（`uv sync` / `uv run pytest` など）。担当になったときの手順は
+[docs/setup.md](./docs/setup.md) の「6. 担当が決まったら」。
 
 ## ドキュメント
 
-| | 内容 |
+**同じことを2箇所に書かない。** 下の表がそれぞれの担当範囲で、迷ったらここを見て置き場所を決める。
+
+| | 書くこと |
 | --- | --- |
-| [docs/setup.md](./docs/setup.md) | 環境構築の手順。**まずここから** |
-| [CONTRIBUTING.md](./CONTRIBUTING.md) | Issue から PR・レビューまでの進め方。開発が初めての人向け |
-| [CLAUDE.md](./CLAUDE.md) | 開発上の決まりごと（AI エージェント向けだが、人が読んでも開発方針がわかる） |
-| [docs/adr/](./docs/adr/) | 技術選定・設計判断とその理由 |
-| [docs/interfaces.md](./docs/interfaces.md) | コンポーネント間のインターフェース仕様 |
-| [docs/hardware.md](./docs/hardware.md) | ハードウェア構成 |
-| [docs/unverified.md](./docs/unverified.md) | 実機でまだ確認していない前提 |
+| このファイル（`README.md`） | **外部向けの入口。** 何を作っているか、どう動かすか。審査員や他チームが最初に読む |
+| [docs/setup.md](./docs/setup.md) | **環境構築の手順。** 入れるツール・OS ごとのコマンド・つまずいたときの対処。**まずここから** |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | **チーム向けの手順。** Issue から PR・レビューまで。開発が初めての人が読む前提で書く |
+| [CLAUDE.md](./CLAUDE.md) | **守るべき制約。** AI エージェント向けだが、人が読んでも開発方針がわかる。理由は書かず ADR を参照する |
+| [docs/adr/](./docs/adr/) | **なぜそう決めたか。** 決定を見直すときに読む |
+| [docs/interfaces.md](./docs/interfaces.md) | コンポーネント間の境界仕様。実装と同じ PR で更新する |
+| [docs/hardware.md](./docs/hardware.md) | **配線の正本。** 接続中の部品・ピン割り当て・I2C アドレス・消費電流。配線を変えたら必ず更新する |
+| [docs/notifications.md](./docs/notifications.md) | 検知結果をどう人に伝えるか。警告（本人向け）と表示（周囲向け）の境界 |
+| [docs/unverified.md](./docs/unverified.md) | 実機で確認していない前提。確認できたら行を消す |
+| [Issues](../../issues) | **これからやること。** 誰が・何を・どこまでやれば終わりか |
+
+**ドキュメントには決まったことを書き、これからやることは Issue に置く。**
+ドキュメントの中に作業リストはない（二重管理になり、どちらかが必ず古くなるため）。
 
 ## 開発の進め方
 
