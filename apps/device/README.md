@@ -3,7 +3,7 @@
 自転車に載せるデバイス（Raspberry Pi Zero W）のプログラム。Python で書く。
 
 **実機がなくても開発できます。** 手元の PC（Windows / macOS どちらでも）で
-`uv sync` → `uv run pytest` まで通ります。GPS や BLE などハードウェアに触る部分は後から足すもので、
+`uv sync` → `uv run pytest` まで通ります。BLE やセンサーなどハードウェアに触る部分は後から足すもので、
 検知ロジックそのものはモックデータだけでテストできる状態を保ちます。
 
 ## 準備
@@ -37,10 +37,11 @@ uv sync
 | | 中身 |
 | --- | --- |
 | `src/device/detect/` | **判断する層。** 検知アルゴリズム。1つの検知につき1ファイル |
-| `src/device/hw/` | **ハードウェアに触る層。** 1つの部品につき1ファイル（`gps.py` / `led.py` / `switch.py` …） |
+| `src/device/hw/` | **ハードウェアに触る層。** 1つの部品につき1ファイル（`ble.py` / `led.py` / `switch.py` …） |
+| `src/device/v2v.py` | **車車間の位置共有。** スマホから届いた自車と周辺車両の位置を検証して保つ（`../../docs/interfaces.md`）。**BLE を知らないので開発機でもテストできる** |
 | `src/device/notify.py` | 検知の結果をどう出すかの調停（`../../docs/notifications.md`）。ハードには触らない |
 | `src/device/main.py` | 起動と配線。どの部品の値をどの検知に渡し、結果をどこに出すかを決める |
-| `src/device/config.py` | しきい値と**ピン番号**の設定。どちらもコードに直書きしない |
+| `src/device/config.py` | しきい値・**ピン番号**・失効やウォッチドッグの秒数などの設定。コードに直書きしない。**秘密値は置かない** — このファイルはコミットされる |
 | `src/device/` 直下 | どの層からも使う共通の計算（`geo.py` の距離計算など） |
 | `tests/` | テスト |
 
@@ -49,6 +50,11 @@ uv sync
 
 `hw` は hardware の略です。`io` にしないのは、Python の標準ライブラリに同名の `io` があり、
 読むときにどちらか分からなくなるためです。
+
+**位置情報はデバイスでは測りません。** スマホが測位して BLE で送ってきます
+（`../../docs/adr/0004-v2v-transport.md`）。`hw/gps.py` は作りません。
+BlueZ を触る `hw/ble.py` は Linux 専用ですが、**受け取ったあとの処理はすべて `v2v.py` 側**にあるので、
+開発機（Windows / macOS）でも pytest で確かめられます。
 
 実機での起動は `uv run python -m device.main`（ラズパイ上でのみ動きます）。
 

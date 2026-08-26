@@ -54,7 +54,7 @@ Issue を選ぶ → 自分にアサイン → ブランチを切る → 実装 �
 ```sh
 git switch main
 git pull
-git switch -c feat/mesh-protocol
+git switch -c feat/v2v-protocol
 ```
 
 種別は `feat`（機能追加） / `fix`（不具合修正） / `docs`（ドキュメント） / `chore`（設定など） / `refactor` / `test`。
@@ -170,7 +170,7 @@ Git から見ると**手元のブランチのコミットは main に入って�
   絶対にコミットしないでください。詳細は [CLAUDE.md](./CLAUDE.md) の「機密情報の扱い」。
 - **実機（ラズパイ）での確認は待たなくて構いません。** これは方針です。
   ただし「実機で確かめていない前提」を置いたときは [docs/unverified.md](./docs/unverified.md) に1行足してください。
-- **コンポーネントの境界に関わる変更**（BLE の仕様、API、メッシュのメッセージ、検知の入出力）は、
+- **コンポーネントの境界に関わる変更**（BLE の仕様、API、車車間通信のメッセージ、検知の入出力）は、
   実装の前に「設計の相談」Issue で合意してください。ここは他の人の作業に直結します。
 
 ---
