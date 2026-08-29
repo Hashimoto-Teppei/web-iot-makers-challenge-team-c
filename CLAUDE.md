@@ -12,7 +12,7 @@ Web×IoT メイカーズチャレンジ（ハッカソン）チームCのリポ�
 
 ```
 [自転車デバイス] <--BLE 常時接続--> [モバイルアプリ] <--HTTPS--> [Cloudflare Worker]
-                                                                画面 + API + D1
+                                                                画面 + API + D1 + DO
                                                                      ^
                                                                      |
                                                     他の自転車のスマホ（同じ経路）
@@ -39,6 +39,11 @@ Web×IoT メイカーズチャレンジ（ハッカソン）チームCのリポ�
   なりうる。情報の表示は停止中に限る（`docs/notifications.md`）。
 - **スマホは画面を消したままハンドルに固定して使う前提**で設計する。ポケットや鞄では
   測位の精度が落ち、検知の前提が崩れる（`docs/hardware.md`）。
+- **近傍を保つための状態は Durable Object のメモリに置き、D1 に置かない。**
+  位置情報は個人情報であり、消える方が既定であること自体が安全。
+  **中継のリクエストの中で D1 に書かない**（リアルタイム経路の遅延に永続化を載せない）。
+  走行中でも蓄積は取れるが、DO のアラームか `ctx.waitUntil()` で非同期に流すこと
+  （`docs/adr/0005-realtime-transport.md`）。
 - Raspberry Pi Zero W はリソースが厳しい。BLE の常時接続・検知・表示制御の負荷配分に注意する。
 - ラズパイには CHIRIMEN（Node.js 環境）が入っているが**使わない**。組み込み側は Python で実装する。
   ラズパイ上の Node.js に関する提案は不要。
@@ -48,7 +53,7 @@ Web×IoT メイカーズチャレンジ（ハッカソン）チームCのリポ�
 | 領域 | 採用 |
 | --- | --- |
 | デバイス | Python 3.12 / uv / Ruff / basedpyright / pytest |
-| Web + API | React / Vite / Hono / Cloudflare Workers / D1 / Drizzle / Wrangler |
+| Web + API | React / Vite / Hono / Cloudflare Workers / D1 / Durable Objects / Drizzle / Wrangler |
 | モバイル | Expo (SDK 57, React Native) — Android 主 |
 | 共通 | pnpm workspaces / Turborepo / Biome / Vitest / Zod |
 | バージョン管理 | mise |
@@ -67,7 +72,7 @@ Web と API を1つの Worker にまとめる理由、`packages/` を作らな�
 ```
 apps/device/   Python + uv。危険検知・BLE ペリフェラル（Raspberry Pi 上で動作）
 apps/web/      React + Hono。画面と API を1つの Worker で担う
-               src/client/（React） src/worker/（Hono + D1） src/shared/（共有する型）
+               src/client/（React） src/worker/（Hono + D1 + DO） src/shared/（共有する型）
 apps/mobile/   Expo。Android 主、iOS は Mac 保有者のみ
 docs/          設計と手順。一覧は README.md
 ```

@@ -9,35 +9,20 @@
 | 境界 | 状態 | 決めるための Issue |
 | --- | --- | --- |
 | [デバイス ⇄ モバイル（BLE GATT）](./interfaces/ble-gatt.md) | 決定済み（#5 / #6）。`config` の中身のみ未確定 | [#33](https://github.com/Hashimoto-Teppei/web-iot-makers-challenge-team-c/issues/33) |
-| [車車間の位置共有](./interfaces/v2v.md) | 決定済み（#6）。**Worker の中継のみ未確定** | [#7](https://github.com/Hashimoto-Teppei/web-iot-makers-challenge-team-c/issues/7) |
-| [モバイル ⇄ API](#モバイル--api) | 未着手 | [#7](https://github.com/Hashimoto-Teppei/web-iot-makers-challenge-team-c/issues/7) |
+| [車車間の位置共有](./interfaces/v2v.md) | 決定済み（#6 / #7） | — |
+| [モバイル ⇄ API](./interfaces/mobile-api.md) | **走行中の中継は決定済み。走行後の蓄積の見せ方が未確定** | [#7](https://github.com/Hashimoto-Teppei/web-iot-makers-challenge-team-c/issues/7) |
 | [危険検知アルゴリズム](#危険検知アルゴリズム) | 未着手 | [#8](https://github.com/Hashimoto-Teppei/web-iot-makers-challenge-team-c/issues/8) |
 
-**このファイルは境界の一覧で、大きい2つの中身は `interfaces/` に分けてある。**
-分ける基準は「1ファイルが 400 行を超えたら」（`CLAUDE.md`）。
-`モバイル ⇄ API` と `危険検知アルゴリズム` は中身より前書きの方が長くなるため、ここに置いたままにする。
-**内容が決まって 400 行に近づいた時点で切り出す。**
+**このファイルは境界の一覧で、中身は `interfaces/` に分けてある。**
+分ける基準は「1ファイルが 400 行を超えたら」（`CLAUDE.md`）だが、
+**ドキュメントは再統合のコストがほぼゼロなので、決まった境界は早めに切り出す。**
+`危険検知アルゴリズム` は中身より前書きの方が長くなるため、ここに置いたままにする。
 
 | ファイル | 中身 |
 | --- | --- |
 | [`interfaces/ble-gatt.md`](./interfaces/ble-gatt.md) | デバイス ⇄ モバイルの GATT 仕様。走行ログの吸い上げと測位の供給 |
 | [`interfaces/v2v.md`](./interfaces/v2v.md) | 車車間で流すメッセージ、送る間隔、受信側の約束、通信断の見せ方 |
-
----
-
-## モバイル ⇄ API
-
-**エンドポイントの型はコードが正本。** `apps/web/src/worker/` のルート定義から Hono RPC で型が伝播するため、
-ここにリクエスト/レスポンスの構造を書き写さない（必ず実装とずれる）。
-この節には型から読み取れないことだけを書く。
-
-Web の画面は API と同じ Worker 内にあるため単一オリジンで、CORS の考慮は不要。
-モバイルアプリはネイティブなので CORS の対象外。
-
-**この境界は走行後の同期だけでなく、走行中の中継も担う**（「[車車間の位置共有](./interfaces/v2v.md)」）。
-自分の位置を送り、近くにいる相手の位置を受け取る経路がここに要る。
-**流れるペイロードの中身は [`interfaces/v2v.md`](./interfaces/v2v.md) が正本**で、Worker がどう受けてどう配るか（近さの決め方、
-つなぎ方、配る間隔）が未確定（#7）。
+| [`interfaces/mobile-api.md`](./interfaces/mobile-api.md) | モバイル ⇄ API の運び方、Worker と Durable Object の約束、BLE に渡すまでの絞り込み |
 
 ---
 

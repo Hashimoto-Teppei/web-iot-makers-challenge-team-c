@@ -55,6 +55,9 @@ GPS・GPIO・BLE いずれもライブラリの選択肢と実績が Python に�
 
 ### Web + API: React + Vite + Hono + D1 + Drizzle を1つの Worker に
 
+**この節に Durable Objects は入っていない。** 走行中の位置中継のために後から足した。
+選定時には経路そのものが決まっていなかったため（`0005-realtime-transport.md`）。
+
 Vite は起動と HMR が速く、改良サイクルを回す回数が多いハッカソンに向く。SSR が要らないため Next.js は採用しない。
 Workers は無料枠で常時稼働でき、デプロイが速い。D1 は Workers と同一プラットフォーム上の SQLite で、
 別途 DB をプロビジョニングする手間がない。Drizzle は D1 を公式サポートし、マイグレーションを SQL として
