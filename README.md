@@ -22,7 +22,7 @@ Raspberry Pi Zero W を載せた自転車が、手元のスマホと Worker を�
 
 ```
 [自転車デバイス] <--Bluetooth--> [モバイルアプリ] <--HTTPS--> [Cloudflare Worker]
-                                                              画面 + API + D1
+                                                              画面 + API + D1 + DO
                                                                    ^
                                                                    |
                                                   他の自転車のスマホ（同じ経路）
@@ -39,7 +39,7 @@ Raspberry Pi Zero W を載せた自転車が、手元のスマホと Worker を�
 | ディレクトリ | 内容 | 主な技術 |
 | --- | --- | --- |
 | `apps/device` | 危険検知・BLE ペリフェラル | Python 3.12 / uv |
-| `apps/web` | 画面と API（1つの Worker） | React / Vite / Hono / D1 / Drizzle |
+| `apps/web` | 画面と API（1つの Worker） | React / Vite / Hono / D1 / Durable Objects / Drizzle |
 | `apps/mobile` | モバイルアプリ | Expo (React Native) |
 
 ## 開発をはじめる
