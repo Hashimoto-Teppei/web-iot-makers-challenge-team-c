@@ -8,21 +8,26 @@
 
 | 境界 | 状態 | 決めるための Issue |
 | --- | --- | --- |
-| [デバイス ⇄ モバイル（BLE GATT）](./interfaces/ble-gatt.md) | 決定済み（#5 / #6）。`config` の中身のみ未確定 | [#33](https://github.com/Hashimoto-Teppei/web-iot-makers-challenge-team-c/issues/33) |
-| [車車間の位置共有](./interfaces/v2v.md) | 決定済み（#6 / #7） | — |
+| [デバイス ⇄ モバイル（BLE GATT）](./interfaces/ble-gatt.md) | 決定済み（#5 / #6）。**`uplink` を `alert` に置き換え、`proto` を 2 に上げた**（`adr/0006`）。`config` の中身のみ未確定 | [#33](https://github.com/Hashimoto-Teppei/web-iot-makers-challenge-team-c/issues/33) |
+| [車車間の位置共有](./interfaces/v2v.md) | 決定済み（#6 / #7）。**位置は BLE を通らなくなった**（`adr/0006`） | — |
 | [モバイル ⇄ API](./interfaces/mobile-api.md) | **走行中の中継は決定済み。走行後の蓄積の見せ方が未確定** | [#7](https://github.com/Hashimoto-Teppei/web-iot-makers-challenge-team-c/issues/7) |
 | [危険検知アルゴリズム](#危険検知アルゴリズム) | 未着手 | [#8](https://github.com/Hashimoto-Teppei/web-iot-makers-challenge-team-c/issues/8) |
 
 **このファイルは境界の一覧で、中身は `interfaces/` に分けてある。**
 分ける基準は「1ファイルが 400 行を超えたら」（`CLAUDE.md`）だが、
 **ドキュメントは再統合のコストがほぼゼロなので、決まった境界は早めに切り出す。**
+
+**`interfaces/` の中では、切り出す単位になる節を `##` で書く。**
+`###` から始めると 400 行の基準が**切り出す先を見つけられず、いつまでも発火しない。**
+（`ble-gatt.md` が実際にそうなっていたので、`##` に上げてから分割した。）
 `危険検知アルゴリズム` は中身より前書きの方が長くなるため、ここに置いたままにする。
 
 | ファイル | 中身 |
 | --- | --- |
-| [`interfaces/ble-gatt.md`](./interfaces/ble-gatt.md) | デバイス ⇄ モバイルの GATT 仕様。走行ログの吸い上げと測位の供給 |
-| [`interfaces/v2v.md`](./interfaces/v2v.md) | 車車間で流すメッセージ、送る間隔、受信側の約束、通信断の見せ方 |
-| [`interfaces/mobile-api.md`](./interfaces/mobile-api.md) | モバイル ⇄ API の運び方、Worker と Durable Object の約束、BLE に渡すまでの絞り込み |
+| [`interfaces/ble-gatt.md`](./interfaces/ble-gatt.md) | デバイス ⇄ モバイルの GATT 仕様。UUID・接続手順・Characteristic の役割・ペアリング |
+| [`interfaces/ble-log-transfer.md`](./interfaces/ble-log-transfer.md) | `log` で流すレコードの形と、転送を最後までやりきるための約束 |
+| [`interfaces/v2v.md`](./interfaces/v2v.md) | 車車間で流すメッセージ、送る間隔、受信側の約束、デバイスへ渡すもの、心拍の見せ方 |
+| [`interfaces/mobile-api.md`](./interfaces/mobile-api.md) | モバイル ⇄ API の運び方、Worker と Durable Object の約束、受け取ってから警告までの手順 |
 
 ---
 
@@ -34,17 +39,21 @@
 インターフェースは未確定（#8）。**これが決まるまで3つの検知（#9 / #10 / #11）は着手できない。**
 担当と進捗は各 Issue の assignee を見ること。
 
-**入力の出どころが2種類あることを前提に決める**（`adr/0004` の「2つの層に分ける」）。
+**入力の出どころが2種類あり、動く場所も違う**（`adr/0004` の「2つの層に分ける」/ `adr/0006`）。
 
-| | 入力 | 通信への依存 |
-| --- | --- | --- |
-| 車車間の検知（#9 / #10 / #11） | 自車と周辺車両の状態 | **依存する。**通信断の間は動かない |
-| ローカルの検知（#26 など） | デバイスに載せたセンサーの値 | **依存しない** |
+| | 入力 | 動く場所 | 通信への依存 |
+| --- | --- | --- | --- |
+| 車車間の検知（#9 / #10 / #11） | 自車と周辺車両の状態 | **モバイル**（TypeScript） | **依存する。**通信断の間は動かない |
+| 一時停止の事前通知 | 自車の状態と標識の位置 | **モバイル**（TypeScript） | 標識を取得済みなら**依存しない** |
+| ローカルの検知（#26 など） | デバイスに載せたセンサーの値 | **デバイス**（Python） | **依存しない** |
 
-**共通インターフェースを前者だけに合わせて決めない。** 後者が入る受け口を最初から見ておかないと、
-センサーを足すときに全部書き直すことになる。
+**共通インターフェースが2つに割れた。** 上2つはモバイル側で1つの形に揃え、
+デバイス側のローカル検知は別に持つ。**1つのインターフェースに無理やり通さない**——
+言語もプロセスも違うので、揃えても共有できるものが無い。
+**揃えるのは「入力を受けて結果を返す純粋な関数にする」という形だけ**にする。
 
 検知の結果を**どう人に伝えるか**はここでは決めない。`notifications.md` に分けている。
 
-**ハードウェアに触れないこと。** センサーの読み取りや LED の点灯を検知の中に書くと、開発機（Windows / macOS）で
-テストできなくなる。入力を受けて結果を返す純粋な関数として書き、モックデータで pytest を回せる状態を保つ。
+**ハードウェアや通信に触れないこと。** センサーの読み取り・LED の点灯・BLE の書き込み・HTTP を検知の中に書くと、
+開発機（Windows / macOS）でテストできなくなる。入力を受けて結果を返す純粋な関数として書き、
+**モバイル側はモックデータで Vitest、デバイス側は pytest** を回せる状態を保つ。
