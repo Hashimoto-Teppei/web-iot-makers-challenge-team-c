@@ -9,6 +9,8 @@
  */
 
 import type { DetectorInput, StopSign } from "../detect/types";
+import { rideDefaults } from "../ride/loop";
+import type { BeatMessage } from "../v2v/alert";
 import { type PeerMessage, roundForWire, type SelfMessage } from "../v2v/messages";
 import { NeighborStore, type NeighborsConfig, neighborsDefaults } from "../v2v/neighbors";
 import type { SimNode, Span } from "./node";
@@ -33,20 +35,16 @@ export type Faults = {
 };
 
 /**
- * BLE の `alert` に書く心拍（`docs/interfaces/v2v.md`「デバイスへ渡すもの」）。
+ * BLE の `alert` に書く心拍。
+ *
+ * **形は `../v2v/alert.ts` が正本。**シミュレータのために別の形を作らない（同じものを
+ * 2つの型で持つと、片方を直したときにもう片方が古いまま残る）。ここで別名を付けているのは、
+ * シミュレータが表しているのが「そのティックでスマホが書くはずの心拍」だからである。
  *
  * **警告（`warn`）はここに含めない。**何を危険と見なすかは検知が決めるもので、
- * シミュレータは入力を作る側である。
+ * シミュレータは入力を作る側である。**検知まで含めて回したいときは `./ride.ts`。**
  */
-export type Beat = {
-  k: "beat";
-  /** UTC ミリ秒 */
-  t: number;
-  /** 測位が取れているか */
-  st: "ok" | "nofix";
-  /** 走行中か。速度を持っているのはスマホだけなので、判定もスマホが行う */
-  mv: boolean;
-};
+export type Beat = BeatMessage;
 
 /** 1ティックぶん、観測者のスマホから見えるもの。 */
 export type SimTick = {
@@ -116,8 +114,10 @@ export const runDefaults: RunConfig = {
   tickMs: 1_000,
   // 固定の時刻。値そのものに意味は無いが、変えるとテストの期待値がずれる。
   startAt: Date.UTC(2026, 8, 1, 0, 0, 0),
-  // 歩くより速ければ走行中とみなす仮の値（`docs/unverified.md`）。
-  movingSpdMps: 1.5,
+  // **走行ループと同じ値を使う。**ここが表しているのは「そのティックでスマホが書くはずの
+  // 心拍」なので、別に持つと**シミュレータの期待値と実際に書かれる値が静かにずれる**
+  // （`./ride.ts` はその両方を同じフレームに並べる）。
+  movingSpdMps: rideDefaults.movingSpdMps,
   world: worldDefaults,
   neighbors: neighborsDefaults,
 };
