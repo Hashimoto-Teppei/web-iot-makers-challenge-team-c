@@ -10,8 +10,8 @@
 | --- | --- | --- |
 | [デバイス ⇄ モバイル（BLE GATT）](./interfaces/ble-gatt.md) | 決定済み（#5 / #6）。**`uplink` を `alert` に置き換え、`proto` を 2 に上げた**（`adr/0006`）。`config` の中身のみ未確定 | [#33](https://github.com/Hashimoto-Teppei/web-iot-makers-challenge-team-c/issues/33) |
 | [車車間の位置共有](./interfaces/v2v.md) | 決定済み（#6 / #7）。**位置は BLE を通らなくなった**（`adr/0006`） | — |
-| [モバイル ⇄ API](./interfaces/mobile-api.md) | **走行中の中継は決定済み。一時停止の標識を配る経路のみ未確定** | [#7](https://github.com/Hashimoto-Teppei/web-iot-makers-challenge-team-c/issues/7) |
-| [蓄積したデータの見せ方](./interfaces/web-service.md) | **集計・画面・取り込み・テーブルは決定済み**（生ログを残す判断は `adr/0007`）。しきい値の既定値と、標識を配る経路が未確定 | [#7](https://github.com/Hashimoto-Teppei/web-iot-makers-challenge-team-c/issues/7) |
+| [モバイル ⇄ API](./interfaces/mobile-api.md) | **決定済み。** 走行中の中継（#7）に加え、**一時停止の標識を配る経路も決まった**（#63。端末側の置き方は `adr/0009`） | — |
+| [蓄積したデータの見せ方](./interfaces/web-service.md) | **集計・画面・取り込み・テーブルは決定済み**（生ログを残す判断は `adr/0007`）。**標識を配る経路は #63 で決まった**（`mobile-api.md`）。しきい値の既定値が未確定 | [#7](https://github.com/Hashimoto-Teppei/web-iot-makers-challenge-team-c/issues/7) |
 | [危険検知アルゴリズム](./interfaces/detectors.md) | **決定済み（#8）。** `kind` の識別子と `lv` の意味もここが正本 | — |
 
 **このファイルは境界の一覧で、中身は `interfaces/` に分けてある。**
