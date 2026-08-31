@@ -67,11 +67,13 @@ BLE と GPIO のライブラリは **Linux 専用**で、開発機（Windows / m
 | `src/device/alert.py` | **スマホから届く表示指示と心拍を受け取る**（`../../docs/interfaces/v2v.md`）。心拍が途切れたら `link` を落とす。**BLE を知らないので開発機でもテストできる** |
 | `src/device/notify.py` | 検知の結果をどう出すかの調停（`../../docs/notifications.md`）。ハードには触らない |
 | `src/device/main.py` | 起動と配線。どの部品の値をどの検知に渡し、結果をどこに出すかを決める |
+| `src/device/state.py` | 今の状態（`link` / 転送の進み具合 / 受け取った警告の数）と、それを `device-info` / `status` の JSON にする変換。**BLE を知らない** |
+| `src/device/identity.py` | `device_id` / `log_id` の生成と保存。アドバタイズの名前もここで作る |
 | `src/device/config.py` | しきい値・**ピン番号**・失効やウォッチドッグの秒数などの設定。コードに直書きしない。**秘密値は置かない** — このファイルはコミットされる |
 | `src/device/` 直下 | どの層からも使う共通の計算（`geo.py` の距離計算など） |
 | `tests/` | テスト |
 
-いまは `geo.py` しか置いていません。**中身ができる前にディレクトリだけ先に作らないでください。**
+`detect/` と `notify.py` / `alert.py` はまだありません。**中身ができる前にディレクトリだけ先に作らないでください。**
 最初のファイルを置く人が、そのときに作ります。
 
 **`geo.py`（緯度経度の距離計算）は、いまこのアプリから使われていません。**
@@ -97,6 +99,12 @@ BlueZ を触る `hw/ble.py` は Linux 専用ですが、**受け取ったあと�
 （`../../docs/interfaces/v2v.md`「心拍を必ず見せる」）。
 
 実機での起動は `uv run python -m device.main`（ラズパイ上でのみ動きます）。
+起動すると BLE のアドバタイズが出て、スマホの汎用 BLE アプリから `bg-xxxx` として見えます
+（`../../docs/interfaces/ble-gatt.md`）。
+
+**`device_id` は初回起動時に作られ、`~/.local/share/bike-device/identity.json` に残ります**
+（置き場所は `config.py`）。**リポジトリの中には置きません**——`git pull` や作り直しで消えると、
+取り込みの一意キーが総入れ替えになります。
 
 ### それぞれの約束
 

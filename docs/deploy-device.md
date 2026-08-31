@@ -139,6 +139,19 @@ uv run python -m device.main
 
 **Ctrl-C で止まる。** ここまでで「手で動かす」はできた。
 
+起動すると **BLE のアドバタイズが出る**。スマホの汎用 BLE アプリ（nRF Connect など）で
+スキャンすると `bg-xxxx` という名前で見えるので、**そのまま接続して確かめる**
+（GATT の中身は [`interfaces/ble-gatt.md`](./interfaces/ble-gatt.md)）。
+
+| 見るところ | 期待 |
+| --- | --- |
+| 名前 | **`bg-` + 4文字で、7文字ぜんぶ出ている**（切れていたら広告が 31 バイトを超えている → [`unverified.md`](./unverified.md) の 12） |
+| `...6e01`（`device-info`） | Read すると `{"proto":2,"device_id":...}` が返る |
+| `...6e04`（`status`） | Read できて、Notify を購読すると毎秒届く |
+
+**`device_id` は初回起動時に作られ、`~/.local/share/bike-device/identity.json` に残る。**
+このファイルを消すと `device_id` が変わり、**取り込み済みのログと結び付かなくなる**ので消さないこと。
+
 ## 9. 電源を入れたら勝手に走るようにする
 
 **自転車に載せると手で起動できない。** systemd に登録する。
@@ -179,7 +192,8 @@ sudo usermod -aG bluetooth <ユーザー名>
 ```
 
 **それでも弾かれる場合は BlueZ の D-Bus ポリシーを足すことになる。**
-ここは実機で詰める（#37）。
+**まだ実機で通していない**（[`unverified.md`](./unverified.md) の 43）。
+`journalctl` に `org.freedesktop.DBus.Error.AccessDenied` が出ていたらこれ。
 
 ## 10. ログを見る
 
@@ -214,6 +228,8 @@ sudo systemctl restart bike-device
 | `uv sync` が Python を落とそうとして失敗する | `--python /usr/bin/python3` を付け忘れている |
 | `import bluezero` が落ちる | 手順 3 の apt が済んでいない |
 | BLE の広告が出ない | `bluetooth` グループと D-Bus のポリシー（手順 9） |
+| 広告は見えるが名前が `bg-` の途中で切れている | 広告が 31 バイトを超えている。**`Appearance` や `tx-power` を足していないか**（`interfaces/ble-gatt.md`） |
+| スキャンで見つからない | **他の人がつなぎっぱなしになっている可能性がある**（接続中はアドバタイズが止まる）。デバイスを再起動する |
 | SD カードが壊れた疑い | **書き直すのが一番速い。** 手順 1 からやり直す |
 
 **ここに無い症状に当たったら、この表に1行足すこと。** 次に同じ場所で止まる人を減らせる。

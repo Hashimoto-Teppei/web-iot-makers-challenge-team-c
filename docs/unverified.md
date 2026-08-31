@@ -42,6 +42,8 @@ PR で実機未確認の前提を置いたら、この表に1行足すこと。�
 | 40 | **実機の Python が 3.11 である**（Raspberry Pi OS Bookworm のシステム Python）。Trixie なら 3.13 で、`requires-python = ">=3.11,<3.12"` を満たさず **`uv sync` が実機で落ちる**。**Zero W は ARMv6 なので、uv が別の版を落としてくることもできない**（python-build-standalone は armv7 以上） | デバイス全体 | 実機で `python3 -V` と `cat /etc/os-release` | 2026-08-31 |
 | 41 | **piwheels から ARMv6 のホイールが実際に降ってくる。**`bluezero` → `PyGObject` → `pycairo` の連鎖に **cp311 の `linux_armv6l` が揃っていることは確認済み**だが、`uv` が piwheels の `linux_armv6l` タグを **pip と同じように受け付けるか**は未確認。受け付けなければソースビルドに落ち、**Zero W では終わらない**（`docs/adr/0008-device-dependencies.md`） | デバイス全体 | 実機で `uv sync --group device`。`Building wheel for ...` が出たら外れ | 2026-08-31 |
 | 42 | **`PyGObject` が要求する apt の共有ライブラリが Raspberry Pi OS に最初から入っている**（`libgirepository-1.0-1` など）。足りなければ import の時点で落ちる。**pip の依存ではないので `uv sync` が成功しても分からない** | デバイス全体 | 実機で `uv run python -c "import bluezero"` | 2026-08-31 |
+| 43 | **`bluetooth` グループのユーザーで `RegisterAdvertisement` と `RegisterApplication` が通る**（BlueZ の D-Bus ポリシーを足さずに済む）。systemd から起動するとログインセッションが無いため、手で動かしたときと結果が違いうる | デバイス全体 | 実機で `systemctl status bike-device` と `journalctl` | 2026-08-31 |
+| 44 | **`device-info` と `status` の Read が1回で返る**（`bluezero` は Read の `offset` を無視して毎回すべてを返すため、**MTU に収まらないと壊れた JSON が届く**）。今の中身は `device-info` が 84 バイト / `status` が 93 バイトで、MTU 247 なら収まる（13 が前提）。**項目を足すときはここも見る** | デバイス / モバイル | 実機 + Android 端末（nRF Connect で読む） | 2026-08-31 |
 
 **20 番と 24 番は欠番。** 20 は「2.4GHz のブロードキャストの取りこぼし」、24 は「`uplink` が毎秒何通通るか」で、
 どちらも**経路が変わって前提ごと消えた**。**書き換えずに欠番のままにする**
@@ -62,8 +64,9 @@ PR で実機未確認の前提を置いたら、この表に1行足すこと。�
 （#52 / `adr/0008-device-dependencies.md`）。手順は `deploy-device.md` を上からなぞるだけで、
 `python3 -V` → `uv sync --group device` → `import bluezero` の3手で済む。
 15（BlueZ の版）も同じ場で確かめられるので、電源を入れたついでに一緒に見る。
+**43 と 44 と 12 は、デバイスを起動してスマホで1回スキャンすれば3つとも分かる**（広告が出るか / 名前が7文字あるか / `device-info` が読めるか）。
 
-実機に触れる機会が来たら **40 → 41 → 42 → 22 → 21 → 30 → 32 → 15 → 4 → 25 → 26 → 31 → 27 → 29 → 23 → 3 → 14 → 13 → 11 → 12 → 8 → 7 → 9 → 5** の順で潰す。
+実機に触れる機会が来たら **40 → 41 → 42 → 22 → 21 → 30 → 32 → 15 → 43 → 12 → 44 → 4 → 25 → 26 → 31 → 27 → 29 → 23 → 3 → 14 → 13 → 11 → 8 → 7 → 9 → 5** の順で潰す。
 
 **22 と 21 と 30 を先頭に置くのは、この3つだけがラズパイを必要としないため。**
 スマホと簡単な確認用アプリがあれば今日から確かめられる。実機の到着を待つ理由が無い。
