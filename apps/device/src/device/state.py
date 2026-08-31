@@ -12,6 +12,8 @@ import json
 from dataclasses import dataclass
 from typing import Literal
 
+from device.alert import AlertResult, Warn
+
 # この境界のプロトコルバージョン。**この境界のバージョンはこれ1つ**で、
 # alert に別の番号を持たせない。
 # 上げるのは互換性を壊す変更のときだけ（`../../../../docs/interfaces/ble-gatt.md`）。
@@ -25,8 +27,8 @@ Link = Literal["up", "nofix", "down"]
 class DeviceState:
     """今のデバイスの状態。
 
-    **この Issue（#37）で埋まるのは `device_id` / `log_id` と `state` だけ。**
-    `link` は #36（心拍のウォッチドッグ）、`warns` / `dropped` は #35（`alert`）、
+    **いま埋まるのは `device_id` / `log_id` / `state` と、`warns` / `dropped`（#35）。**
+    `link` は #36（心拍のウォッチドッグ）、
     `sent` / `remaining` / `oldest_seq` / `latest_seq` / `last_error` は #40（ログの転送）で埋まる。
     **埋まる前から項目を出しておく**のは、セントラル側が形を先に実装できるようにするため
     （知らないキーは無視する約束なので、後から増えても壊れない）。
@@ -43,10 +45,27 @@ class DeviceState:
     remaining: int = 0
     # 直近で断った**コマンド（control）**の理由。alert の異常はここに入れない（dropped に数える）。
     last_error: str | None = None
-    # スマホから心拍が届いているか。まだ受け取る経路が無いので down から始める。
+    # スマホから心拍が届いているか。**`up` から始めない**——`beat` を一度も受け取っていない間を
+    # 健全に見せない（`../../../../docs/interfaces/v2v.md`「心拍を必ず見せる」）。
+    # ここを `beat` から動かすのは #36。
     link: Link = "down"
     warns: int = 0
     dropped: int = 0
+
+    def record_alert(self, result: AlertResult) -> None:
+        """`alert` を1通受け取った結果を数える（`../../../../docs/interfaces/ble-gatt.md`）。
+
+        **2つの数は別の目的を持つ。混ぜない。**
+
+        - `warns` は**警告が本当に届いているかを人が確かめるため**のもの。
+          **採用した `warn` だけ数える**ので、この数は人が見聞きしたものと一致する
+        - `dropped` は**壊れているものだけ**。知らない `kind` はどちらにも入らない
+          （アプリ側が検知を1つ足しただけで増えると、異常に気づくための数として使えなくなる）
+        """
+        if result.dropped:
+            self.dropped += 1
+        elif isinstance(result.message, Warn):
+            self.warns += 1
 
     def device_info(self) -> dict[str, object]:
         """`device-info` で返す内容。"""

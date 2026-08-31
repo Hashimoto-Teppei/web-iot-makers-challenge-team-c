@@ -4,7 +4,8 @@
 実機では `uv run python -m device.main`、電源投入時は systemd から起動される
 （`../../../../docs/deploy-device.md`）。
 
-いまつなぐのは BLE ペリフェラルだけ。センサー・表示・`alert` の受け取りは、
+いまつなぐのは BLE ペリフェラルだけ（`alert` の受け取りはその中にある）。
+センサー・表示と、`alert` で受け取ったものを使う側（#36 のウォッチドッグ / `notify.py`）は、
 それぞれの Issue でここに1行ずつ足していく。
 """
 
@@ -42,6 +43,7 @@ def main() -> None:
         local_name,
         adapter_address=config.BLE_ADAPTER_ADDRESS,
         status_notify_interval_s=config.STATUS_NOTIFY_INTERVAL_S,
+        alert_drop_log_every=config.ALERT_DROP_LOG_EVERY,
     )
     ble.start()
 

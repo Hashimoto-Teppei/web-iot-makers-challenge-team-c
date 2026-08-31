@@ -64,7 +64,7 @@ BLE と GPIO のライブラリは **Linux 専用**で、開発機（Windows / m
 | --- | --- |
 | `src/device/detect/` | **判断する層。** センサーによる検知（後方の物体など）。1つの検知につき1ファイル |
 | `src/device/hw/` | **ハードウェアに触る層。** 1つの部品につき1ファイル（`ble.py` / `led.py` / `lcd.py` …） |
-| `src/device/alert.py` | **スマホから届く表示指示と心拍を受け取る**（`../../docs/interfaces/v2v.md`）。心拍が途切れたら `link` を落とす。**BLE を知らないので開発機でもテストできる** |
+| `src/device/alert.py` | **スマホから届く表示指示と心拍を読み解く**（`../../docs/interfaces/v2v.md`）。**BLE を知らないので開発機でもテストできる**。心拍が途切れたことに気づく仕組み（ウォッチドッグ）は #36 でここに足す |
 | `src/device/notify.py` | 検知の結果をどう出すかの調停（`../../docs/notifications/arbitration.md`）。ハードには触らない |
 | `src/device/main.py` | 起動と配線。どの部品の値をどの検知に渡し、結果をどこに出すかを決める |
 | `src/device/state.py` | 今の状態（`link` / 転送の進み具合 / 受け取った警告の数）と、それを `device-info` / `status` の JSON にする変換。**BLE を知らない** |
@@ -73,7 +73,7 @@ BLE と GPIO のライブラリは **Linux 専用**で、開発機（Windows / m
 | `src/device/` 直下 | どの層からも使う共通の計算（`geo.py` の距離計算など） |
 | `tests/` | テスト |
 
-`detect/` と `notify.py` / `alert.py` はまだありません。**中身ができる前にディレクトリだけ先に作らないでください。**
+`detect/` と `notify.py` はまだありません。**中身ができる前にディレクトリだけ先に作らないでください。**
 最初のファイルを置く人が、そのときに作ります。
 
 **`geo.py`（緯度経度の距離計算）は、いまこのアプリから使われていません。**
