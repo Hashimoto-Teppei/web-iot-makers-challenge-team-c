@@ -15,10 +15,12 @@
     "deploy": "vite build && wrangler deploy"
   },
   "dependencies": {
+    "@hono/zod-validator": "^0.9.0",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.13.3",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.53.1",

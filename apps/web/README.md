@@ -83,6 +83,29 @@ pnpm db:migrate:local
 `hc<AppType>()` で API クライアントを作る。**ルートはメソッドチェーンで書くこと**。
 `app.get(...)` を文として分けて書くと型が積み上がらず、モバイル側の補完が効かなくなる。
 
+**Worker のエントリは `src/worker/entry.ts`**（`wrangler.jsonc` の `main`）で、`index.ts` ではない。
+`entry.ts` は Cloudflare に渡すもの（`fetch` ハンドラと Durable Object のクラス）を並べるだけの
+ファイルである。分けているのは、TypeScript が import を辿るため——**`index.ts` が
+`cloudflare:workers` を間接的にでも読むと、Cloudflare の型を持たないモバイル側の型チェックが落ちる。**
+**Durable Object を足すときは `entry.ts` に export を1行足す**（`index.ts` に書かない）。
+
+**リクエストの検証は `zValidator` に通す**（`@hono/zod-validator`）。ハンドラの中で
+`c.req.json()` を読んで自分で検証すると、**送る側の型が `AppType` に載らない**——
+モバイルが項目を綴り間違えてもコンパイルが通り、実行して初めて 400 で分かる。
+
+**ルートの戻り値には型注釈を付ける**（`const body: ExchangeResponse = ...`）。
+`c.env` 由来の型がそのまま `c.json()` に流れると、モバイル側ではバインディングの型が
+無いため、**受け取るレスポンスが `any` になる。**
+
+## 走行中の中継（`POST /api/v2v/exchange`）
+
+1Hz で自分の位置を受け取り、**同じレスポンスで半径内の周辺車両を返す。**
+状態は Durable Object 1個のメモリにあり、**D1 には何も書かない。**
+
+**仕様の正本は `docs/interfaces/mobile-api.md` と `docs/interfaces/v2v.md`。**
+実装が守っていることの理由はすべてそちらにあるので、ここには書かない。
+半径・失効・値の範囲は `src/worker/v2v/config.ts` に集めてある（**直書きしない**）。
+
 ## 注意
 
 - `compatibility_date` はローカルの workerd が対応している日付までしか上げられない。

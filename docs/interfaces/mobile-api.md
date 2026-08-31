@@ -7,7 +7,7 @@
 経路を選んだ理由と却下した案は `../adr/0005-realtime-transport.md`。
 
 ```
-[スマホ] --1Hz POST /v2v/exchange--> [Worker/Hono] --RPC--> [DO 1個]
+[スマホ] --1Hz POST /api/v2v/exchange--> [Worker/Hono] --RPC--> [DO 1個]
 [スマホ] <-- 200 { peers: [...] } ---------------------------┘
 ```
 

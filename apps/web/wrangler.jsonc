@@ -1,7 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "team-c-web",
-  "main": "src/worker/index.ts",
+  // Durable Object のクラスと fetch ハンドラを並べるだけのファイル。
+  // 実装は src/worker/index.ts にある（分けている理由は entry.ts の冒頭）。
+  "main": "src/worker/entry.ts",
   "compatibility_date": "2026-08-20",
   "compatibility_flags": ["nodejs_compat"],
   // SPA なので、未知のパスは index.html を返す。これがないとリロードで 404 になる。
@@ -19,6 +21,26 @@
       // ローカル開発（--local）とテストはこの値を使わないため、このままでも開発できる。
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "drizzle/migrations"
+    }
+  ],
+  // 走行中の近傍を保つ Durable Object。**インスタンスは1個だけ**で、状態はメモリにしか
+  // 置かない（docs/interfaces/mobile-api.md）。名前と locationHint は
+  // src/worker/v2v/config.ts が持つ。
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "NEIGHBORS",
+        "class_name": "NeighborsDO"
+      }
+    ]
+  },
+  // Durable Object のクラスは migration で宣言しないとデプロイできない。
+  // ストレージは使わないが、新しいクラスは new_sqlite_classes で入れる
+  // （new_classes は旧来の課金プラン向けで、無料プランでは作れない）。
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["NeighborsDO"]
     }
   ],
   "observability": {
