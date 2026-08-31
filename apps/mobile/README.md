@@ -122,6 +122,35 @@ EXPO_PUBLIC_API_BASE_URL=http://192.168.1.5:5173
 必ず指定してください。** 既定値の `http://10.0.2.2:5173` は自分の PC を指すうえ、Android のリリースビルドは
 暗号化されていない http 通信を既定で拒否するため、指定を忘れると通信できません。
 
+## 検知のコードとテスト
+
+危険検知は `src/detect/` に置きます。**仕様の正本は
+[`docs/interfaces/detectors.md`](../../docs/interfaces/detectors.md)** で、ここには書き写しません。
+
+```
+src/detect/
+  types.ts   4つの検知が共有する型（Fix / Track / DetectorInput / Warning / Detector）
+  geo.ts     距離・方位角・角度差の正規化
+```
+
+**検知は測位にも BLE にも HTTP にも触れない純粋な関数**なので、実機も Android のビルドも要りません。
+`pnpm install` さえ済んでいれば、Windows でも macOS でもテストが走ります。
+
+```sh
+pnpm --filter mobile test          # 一度だけ実行
+pnpm --filter mobile exec vitest   # 変更を監視して実行し続ける
+```
+
+テストは検知と同じ名前で並べます（`approach.ts` なら `approach.test.ts`）。
+**実走行の GPS ログは使わず、合成したモックデータで書いてください**（位置情報は個人情報です）。
+
+Vitest の設定は `vitest.config.mts` にあり、`src/` 全体の `*.test.ts` を対象にしています
+（シミュレータのテストもここで走ります）。画面（`src/app/`）だけは react-native の解決が要るので
+除外しており、書くときは別のプロジェクト設定を足してください。
+
+> **Vitest だけは `pnpm add -D` で入れています。** 下の「依存を足すときは `npx expo install`」は
+> Expo SDK が組み合わせを固定しているパッケージの話で、Vitest はその管理外だからです。
+
 ## 他のアプリとバージョンが違うのは正常
 
 `apps/mobile` だけ React が 19.2.3、TypeScript が 6 系です（他は React 19.2.8 / TypeScript 7 系）。
