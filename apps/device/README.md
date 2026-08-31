@@ -20,7 +20,7 @@
 uv sync
 ```
 
-`uv` が Python 3.12 と依存パッケージを用意します。`pip` や `venv` を自分で触る必要はありません。
+`uv` が Python 3.11 と依存パッケージを用意します。`pip` や `venv` を自分で触る必要はありません。
 
 ## コマンド
 
@@ -30,6 +30,27 @@ uv sync
 | `uv run ruff check .` | lint |
 | `uv run ruff format .` | 整形 |
 | `uv run basedpyright` | 型チェック |
+
+## 実機だけで要る依存
+
+BLE と GPIO のライブラリは **Linux 専用**で、開発機（Windows / macOS）には入りません。
+そのため `dependencies` ではなく **`device` という dependency-group に隔離してあります**
+（[ADR 0008](../../docs/adr/0008-device-dependencies.md)）。
+
+| どこ | コマンド | BLE の依存 |
+| --- | --- | --- |
+| 開発機 | `uv sync` | **入らない** |
+| CI | `uv sync --locked` | **入らない** |
+| 実機（Zero W） | `uv sync --group device --python /usr/bin/python3` | 入る |
+
+**新しく実機専用の依存が要るときも `dependencies` へは移さないでください。**
+移した瞬間、開発機の `uv sync` が失敗して全員の手が止まります。
+
+**`hw/` の中では import が解決できません**（開発機にも CI にも入っていないため）。
+ファイルの先頭に `# pyright: reportMissingImports=false` を1行置いて黙らせます。
+**ファイル単位に閉じる**ので、`detect/` 側の import ミスは今までどおり見つかります。
+
+実機へ載せる手順は [`docs/deploy-device.md`](../../docs/deploy-device.md)。
 
 リポジトリのルートで `pnpm test` を実行すると、このディレクトリのテストも一緒に走ります
 （`package.json` は Turborepo に認識させるためだけのもので、中身は `uv run` を呼ぶだけです）。

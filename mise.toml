@@ -3,5 +3,5 @@
 [tools]
 node = "24"
 pnpm = "11"
-python = "3.12"
+python = "3.11"
 uv = "latest"

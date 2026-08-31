@@ -2,7 +2,7 @@
 name = "device"
 version = "0.1.0"
 description = "自転車に載せるデバイス（Raspberry Pi Zero W）の危険検知プログラム"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.11,<3.12"
 # 実行時の依存はまだない。BLE や GPS のライブラリは必要になった時点で追加する。
 dependencies = []
 
@@ -11,6 +11,13 @@ dev = [
   "pytest>=8.4",
   "ruff>=0.14",
   "basedpyright>=1.31",
+]
+# 実機（Raspberry Pi）でしか動かない依存。既定では入らない。
+# 実機だけ `uv sync --group device` で入れる（→ docs/adr/0008-device-dependencies.md）。
+# 開発機（Windows / macOS）に入れると uv sync が失敗して全員が止まるため、
+# ここへ足すものが増えても dependencies へは移さないこと。
+device = [
+  "bluezero>=0.9",
 ]
 
 [build-system]
@@ -23,7 +30,7 @@ packages = ["src/device"]
 [tool.ruff]
 # Biome（TypeScript 側）と揃える。片方だけ違うと読むときに引っかかる。
 line-length = 100
-target-version = "py312"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = [
@@ -40,7 +47,7 @@ include = ["src", "tests"]
 # 既定の "recommended" は指摘が非常に多く、開発が初めての人が手を止めてしまう。
 # まずは "standard" で始め、必要になったら段階的に上げる。
 typeCheckingMode = "standard"
-pythonVersion = "3.12"
+pythonVersion = "3.11"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

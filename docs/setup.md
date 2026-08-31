@@ -175,7 +175,7 @@ pnpm install     # プロジェクトの依存を入れる
 ```sh
 node -v    # v24.x
 pnpm -v    # 11.x
-python -V  # Python 3.12.x
+python -V  # Python 3.11.x
 uv --version
 ```
 
@@ -243,11 +243,14 @@ VS Code に教える操作です（OS ごとにパスが違うため、設定フ
 
 ```sh
 cd apps/device
-uv sync          # Python 3.12 と依存を用意する
+uv sync          # Python 3.11 と依存を用意する
 uv run pytest    # テストが通れば OK
 ```
 
 `pip` や `venv` を自分で触る必要はありません。詳細は [`apps/device/README.md`](../apps/device/README.md)。
+
+**実機（ラズパイ）に載せる手順は [`deploy-device.md`](./deploy-device.md) にあります。**
+OS の書き込み・SSH・依存の入れ方・自動起動まで、そちらに一本化してあります（ここには書きません）。
 
 **実機（Raspberry Pi）がなくても開発できます。** ハードウェアに触る部分は分離してあり、
 検知ロジックはモックデータだけでテストできます。

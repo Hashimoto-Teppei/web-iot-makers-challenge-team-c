@@ -63,7 +63,7 @@ Web×IoT メイカーズチャレンジ **チームC** の開発リポジトリ�
 
 | ディレクトリ | 内容 | 主な技術 |
 | --- | --- | --- |
-| `apps/device` | 後方物体検知・表示・BLE ペリフェラル | Python 3.12 / uv |
+| `apps/device` | 後方物体検知・表示・BLE ペリフェラル | Python 3.11 / uv |
 | `apps/web` | 画面と API（1つの Worker） | React / Vite / Hono / D1 / Durable Objects / Drizzle |
 | `apps/mobile` | 測位・車車間の3検知・一時停止の事前通知・中継・シミュレータ | Expo (React Native) |
 
@@ -106,6 +106,7 @@ pnpm install
 | [CLAUDE.md](./CLAUDE.md) | **守るべき制約。** AI エージェント向けだが、人が読んでも開発方針がわかる。理由は書かず ADR を参照する |
 | [docs/adr/](./docs/adr/) | **なぜそう決めたか。** 決定を見直すときに読む |
 | [docs/interfaces.md](./docs/interfaces.md) | コンポーネント間の境界仕様。実装と同じ PR で更新する |
+| [docs/deploy-device.md](./docs/deploy-device.md) | **ラズパイへの投入手順。** OS の書き込みから 自動起動・ログの見方まで。**実機に載せるときだけ読む** |
 | [docs/hardware.md](./docs/hardware.md) | **配線の正本。** 接続中の部品・ピン割り当て・I2C アドレス・消費電流。配線を変えたら必ず更新する |
 | [docs/notifications.md](./docs/notifications.md) | 検知結果をどう人に伝えるか。警告（本人向け）と表示（周囲向け）の境界 |
 | [docs/unverified.md](./docs/unverified.md) | 実機で確認していない前提。確認できたら行を消す |
