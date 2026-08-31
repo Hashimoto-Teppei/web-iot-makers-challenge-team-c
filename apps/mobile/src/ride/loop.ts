@@ -99,7 +99,13 @@ export type RideDeps = {
   exchange: ExchangeFn;
   /** 回す検知。既定は `./detectors.ts` に登録されているもの */
   detectors?: readonly RegisteredDetector[];
-  /** 近傍の一時停止の標識（#27）。配る経路は未確定（#63） */
+  /**
+   * 近傍の一時停止の標識（#27）。
+   *
+   * **県ぶんの全件を渡さない。**端末の SQLite からセルで絞って渡すのは呼び出し側で、
+   * 置き方は `docs/adr/0009-on-device-storage.md`、配り方は
+   * `docs/interfaces/mobile-api.md`「一時停止の標識をスマホに配る」。
+   */
   signs?: readonly StopSign[];
   /**
    * 自分の時計。**既定は `Date.now`。**
