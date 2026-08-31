@@ -44,10 +44,19 @@ Node・pnpm・Python・uv を `mise.toml` 1ファイルで固定する。
 20 系では `apps/web` のツールチェーンがそもそも起動しない。
 ハッカソン期間中は、これ以外の大きなメジャーアップデートを取り込まない。
 
-### デバイス: Python 3.12 + uv
+### デバイス: Python 3.11 + uv
 
 GPS・GPIO・BLE いずれもライブラリの選択肢と実績が Python に厚く、Raspberry Pi の標準的な開発手段であるため。
 ラズパイに入っている CHIRIMEN（Node.js 環境）は使わない。
+
+**当初は 3.12 としていたが、3.11 へ下げた**（#52）。**実機に 3.12 が存在しないため。**
+Raspberry Pi OS のシステム Python は Bookworm が 3.11、Trixie が 3.13 で、3.12 はどちらにも入っていない。
+加えて Zero W は ARMv6 であり、`uv python install` が使う python-build-standalone は armv7 以上しか
+ビルドを出していないため、**実機では uv も 3.12 を用意できない**（uv 本体のバイナリは armv6 で動く）。
+
+**3.11 を選ぶのは、Zero W の ARMv6 が Trixie で切られる方向にあり、Bookworm が事実上の最終だから。**
+3.13 に寄せると次が無い。3.11 なら実機に最初から入っているので、**実機側で Python を用意する作業そのものが消える。**
+デバイスが使うのは標準ライブラリと BLE / GPIO のライブラリだけで、3.12 以降の新機能に依存していない。
 
 - Ruff: lint と format を1つのツールで賄う（Biome の Python 版という位置づけ）
 - basedpyright: pyright ベースで、より厳格な型チェックをデフォルトで有効にできる

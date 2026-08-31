@@ -57,7 +57,7 @@ Web×IoT メイカーズチャレンジ（ハッカソン）チームCのリポ�
 
 | 領域 | 採用 |
 | --- | --- |
-| デバイス | Python 3.12 / uv / Ruff / basedpyright / pytest |
+| デバイス | Python 3.11 / uv / Ruff / basedpyright / pytest |
 | Web + API | React / Vite / Hono / Cloudflare Workers / D1 / Durable Objects / Drizzle / Wrangler |
 | モバイル | Expo (SDK 57, React Native) — Android 主 |
 | 共通 | pnpm workspaces / Turborepo / Biome / Vitest / Zod |
