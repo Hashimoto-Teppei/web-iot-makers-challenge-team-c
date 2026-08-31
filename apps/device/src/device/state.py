@@ -12,7 +12,7 @@ import json
 from dataclasses import dataclass
 from typing import Literal
 
-from device.alert import AlertResult, Warn
+from device.alert import AlertResult, Link, Warn
 
 # この境界のプロトコルバージョン。**この境界のバージョンはこれ1つ**で、
 # alert に別の番号を持たせない。
@@ -20,7 +20,10 @@ from device.alert import AlertResult, Warn
 PROTO_VERSION = 2
 
 TransferState = Literal["idle", "sending"]
-Link = Literal["up", "nofix", "down"]
+
+# `Link` は `alert.py` にある（値を決めるのが向こうの `LinkWatch` なので、定義もそちらに置く）。
+# ここから再輸出しているのは、`status` の項目として読む人がこのファイルを開くため。
+__all__ = ["PROTO_VERSION", "DeviceState", "Link", "TransferState"]
 
 
 @dataclass
@@ -47,7 +50,8 @@ class DeviceState:
     last_error: str | None = None
     # スマホから心拍が届いているか。**`up` から始めない**——`beat` を一度も受け取っていない間を
     # 健全に見せない（`../../../../docs/interfaces/v2v.md`「心拍を必ず見せる」）。
-    # ここを `beat` から動かすのは #36。
+    # **決めるのは `alert.py` の `LinkWatch`** で、ここはその結果を持つだけ
+    # （`main.py` が毎周期入れ直す）。**判定をここにも書かない。**
     link: Link = "down"
     warns: int = 0
     dropped: int = 0

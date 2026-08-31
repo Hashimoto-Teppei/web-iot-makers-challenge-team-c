@@ -77,6 +77,9 @@ class BlePeripheral:
         status_notify_interval_s: int = 1,
         alert_drop_log_every: int = 100,
         on_alert: Callable[[Warn | Beat], None] | None = None,
+        on_tick: Callable[[], None] | None = None,
+        tick_interval_s: int = 1,
+        tick_error_log_every: int = 60,
     ) -> None:
         """
         Args:
@@ -88,11 +91,21 @@ class BlePeripheral:
             on_alert: `alert` で受け取って**採用した**1通を渡す先。
                 心拍のウォッチドッグ（#36）と警告の調停（`notify.py`）がここにつながる。
                 None なら数えるだけで捨てる
+            on_tick: 一定間隔で呼ぶ先。**何も届かなくても呼ばれる**ので、
+                心拍が途切れたことに気づけるのはここだけ（`../alert.py` の `LinkWatch`）。
+                None なら呼ばない
+            tick_interval_s: `on_tick` を呼ぶ間隔（秒）
+            tick_error_log_every: `on_tick` が例外で落ち続けるとき、何回に1本ログを出すか
         """
         self._state = state
         self._interval_s = status_notify_interval_s
         self._drop_log_every = alert_drop_log_every
         self._on_alert = on_alert
+        self._on_tick = on_tick
+        self._tick_interval_s = tick_interval_s
+        self._tick_error_log_every = tick_error_log_every
+        # 周期処理が例外で落ちた回数。**毎回ログに出さないため**（`_tick`）。
+        self._tick_errors = 0
         # 直近で捨てた理由と、そのあと同じ理由で捨てた数。**毎通ログに出さないため**（下）。
         self._last_drop_reason: str | None = None
         self._drop_repeats = 0
@@ -160,8 +173,40 @@ class BlePeripheral:
 
     def start(self) -> None:
         """アドバタイズを始め、イベントループに入る（戻らない）。"""
+        if self._on_tick is not None:
+            # **`publish()` の前に登録してよい。** bluezero の `add_timer_seconds` は
+            # `GLib.timeout_add_seconds` を呼ぶだけで、**タイマーは登録した時点で既定の
+            # main context に付く**（動き出すのはループが回り始めてから）。
+            #
+            # **`status` の購読タイマーと同じ仕組みだが、別に持つ。**
+            # あちらは購読されている間しか回らない ——
+            # **セントラルがつながっていない間こそ `link` は `down` である**べきなので、
+            # 購読に相乗りさせると**一番出したい状態のときに止まる。**
+            async_tools.add_timer_seconds(self._tick_interval_s, self._tick)
         logger.info("アドバタイズを開始する")
         self._peripheral.publish()
+
+    def _tick(self) -> bool:
+        """一定間隔で `on_tick` を呼ぶ。**True を返して回り続ける。**
+
+        **ここから例外を出さない。** 抜けると GLib がこのタイマーを外し、
+        **心拍のウォッチドッグが二度と回らないまま、表示は最後の値のまま残る**
+        （`../../../../../docs/adr/0006-decision-layer-on-mobile.md` が一番恐れた
+        「静かに止まる」そのもの）。False を返さないのも同じ理由。
+        """
+        try:
+            if self._on_tick is not None:
+                self._on_tick()
+        except Exception:
+            # **毎回は出さない。** 周期は毎秒なので、つないだ先が恒常的に落ちていると
+            # トレースバックで journalctl が埋まり、**`link` が変わったという一番読みたい行が
+            # その中に消える**（`_record_drop` と同じ理由）。1本目は必ず出す。
+            if self._tick_errors % self._tick_error_log_every == 0:
+                logger.exception(
+                    "周期処理で例外が出た（%d 回目。この回は飛ばす）", self._tick_errors + 1
+                )
+            self._tick_errors += 1
+        return True
 
     def push_status(self) -> None:
         """今の `status` を購読しているセントラルへ送る。

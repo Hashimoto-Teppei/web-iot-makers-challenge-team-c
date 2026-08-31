@@ -64,7 +64,7 @@ BLE と GPIO のライブラリは **Linux 専用**で、開発機（Windows / m
 | --- | --- |
 | `src/device/detect/` | **判断する層。** センサーによる検知（後方の物体など）。1つの検知につき1ファイル |
 | `src/device/hw/` | **ハードウェアに触る層。** 1つの部品につき1ファイル（`ble.py` / `led.py` / `lcd.py` …） |
-| `src/device/alert.py` | **スマホから届く表示指示と心拍を読み解く**（`../../docs/interfaces/v2v.md`）。**BLE を知らないので開発機でもテストできる**。心拍が途切れたことに気づく仕組み（ウォッチドッグ）は #36 でここに足す |
+| `src/device/alert.py` | **スマホから届く表示指示と心拍を読み解く**（`../../docs/interfaces/v2v.md`）。**BLE を知らないので開発機でもテストできる**。心拍が途切れたことに気づく仕組み（`LinkWatch`）も同じファイルにある |
 | `src/device/notify.py` | 検知の結果をどう出すかの調停（`../../docs/notifications/arbitration.md`）。ハードには触らない |
 | `src/device/main.py` | 起動と配線。どの部品の値をどの検知に渡し、結果をどこに出すかを決める |
 | `src/device/state.py` | 今の状態（`link` / 転送の進み具合 / 受け取った警告の数）と、それを `device-info` / `status` の JSON にする変換。**BLE を知らない** |
@@ -97,6 +97,11 @@ BlueZ を触る `hw/ble.py` は Linux 専用ですが、**受け取ったあと�
 **心拍が途切れたことを人に見せるのは、このデバイスの仕事です。**
 判断がスマホへ移ったぶん、**スマホが黙ったときに気づける手段はこれしかありません**
 （`../../docs/interfaces/v2v.md`「心拍を必ず見せる」）。
+
+見張っているのは `alert.py` の `LinkWatch` で、`main.py` が毎秒呼び、結果を `status` の `link`
+（`up` / `nofix` / `down`）として出します。秒数は `config.py` にあります。
+**いまの出力先は `status` と journalctl だけです**——ディスプレイ・ブザー・LED に出すのは
+`notify.py`（部品が未確定のため未実装。#13）。
 
 実機での起動は `uv run python -m device.main`（ラズパイ上でのみ動きます）。
 起動すると BLE のアドバタイズが出て、スマホの汎用 BLE アプリから `bg-xxxx` として見えます
