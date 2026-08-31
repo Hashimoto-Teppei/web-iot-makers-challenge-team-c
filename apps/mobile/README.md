@@ -151,6 +151,41 @@ Vitest の設定は `vitest.config.mts` にあり、`src/` 全体の `*.test.ts`
 > **Vitest だけは `pnpm add -D` で入れています。** 下の「依存を足すときは `npx expo install`」は
 > Expo SDK が組み合わせを固定しているパッケージの話で、Vitest はその管理外だからです。
 
+## 書いた検知をアプリの中で動かす
+
+**検知を1つ足す手順は2つです。**
+
+1. `src/detect/` に自分のファイルを1つ足す（`hard-brake.ts` など）
+2. **`src/ride/detectors.ts` の配列に1行足す** —— `register("brake", detectHardBrake, hardBrakeDefaults),`
+
+**これだけで走行ループが毎周期呼びます。**呼び出し側（`src/ride/loop.ts`）は触りません
+（触る形にすると、並行で書いている担当どうしが同じ場所を編集してぶつかります）。
+
+```
+src/ride/
+  detectors.ts     検知の登録口。**検知を足す人が触るのはここだけ**
+  loop.ts          走行ループ（測位 → 中継 → 検知 → 出力）。BLE も測位も HTTP も知らない
+  warn-gate.ts     同じ警告を毎周期書き直さないための抑制
+  device.ts        BLE の出口（口だけ）とモック実装。実装は #38 で差し替える
+  location.ts      測位の購読（expo-location を知っている唯一の場所）
+  api.ts           POST /api/v2v/exchange の実装
+  use-ride-loop.ts 画面のライフサイクルに載せるフック
+```
+
+**動いたことは実機なしで確かめられます。**シミュレータのシナリオを走行ループごと回して、
+デバイスの出口に `warn` が届くかを見ます（`src/sim/ride.ts`）。
+
+```ts
+const frames = await runRide(hardBrakeAhead, {
+  detectors: [register("brake", detectHardBrake, hardBrakeDefaults)],
+});
+expect(frames.flatMap((f) => f.warns).length).toBeGreaterThan(0);
+```
+
+**`src/sim/run.ts` の `runDetectorInputs()` との違い**は、あちらが「検知に渡る入力」までを
+返すのに対し、こちらは**登録・抑制・BLE への書き込みまで**通ることです。
+検知そのものの合否は前者で、アプリの中で動くことの確認は後者で見ます。
+
 ## 他のアプリとバージョンが違うのは正常
 
 `apps/mobile` だけ React が 19.2.3、TypeScript が 6 系です（他は React 19.2.8 / TypeScript 7 系）。

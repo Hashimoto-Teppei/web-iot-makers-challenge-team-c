@@ -214,6 +214,23 @@ export class NeighborStore {
     return { now, self, peers, signs };
   }
 
+  /**
+   * 自車の測位が生きているか。**`beat` の `st` はこれで決める。**
+   *
+   * **`detectorInput()` が `null` を返したことで代用しない。**あちらは自車の測位が
+   * 無いときも、履歴が尽きたときも `null` を返す。心拍が伝えるのは「測位が取れているか」
+   * だけなので、混ぜると**測位できているのに `nofix` を書く**ことになりうる
+   * （`docs/interfaces/v2v.md`「心拍を必ず見せる」）。
+   *
+   * **状態を変えない。**心拍は毎秒書くので、ここで `prune()` を呼ぶと、走行ループの
+   * 周期とは別の頻度で近傍が消えることになる。
+   *
+   * @param now 自分の時計の「いま」（UTC ミリ秒）
+   */
+  hasSelfFix(now: number): boolean {
+    return !this.isSelfStale(now);
+  }
+
   /** 自車の測位が古すぎるか（一度も無い場合も含む）。 */
   private isSelfStale(now: number): boolean {
     const last = this.selfFixes.at(-1);
