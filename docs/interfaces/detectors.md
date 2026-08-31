@@ -50,7 +50,7 @@ type Fix = {
 
 type Track = {
   id: string;              // 端末ID（16進の小文字8文字）。自車は自分の id
-  fixes: readonly Fix[];   // 古い順。末尾が最新。空にしない
+  fixes: readonly [Fix, ...Fix[]];  // 古い順。末尾が最新。空にしない（型で止める）
 };
 
 type StopSign = {
@@ -213,6 +213,8 @@ export const detectApproach: Detector<ApproachConfig> = (input, config) => { /* 
 長く持つほど**古い点を含んだ平均が鈍る。** 既定は仮の値（`../unverified.md` 36）。
 
 **`fixes` を空にしない。** 空の `Track` を作るくらいなら、その `Track` を `peers` に入れない。
+**`types.ts` では「先頭が必ず1つある配列」として型で止めてある**ので、配列から `Track` を作る側が
+非空を確かめる。おかげで検知は末尾（最新）を undefined の確認なしに取れる。
 
 **自車の測位が無い間は、検知を1つも呼ばない。** 空の `self` を渡さない。
 [`v2v.md`](./v2v.md)「受信側（モバイル）の約束」7 が同じ状態で `peer` を持つことを禁じており、
