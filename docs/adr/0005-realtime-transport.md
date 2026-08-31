@@ -38,7 +38,7 @@
 生きている状態は Durable Object 1個のメモリに置き、永続化しない。**
 
 ```
-[スマホ] --1Hz POST /v2v/exchange { self }--> [Worker/Hono] --RPC--> [DO 1個]
+[スマホ] --1Hz POST /api/v2v/exchange { self }--> [Worker/Hono] --RPC--> [DO 1個]
                                                                       Map<id, 最新の位置>
 [スマホ] <-- 200 { peers: [半径 300m 内の全員] } ---------------------┘
    |
