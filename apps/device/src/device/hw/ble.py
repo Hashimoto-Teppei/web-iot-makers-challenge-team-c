@@ -8,15 +8,16 @@
 ここは読まれたときにそれを渡すだけ（BLE の管に徹する）。
 
 UUID とプロパティの正本は `../../../../../docs/interfaces/ble-gatt.md`。
-この Issue（#37）で作るのは `device-info` と `status` だけで、
-`control` / `log` は #40、`alert` は #35 でここに足す。
+いまあるのは `device-info` / `status` / `alert` で、`control` / `log` は #40 でここに足す。
 """
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from bluezero import adapter, async_tools, peripheral
 
+from device.alert import AlertResult, Beat, Warn, parse_alert
 from device.state import DeviceState
 
 logger = logging.getLogger(__name__)
@@ -24,11 +25,13 @@ logger = logging.getLogger(__name__)
 SERVICE_UUID = "68666e00-58cc-4540-90ad-18bfae31615f"
 DEVICE_INFO_UUID = "68666e01-58cc-4540-90ad-18bfae31615f"
 STATUS_UUID = "68666e04-58cc-4540-90ad-18bfae31615f"
+ALERT_UUID = "68666e06-58cc-4540-90ad-18bfae31615f"
 
 # bluezero が GATT のツリーを組むための通し番号。UUID とは無関係で、この中でだけ使う。
 _SRV_ID = 1
 _CHR_DEVICE_INFO = 1
 _CHR_STATUS = 2
+_CHR_ALERT = 3
 
 
 def _first_adapter_address() -> str:
@@ -72,16 +75,27 @@ class BlePeripheral:
         *,
         adapter_address: str | None = None,
         status_notify_interval_s: int = 1,
+        alert_drop_log_every: int = 100,
+        on_alert: Callable[[Warn | Beat], None] | None = None,
     ) -> None:
         """
         Args:
-            state: 読み出しのたびに今の値を聞く状態。**ここでは書き換えない**
+            state: 読み出しのたびに今の値を聞く状態。**数えるのはここ**（`record_alert`）
             local_name: アドバタイズに載せる名前（`bg-a20b` の形、7文字）
             adapter_address: 使うアダプタ。None なら最初に見つかったもの
             status_notify_interval_s: status を Notify で送り直す間隔（秒）
+            alert_drop_log_every: 同じ理由で `alert` を捨て続けたとき、何通に1行ログを出すか
+            on_alert: `alert` で受け取って**採用した**1通を渡す先。
+                心拍のウォッチドッグ（#36）と警告の調停（`notify.py`）がここにつながる。
+                None なら数えるだけで捨てる
         """
         self._state = state
         self._interval_s = status_notify_interval_s
+        self._drop_log_every = alert_drop_log_every
+        self._on_alert = on_alert
+        # 直近で捨てた理由と、そのあと同じ理由で捨てた数。**毎通ログに出さないため**（下）。
+        self._last_drop_reason: str | None = None
+        self._drop_repeats = 0
         # 購読が始まったときに bluezero から渡される Characteristic。一度受け取ったら**捨てない。**
         # 切断や購読解除のたびに None へ戻すと、**再購読で戻ってこない。**
         # bluezero の `StartNotify` は `Notifying` が既に True なら何もせずに返り、
@@ -122,6 +136,21 @@ class BlePeripheral:
             read_callback=self._read_status,
             write_callback=None,
             notify_callback=self._on_status_subscribed,
+        )
+        # **`write` だけを立てて `write-without-response` を立てない。**
+        # 応答なしの書き込みは送信キューが埋まると**黙って落ちる**ため、
+        # セントラルに Write Request を使わせる（`../../../../../docs/interfaces/ble-gatt.md`
+        # 「`alert`（Write）」）。**警告が落ちたことが分かる方を選ぶ。**
+        self._peripheral.add_characteristic(
+            srv_id=_SRV_ID,
+            chr_id=_CHR_ALERT,
+            uuid=ALERT_UUID,
+            value=[],
+            notifying=False,
+            flags=["write"],
+            read_callback=None,
+            write_callback=self._on_alert_write,
+            notify_callback=None,
         )
         # **暗号化のフラグ（encrypt-*）を付けない。** ペアリングしない決定
         # （`../../../../../docs/interfaces/ble-gatt.md`「ペアリング・認証」）。
@@ -177,6 +206,74 @@ class BlePeripheral:
             return False
         characteristic.set_value(list(self._state.status_bytes()))
         return True
+
+    def _on_alert_write(self, value: bytearray, options: dict[str, Any]) -> None:
+        """セントラルが `alert` に1通書いたときに呼ばれる。
+
+        bluezero は D-Bus の `ay` を **`bytearray`** にして渡す
+        （`bluezero/dbus_tools.py` の `dbus_to_python`。署名が `y` の配列だけ特別扱いされる）。
+        **中身の解釈はここでしない** —— `../alert.py` に渡し、ここは受け取って数えるところまで
+        （BLE の管に徹する）。
+
+        **ここから例外を出さない。** 送出すると bluezero の `WriteValue` を抜けて
+        dbus-python が ATT のエラー応答に変えるため、
+        **その1通だけでなく以降の Write も失敗し続ける。**
+        `alert` はデバイスが警告を出せる唯一の入口なので、そこで警告が止まる
+        （`../../../../../docs/adr/0006-decision-layer-on-mobile.md`）。
+        """
+        # **分割された Write を1通として読まない。** MTU を上げずにつなぐと（既定の ATT_MTU 23 →
+        # 1回 20 バイト）、50 バイトを超える `beat` は BlueZ から **offset 付きで複数回**渡される。
+        # 気づかずに読むと全部 JSON として壊れ、**「届いていない」ではなく「壊れている」に見える。**
+        # セントラルは MTU 247 を要求する約束だが（`../../../../../docs/interfaces/ble-gatt.md`
+        # 「接続してから転送するまで」）、**nRF Connect のような手動のツールは上げてくれない。**
+        # **すべてを try の中に置く。** 一部でも外に出すと、そこで出た例外が
+        # そのまま bluezero を抜けてしまい、上の約束が守れない。
+        try:
+            offset = options.get("offset", 0)
+            if offset:
+                result = AlertResult(
+                    None, dropped=True, reason=f"分割されて届いた（offset={offset}）"
+                )
+            else:
+                result = parse_alert(bytes(value))
+
+            self._state.record_alert(result)
+            if result.message is None:
+                self._record_drop(result)
+                return
+
+            # **`beat` をログに出さない。** 毎秒1通来るので、走行1時間で数千行になり、
+            # SD カードへの書き込みと journalctl の見通しの両方を潰す
+            # （`../config.py` と同じ理由）。届いているかは `status` の `warns` で見る。
+            if isinstance(result.message, Warn):
+                logger.info("warn を受け取った: %s lv%d", result.message.kind, result.message.lv)
+            if self._on_alert is not None:
+                # **渡す先で何が起きても、この経路は止めない。** #36 のウォッチドッグと
+                # `notify.py` がここにつながるので、
+                # あちらの不具合が `alert` 全体を殺さないようにする。
+                self._on_alert(result.message)
+        except Exception:
+            logger.exception("alert の処理で例外が出た（この1通は捨てる）")
+
+    def _record_drop(self, result: AlertResult) -> None:
+        """捨てたことをログに出す。**同じ理由が続く間は間引く。**
+
+        理由は `status` に載せられない（`alert` は毎秒流れるので、`last_error` に入れると
+        転送を断った理由が毎秒上書きされる。`../../../../../docs/interfaces/ble-gatt.md`「`status`」）。
+        **journalctl だけが理由を知る手段**になるが、毎通出すと `beat` を出さないことにした理由
+        （SD への書き込みと見通し）をここで自分から壊すことになる ——
+        **`st` の綴りを1つ間違えたアプリは毎秒ここへ来る。**
+        """
+        reason = result.reason
+        if reason != self._last_drop_reason:
+            self._last_drop_reason = reason
+            self._drop_repeats = 0
+            logger.warning("alert を捨てた（dropped=%s）: %s", result.dropped, reason)
+            return
+
+        self._drop_repeats += 1
+        if self._drop_repeats % self._drop_log_every == 0:
+            logger.warning("alert を捨て続けている（%d 通目）: %s", self._drop_repeats + 1, reason)
 
     def _on_connect(self, remote: Any) -> None:
         logger.info("接続された: %s", remote)
