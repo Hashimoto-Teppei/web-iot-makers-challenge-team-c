@@ -108,7 +108,8 @@ pnpm install
 | [docs/interfaces.md](./docs/interfaces.md) | コンポーネント間の境界仕様。実装と同じ PR で更新する |
 | [docs/deploy-device.md](./docs/deploy-device.md) | **ラズパイへの投入手順。** OS の書き込みから 自動起動・ログの見方まで。**実機に載せるときだけ読む** |
 | [docs/hardware.md](./docs/hardware.md) | **配線の正本。** 接続中の部品・ピン割り当て・I2C アドレス・消費電流。配線を変えたら必ず更新する |
-| [docs/notifications.md](./docs/notifications.md) | 検知結果をどう人に伝えるか。警告（本人向け）と表示（周囲向け）の境界 |
+| [docs/notifications.md](./docs/notifications.md) | 検知結果をどう人に伝えるかの境界。走行中と停止中で出せるものが違う理由と、その境目 |
+| [docs/notifications/arbitration.md](./docs/notifications/arbitration.md) | **警告の出し分け。**出力のチャンネル・優先順位・出し続ける時間・鳴らし直す条件・16×2 の割り付け |
 | [docs/unverified.md](./docs/unverified.md) | 実機で確認していない前提。確認できたら行を消す |
 | [Issues](../../issues) | **これからやること。** 誰が・何を・どこまでやれば終わりか |
 

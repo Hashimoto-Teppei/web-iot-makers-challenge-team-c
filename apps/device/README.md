@@ -65,7 +65,7 @@ BLE と GPIO のライブラリは **Linux 専用**で、開発機（Windows / m
 | `src/device/detect/` | **判断する層。** センサーによる検知（後方の物体など）。1つの検知につき1ファイル |
 | `src/device/hw/` | **ハードウェアに触る層。** 1つの部品につき1ファイル（`ble.py` / `led.py` / `lcd.py` …） |
 | `src/device/alert.py` | **スマホから届く表示指示と心拍を受け取る**（`../../docs/interfaces/v2v.md`）。心拍が途切れたら `link` を落とす。**BLE を知らないので開発機でもテストできる** |
-| `src/device/notify.py` | 検知の結果をどう出すかの調停（`../../docs/notifications.md`）。ハードには触らない |
+| `src/device/notify.py` | 検知の結果をどう出すかの調停（`../../docs/notifications/arbitration.md`）。ハードには触らない |
 | `src/device/main.py` | 起動と配線。どの部品の値をどの検知に渡し、結果をどこに出すかを決める |
 | `src/device/state.py` | 今の状態（`link` / 転送の進み具合 / 受け取った警告の数）と、それを `device-info` / `status` の JSON にする変換。**BLE を知らない** |
 | `src/device/identity.py` | `device_id` / `log_id` の生成と保存。アドバタイズの名前もここで作る |

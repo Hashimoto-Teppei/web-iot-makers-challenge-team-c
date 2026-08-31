@@ -186,7 +186,8 @@ GATT の約束は [`ble-gatt.md`](./ble-gatt.md)。
 | `beat` | **毎秒1回、必ず** | `t`（UTC ミリ秒） / `st`（`ok` or `nofix`） / `mv`（走行中か） |
 
 - **`kind` の一覧と `lv` の意味は [`detectors.md`](./detectors.md) が正本**（生むのは検知の側）。
-  **それをどの出力でどう出すかは [`../notifications.md`](../notifications.md) が正本。**
+  **それをどの出力でどう出すかは
+  [`../notifications/arbitration.md`](../notifications/arbitration.md) が正本。**
   ここには**運び方**だけを書く。
 - **`beat` は検知が起きていなくても止めない。** これが心拍であり、
   **止まった瞬間にデバイスが「スマホが落ちた」と判断する**根拠になる（下）。
@@ -255,7 +256,8 @@ GATT の約束は [`ble-gatt.md`](./ble-gatt.md)。
 
 ### `up` でない間にすること
 
-- **その旨を出力に出し続ける。** 出し方は [`../notifications.md`](../notifications.md)。
+- **その旨を出力に出し続ける。** 出し方は
+  [`../notifications/arbitration.md`](../notifications/arbitration.md)「通信断の見せ方」。
   **一度きりの通知にしない。** 見逃した人はそのまま走り続ける。
 - **表示は「走行中」として扱う**（`mv` が届かないため）。
   止まっているように見えても、走行中の画面に文章を出さない。

@@ -12,7 +12,7 @@
 
 **検知の結果をどう人に伝えるかは [`../notifications.md`](../notifications.md)。**
 ここが決めるのは**検知の入口と出口の形**だけで、どの出力に割り当てるか・
-同時に出たときにどれを優先するかは決めない（#29）。
+同時に出たときにどれを優先するか・**何秒出し続けるか**は決めない。
 
 ## 入力を受けて結果を返す純粋な関数にする
 
@@ -132,7 +132,8 @@ type Warning = {
   [`v2v.md`](./v2v.md)「デバイスへ渡すもの」の `warn` は `kind` と `lv` だけであり、
   `detections` の列にも無い（[`web-service.md`](./web-service.md)）。
   **スマホの中で、同じ相手の警告を抑制するためだけに持つ**
-  （抑制の仕様は [`../notifications.md`](../notifications.md)）
+  （抑制の仕様は [`../notifications/arbitration.md`](../notifications/arbitration.md)
+  「送り続けるのはスマホの責務」）
 - **`causeId` は「相手の id」とは限らない。** 車車間の3つでは `Track.id`
   （16進の小文字8文字）が入り、一時停止の事前通知では **`StopSign.id`** が入る。
   **形式の違う2つの ID が同じ項目に入る**ので、
@@ -141,8 +142,8 @@ type Warning = {
 
 ### `kind` の一覧
 
-**識別子はここが正本。** どの出力にどう割り当てるかは
-[`../notifications.md`](../notifications.md)（#29）。**一覧を両方に書かない。**
+**識別子はここが正本。** どの出力にどう割り当てるか・**同時に出たときの順位**は
+[`../notifications/arbitration.md`](../notifications/arbitration.md)。**一覧を両方に書かない。**
 
 | `kind` | 何 | 出どころ | Issue |
 | --- | --- | --- | --- |
@@ -262,9 +263,11 @@ POST が失敗して近傍が空の間、測位が粗すぎて判断できない
   （`../notifications.md`）、**スマホは `rear_object` の存在を知らない。**
   ここで絞ると、デバイスから見て「起きなかったこと」になる
 - **`lv` の高い順に書くのは、詰まったときに重要なものが先に届くようにするため。**
-  優先順位を決めているのではない（それは #29）
+  優先順位を決めているのではない（それは
+  [`../notifications/arbitration.md`](../notifications/arbitration.md)「同時に起きたときの優先順位」）
 - **同じ警告を毎周期書き直さない。** 抑制の仕様は
-  [`mobile-api.md`](./mobile-api.md)「スマホの約束」と `../notifications.md`
+  [`mobile-api.md`](./mobile-api.md)「スマホの約束」と
+  `../notifications/arbitration.md`「送り続けるのはスマホの責務」
 
 ## ファイル構成
 
