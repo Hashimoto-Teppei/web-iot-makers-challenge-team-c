@@ -13,14 +13,25 @@ GATT の約束は `../../../../docs/interfaces/ble-gatt.md`「`alert`（Write）
 
     {"k":"warn","kind":"approach","lv":2}
     {"k":"beat","t":1756123456789,"st":"ok","mv":false}
+
+**心拍が途切れたことに気づく `LinkWatch` も、このファイルにある**（`../../README.md` の表）。
+読み解いた `beat` をそのまま渡す先なので、同じ境界のものとして1か所に置く。
+**こちらも BLE を知らない**（時刻は引数で受け取る）ので、開発機で pytest から回せる。
 """
 
 import json
+from collections import deque
 from dataclasses import dataclass
 from typing import Literal, TypeGuard
 
 Level = Literal[1, 2, 3]
 BeatState = Literal["ok", "nofix"]
+
+# スマホが生きているか（`../../../../docs/interfaces/v2v.md`「心拍を必ず見せる」）。
+#
+# **`status` の項目としての意味は `state.py` にあるが、値を決めるのはここ**なので、
+# 定義もここに置いて `state.py` から import する。**同じ Literal を2か所に書かない。**
+Link = Literal["up", "nofix", "down"]
 
 # スマホから届きうる `kind`。**正本は `../../../../docs/interfaces/detectors.md`。**
 #
@@ -160,6 +171,153 @@ def _parse_beat(body: dict[str, object]) -> AlertResult:
     mv = raw_mv if isinstance(raw_mv, bool) else True
 
     return AlertResult(message=Beat(t=t, st=st, mv=mv), dropped=False)
+
+
+@dataclass(frozen=True)
+class LinkStatus:
+    """いまスマホとどうつながっているか。`LinkWatch.evaluate()` が返す。"""
+
+    link: Link
+    # いまの `link` になった時刻（`evaluate()` に渡した時刻の目盛り）。
+    # **通信断のチャイムを1回だけ鳴らすための鍵に使う**
+    # （`../../../../docs/notifications/arbitration.md`「鳴らしたことを鍵の集合で持つ」）。
+    since_ms: int
+    # 走行中か。**`link` が `up` でない間は必ず True**（下の `_moving`）。
+    moving: bool
+
+
+class LinkWatch:
+    """心拍のウォッチドッグ。**`beat` が届いているかだけを見て `link` を決める。**
+
+    **この方式で一番危ないのは、静かに止まることである**
+    （`../../../../docs/adr/0006-decision-layer-on-mobile.md`）。判断そのものがスマホへ移ったので、
+    スマホが落ちるとデバイスから見て「警告が来ていない」＝「今日は危険が無い」に見える。
+    **それを「落ちた」と言えるようにするのがここ。**
+
+    仕様は `../../../../docs/interfaces/v2v.md`「心拍を必ず見せる」。**決め直さない。**
+    外してはいけない4つが向こうに書いてあり、この実装はそれぞれ次で守っている。
+
+    | 外してはいけないこと | ここでの守り方 |
+    | --- | --- |
+    | `up` から始めない | `_last_beat` が `None` の間は `down`（初期値を `up` にしない） |
+    | `warn` を根拠にしない | 受け口が `record_beat()` だけで、**`Beat` しか受け取らない** |
+    | `nofix` を旗にしない | 毎回**直近の `beat` の `st`** から引き直す（`nofix` を覚えない） |
+    | `t` が進んでいるかも見る | **窓の中で**見る（`_stalled`）。1点を基準に控えない |
+
+    **時刻は引数で受け取る。** 中で `time` を呼ぶと**同じ入力で結果が変わってテストが書けない**
+    （`../../../../docs/notifications/arbitration.md`「調停の関数の形」と同じ理由）。
+    渡すのは**単調時計のミリ秒**にすること —— デバイスに RTC は無く、`beat` の `t` は
+    スマホの壁時計なので、**経過時間の計測にどちらも使えない。**
+    """
+
+    def __init__(self, *, timeout_ms: int, stall_window_ms: int, started_at_ms: int) -> None:
+        """
+        Args:
+            timeout_ms: 最後の `beat` からこれを超えて空いたら `down`。
+                **`beat` は毎秒1通**なので、何通ぶん落ちるまで待つかを決める値になる
+            stall_window_ms: `t` が進んでいるかを見る窓の長さ。
+                **この窓いっぱい同じ `t` が続いたときだけ**「固まっている」と見なす
+            started_at_ms: 起動した時刻。**まだ一度も `beat` が来ていない `down` がいつからか**を
+                答えられるようにするために要る（`since_ms` の初期値）
+        """
+        self._timeout_ms = timeout_ms
+        self._stall_window_ms = stall_window_ms
+        self._last_beat: Beat | None = None
+        self._last_beat_at_ms: int | None = None
+        # 窓の中の `(受け取った時刻, beat の t)`。**`t` が進んでいるかを見るためだけ**に持つ。
+        self._recent: deque[tuple[int, int]] = deque()
+        # **`up` から始めない**（`v2v.md`）。一度も `beat` を受け取っていない状態を健全に見せない。
+        self._link: Link = "down"
+        self._since_ms = started_at_ms
+
+    def record_beat(self, beat: Beat, now_ms: int) -> None:
+        """`beat` を1通受け取ったことを控える。
+
+        **受け取るのは `Beat` だけ。** `Warn` を渡せないようにしてあるのは、
+        **警告の到着を生存の根拠にしない**ため（`v2v.md`）。警告は**来ないのが正常**なので、
+        混ぜると**静かなときと落ちたときが区別できなくなる。**
+
+        **`t` の中身を検証しない。** ここで未来や過去の `t` を弾くと、
+        **時計がずれているだけの端末に対して「スマホが落ちた」と表示する**ことになる。
+        見るのは「窓の中で進んでいるか」だけ（`_stalled`）。
+        """
+        self._last_beat = beat
+        self._last_beat_at_ms = now_ms
+        self._recent.append((now_ms, beat.t))
+        self._prune(now_ms)
+
+    def evaluate(self, now_ms: int) -> LinkStatus:
+        """いまの `link` を出す。**呼ぶたびに引き直す。**
+
+        **周期的に呼ぶこと。** `beat` が来たときだけ呼ぶ作りにすると、
+        **来なくなったことに永久に気づけない** —— それがこの仕組みの目的そのものである。
+        """
+        self._prune(now_ms)
+        link = self._link_at(now_ms)
+        if link != self._link:
+            self._link = link
+            self._since_ms = now_ms
+        return LinkStatus(link=link, since_ms=self._since_ms, moving=self._moving(link))
+
+    def _link_at(self, now_ms: int) -> Link:
+        """いまの `link`。**直近の `beat` から毎回引き直す**（旗を立てない）。"""
+        beat = self._last_beat
+        if beat is None or self._last_beat_at_ms is None:
+            # まだ一度も届いていない。**スマホがつながる前を `up` にしない。**
+            return "down"
+        if now_ms - self._last_beat_at_ms > self._timeout_ms:
+            # 届かなくなった。アプリが落ちたか、BLE が切れたか（人がすることは「端末を見る」）。
+            return "down"
+        if self._stalled(now_ms):
+            # 届いてはいるが `t` が動いていない。**値の検証では気づけない止まり方**
+            # （`v2v.md`「`t` が進んでいるかも見る」）。
+            # **`nofix` ではなく `down` にする。** 待って直るものではないので、
+            # 人がすべきことは「端末を見る」側である（`v2v.md`「心拍を必ず見せる」）。
+            return "down"
+        # **`nofix` を覚えない。** 見るのは直近の `beat` がどちらだったかだけ。
+        # 旗にすると**再起動するまで `up` に戻らない**（`v2v.md`）。
+        return "up" if beat.st == "ok" else "nofix"
+
+    def _moving(self, link: Link) -> bool:
+        """走行中として扱うか。
+
+        **`link` が `up` でなければ走行中に倒す。** 速度を持っているのはスマホだけなので、
+        心拍が来ていない間は走っているか止まっているか分からない。ここを「停止中」に倒すと
+        **通信が切れた瞬間に走行中の画面へ文章が出て**、防ごうとしている「ながら運転」を
+        こちらから作り込むことになる（`../../../../docs/notifications.md`「迷ったら走行中に倒す」）。
+        """
+        beat = self._last_beat
+        if link != "up" or beat is None:
+            return True
+        return beat.mv
+
+    def _prune(self, now_ms: int) -> None:
+        """窓から出た控えを捨てる。**境界の1つ手前は残す。**
+
+        窓より古いものを全部捨てると、**残った控えは必ず窓より新しくなり**、
+        「窓いっぱい同じ `t` が続いた」が永久に成立しない（`_stalled` が発火しなくなる）。
+        """
+        limit = now_ms - self._stall_window_ms
+        while len(self._recent) >= 2 and self._recent[1][0] <= limit:
+            self._recent.popleft()
+
+    def _stalled(self, now_ms: int) -> bool:
+        """`t` が固まっているか。**窓の中だけを見る。**
+
+        **「控えた1点の `t` より進んだか」で書かないこと**（`v2v.md`）。
+        変な値を1通採用した瞬間に基準がそこで固まり、**再起動まで戻らなくなる。**
+        窓の中の広がりで見れば、**新しい `t` が1通来た時点で自然に戻る。**
+        """
+        if len(self._recent) < 2:
+            # 1通しか無ければ「進んでいない」とは言えない（`beat` は毎秒1通しか来ない）。
+            return False
+        oldest_at_ms = self._recent[0][0]
+        if now_ms - oldest_at_ms < self._stall_window_ms:
+            # まだ窓ぶん溜まっていない。**足りない窓で判定しない。**
+            return False
+        # **前に進んだかではなく、動いたかを見る。** 巻き戻った `t`（時計合わせ）も
+        # 「動いている」として通す —— ずれた時計を「落ちた」と表示しないため。
+        return len({t for _, t in self._recent}) == 1
 
 
 def _drop(reason: str) -> AlertResult:
