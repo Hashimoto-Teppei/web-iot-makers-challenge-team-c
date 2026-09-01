@@ -40,7 +40,8 @@ Web×IoT メイカーズチャレンジ **チームC** の開発リポジトリ�
 
 **走ったぶんのログは Worker に溜まる。** これを集計して、
 **どこで危険が起きやすいかを地図とランキングで公開する**
-（仕様は [docs/interfaces/web-service.md](./docs/interfaces/web-service.md)）。
+（データの側は [docs/interfaces/web-service.md](./docs/interfaces/web-service.md)、
+画面は [docs/interfaces/web-ui.md](./docs/interfaces/web-ui.md)）。
 
 **件数ではなく率（危険が出た走行の数 ÷ そこを通った走行の数）で見る。**
 件数のまま並べると「危ない場所」ではなく「よく通る場所」の一覧になるため。
