@@ -1,8 +1,11 @@
 import { zValidator } from "@hono/zod-validator";
 import { drizzle } from "drizzle-orm/d1";
 import { Hono } from "hono";
-import type { HealthResponse, Ping } from "../shared/api";
+import type { HealthResponse, Ping, StopSignsResponse } from "../shared/api";
 import { pings } from "./db/schema";
+import { etagOf, matchesIfNoneMatch } from "./stop-signs/etag";
+import { readStopSigns, readStopSignVersion } from "./stop-signs/query";
+import { stopSignsQuery } from "./stop-signs/request";
 import { NEIGHBORS_DO_NAME, NEIGHBORS_LOCATION_HINT } from "./v2v/config";
 import { type ExchangeResponse, exchangeRequest } from "./v2v/messages";
 
@@ -37,6 +40,66 @@ const routes = app
 
     return c.json(row satisfies Ping, 201);
   })
+  /**
+   * 一時停止の標識を都道府県ぶん丸ごと配る。
+   *
+   * **走行中には使われない。**アプリの起動時にだけ取りに行き、走行中は端末の手元
+   * （`signs.db`）を見る（`docs/adr/0009-on-device-storage.md`）。**それでも壊すと、
+   * 走行中ではなくアプリのビルドが止まる**——各自の同梱物はこの経路から作る。
+   *
+   * **認証を置かない。**公開されている交通規制情報であり、隠す意味がない
+   * （`docs/interfaces/web-service.md`「割り切っていること」）。
+   */
+  .get(
+    "/api/stop-signs",
+    zValidator("query", stopSignsQuery, (result, c) => {
+      // 範囲外の県コードは送り手の誤り。例外のまま落とすと 500 になる。
+      if (!result.success) return c.json({ error: "pref は 1〜47 の都道府県コードです" }, 400);
+    }),
+    async (c) => {
+      const { pref } = c.req.valid("query");
+      const db = drizzle(c.env.DB);
+
+      // **まず版だけを読む。**標識の本体を先に読むと、`304` で捨てるだけの数万行を
+      // アプリの起動のたびに D1 から引くことになる。
+      const found = await readStopSignVersion(db, pref);
+      // **空の配列を返さない。**「まだ取り込んでいない県」を 200 + 0 件で返すと、
+      // 端末からは「標識が無い県」と区別が付かない（`docs/interfaces/mobile-api.md`
+      // 「『持っていない』と『0件』を混ぜない」）。
+      if (!found) return c.json({ error: `都道府県コード ${pref} の標識がまだありません` }, 404);
+
+      const etag = etagOf(pref, found.version);
+      // **`no-cache` は「キャッシュするな」ではなく「使う前に必ず確かめろ」。**
+      // 月に1回しか変わらないデータなので、中継に握られたまま古い版を返されると
+      // 端末が更新を取り逃す。ETag の検証だけは毎回通す。
+      const headers = { ETag: etag, "Cache-Control": "no-cache" };
+
+      // 版が変わっていなければ本文を送らない。**同梱直後の最初の起動はここに来る**
+      // （`docs/adr/0009-on-device-storage.md`）。
+      if (matchesIfNoneMatch(c.req.header("If-None-Match"), etag)) {
+        return c.body(null, 304, headers);
+      }
+
+      const signs = await readStopSigns(db, pref);
+      // **取り込んだときの件数と食い違っていたら配らない。**取り込みの SQL は
+      // トランザクションで囲めない（D1 が `BEGIN` を受け付けない）ので、途中で
+      // 落ちれば**新しい版のまま中身が欠ける。**そのまま 200 で返すと、端末は
+      // **正しく揃っている手元の `signs.db` を、欠けたもので置き換える。**
+      if (signs.length !== found.count) {
+        return c.json(
+          {
+            error:
+              `都道府県コード ${pref} の標識が壊れています` +
+              `（取り込み時 ${found.count} 件 / いま ${signs.length} 件）。取り込み直してください`,
+          },
+          500,
+        );
+      }
+
+      const body: StopSignsResponse = { pref, version: found.version, count: signs.length, signs };
+      return c.json(body, 200, headers);
+    },
+  )
   /**
    * 走行中の位置の中継。1Hz で自分の位置を受け取り、**同じレスポンスで半径内の
    * 周辺車両を返す**（`docs/adr/0005-realtime-transport.md`）。

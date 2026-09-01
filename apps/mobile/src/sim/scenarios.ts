@@ -113,10 +113,15 @@ export const blindCorner: Scenario = {
   ],
 };
 
-/** {@link stopSignAhead} の標識。進路上 80m 先に置いてある。 */
+/**
+ * {@link stopSignAhead} の標識。進路上 80m 先に置いてある。
+ *
+ * **進入方向は標識の 20m 手前**（南）。北へ走る自車は、この点から標識へ向かっている。
+ */
 const SIGN_AHEAD: StopSign = {
   id: "sim-stop-1",
   ...destination(BASE.lat, BASE.lon, NORTH, 80),
+  approach: destination(BASE.lat, BASE.lon, NORTH, 60),
 };
 
 /**
@@ -135,7 +140,12 @@ export const stopSignAhead: Scenario = {
   signs: [
     SIGN_AHEAD,
     // 東へ 40m 外れた、別の道の標識。距離だけを見ると先に引っかかる。
-    { id: "sim-stop-2", ...destination(BASE.lat, BASE.lon, EAST, 40) },
+    // **進入方向はさらに東**——東から西へ走る車が対象で、北へ走る自車は対象ではない。
+    {
+      id: "sim-stop-2",
+      ...destination(BASE.lat, BASE.lon, EAST, 40),
+      approach: destination(BASE.lat, BASE.lon, EAST, 60),
+    },
   ],
   nodes: [
     rider({ id: ME, ...BASE, legs: [{ durationMs: 20_000, bearingDeg: NORTH, speedMps: 5 }] }),

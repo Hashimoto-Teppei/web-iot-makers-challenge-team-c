@@ -214,7 +214,7 @@ describe("detectorInput", () => {
   });
 
   it("標識をそのまま渡す（絞るのは呼び出し側）", () => {
-    const signs = [{ id: "s1", lat: 34.66, lon: 133.93 }];
+    const signs = [{ id: "s1", lat: 34.66, lon: 133.93, approach: { lat: 34.659, lon: 133.93 } }];
     expect(storeWithSelf().detectorInput(T0, signs)?.signs).toEqual(signs);
   });
 
