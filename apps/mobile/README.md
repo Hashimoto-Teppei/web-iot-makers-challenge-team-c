@@ -186,6 +186,34 @@ expect(frames.flatMap((f) => f.warns).length).toBeGreaterThan(0);
 返すのに対し、こちらは**登録・抑制・BLE への書き込みまで**通ることです。
 検知そのものの合否は前者で、アプリの中で動くことの確認は後者で見ます。
 
+## 一時停止の標識（`src/signs/`）
+
+**県ぶんの標識をアプリに同梱し、走行中は SQLite（`expo-sqlite`）で近傍だけを引きます。**
+**決めた理由の正本は [`docs/adr/0009-on-device-storage.md`](../../docs/adr/0009-on-device-storage.md)**、
+配り方は [`docs/interfaces/mobile-api.md`](../../docs/interfaces/mobile-api.md)。ここには置き場所だけを書きます。
+
+```
+src/signs/
+  cell.ts      セル（緯度経度を小数第3位で切り捨てた升目）。切り方の正本は docs/interfaces/web-service.md
+  schema.ts    signs.db の Drizzle スキーマと、作るときの DDL
+  store.ts     SignStore の口 / メモリ実装 / SQL 実装（better-sqlite3 と expo-sqlite で共通）
+  node.ts      better-sqlite3（Node のテストと同梱物の生成。**アプリから import しない**）
+  expo.ts      expo-sqlite（実機。React Native に触れる唯一のファイル）
+  nearby.ts    セルをまたいだときだけ引き直す
+  response.ts  GET /api/stop-signs の応答を確かめる（同梱物を作るときだけ通る）
+scripts/build-signs-db.ts  同梱物を作る
+```
+
+**`assets/signs.db` は生成物で、リポジトリに入っていません。**作り方は
+[`docs/setup.md`](../../docs/setup.md)。**作っていないとビルドが止まります**（そういう作りです）。
+
+**走行ループも検知も SQL を知りません。**間に `SignStore` があるので、テストは実機なしで回せます。
+**メモリ実装と `better-sqlite3` 実装に同じテストを回している**（`src/signs/store.test.ts`）のは、
+メモリだけだと「実機の SQL が間違っている」が素通りするためです。
+
+> **`better-sqlite3` は `pnpm add -D` で入れています。**Vitest と同じ理由（Expo SDK の管理外）で、
+> **Node でしか動きません。**アプリの中では `expo-sqlite` を使います。
+
 ## 他のアプリとバージョンが違うのは正常
 
 `apps/mobile` だけ React が 19.2.3、TypeScript が 6 系です（他は React 19.2.8 / TypeScript 7 系）。

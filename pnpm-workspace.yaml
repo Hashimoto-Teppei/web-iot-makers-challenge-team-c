@@ -4,5 +4,8 @@ packages:
 # 依存のインストール時にビルドスクリプトの実行を許可するパッケージ。
 # pnpm 10 以降は既定で全て無効なので、必要なものだけを true にする。
 allowBuilds:
+  # 端末と同じ SQL を Node で回すため（apps/mobile のテストと signs.db の生成）。
+  # ネイティブの拡張なので、ビルド（または prebuilt の取得）を許可しないと読み込めない。
+  better-sqlite3: true
   esbuild: true
   workerd: true
