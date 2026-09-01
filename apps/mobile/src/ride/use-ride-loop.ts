@@ -12,15 +12,17 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiBaseUrl } from "../lib/api";
+import { blocksMockDevice } from "../lib/mock-guard";
+import { createDiscardingRideLogStore, type RideLogStore, type RideRecording } from "../log/store";
 import { createNearbySigns } from "../signs/nearby";
 import type { SignStore } from "../signs/store";
-import { blocksMockExchange, exchangeViaApi, refuseMockExchange } from "./api";
+import { exchangeViaApi, refuseMockExchange } from "./api";
 import { createMockDeviceLink } from "./device";
 import { watchFixes } from "./location";
 import { RideLoop, type RideStatus } from "./loop";
 
 /** 開始と停止の一回ぶん。**止め忘れを防ぐために、止める関数をここに集める。** */
-type Session = { stops: (() => void)[]; cancelled: boolean };
+type Session = { stops: (() => void)[]; cancelled: boolean; recording: RideRecording };
 
 export type RideControl = {
   running: boolean;
@@ -41,39 +43,79 @@ export type RideControl = {
  *
  * @param signs 手元の標識（`../signs/`）。**絞るのは呼び出し側の責務**なので、
  *   ここでセルごとに引き直して `RideLoop` へ渡す（`docs/adr/0009-on-device-storage.md`）。
+ * @param logs 走行ログの保存層（`../log/`）。**測位と警告をここに溜め、走行後に送る**
+ *   （#73。送るのは画面から `syncRideLogs()` を呼ぶ——**走行中に送らない**）。
  */
-export function useRideLoop(signs: SignStore): RideControl {
+export function useRideLoop(signs: SignStore, logs: RideLogStore): RideControl {
   const [status, setStatus] = useState<RideStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const sessionRef = useRef<Session | null>(null);
+
+  /**
+   * 走行ログへの書き込みを1回。**失敗しても走行を止めず、人には見せる。**
+   *
+   * **握りつぶすだけにしない。**書けていないことは画面のどこにも出ず、
+   * **走り終えてから「送るものが無い」と分かる**ことになる。
+   */
+  const record = useCallback((write: () => void) => {
+    try {
+      write();
+    } catch (reason: unknown) {
+      setError(`走行ログを保存できません: ${String(reason)}`);
+    }
+  }, []);
 
   const stop = useCallback(() => {
     const session = sessionRef.current;
     if (session === null) return;
     session.cancelled = true;
     for (const halt of session.stops) halt();
+    // **走行を閉じる。**閉じるまで送信の対象にならない（`../log/schema.ts` の `ended_at`）
+    // ——**終わっていない走行の点は、誰にも見えないまま端末に溜まり続ける。**
+    record(() => session.recording.end(Date.now()));
     sessionRef.current = null;
     setRunning(false);
     // **古い状態を残さない。**残すと、走行を終えたあとも「測位: 取れている」や
     // 中継の失敗の赤字が出たままになり、**動いていないのに動いているように見える。**
     setStatus(null);
-  }, []);
+  }, [record]);
 
   const start = useCallback(() => {
     if (sessionRef.current !== null) return;
-    const session: Session = { stops: [], cancelled: false };
-    sessionRef.current = session;
     setError(null);
 
     // TODO(#38): 接続中のデバイスに差し替える。それまでは名乗る ID もモックのもの。
     const device = createMockDeviceLink();
-    // **モックのまま共有のデプロイ先へ位置を送らない**（理由は `./api.ts`）。
+    // **モックのまま共有のデプロイ先へ位置を送らない**（理由は `../lib/mock-guard.ts`）。
     // 手元の apps/web に向けているときだけ実際に中継する。
-    const exchange = blocksMockExchange(device.deviceId, apiBaseUrl)
+    const exchange = blocksMockDevice(device.deviceId, apiBaseUrl)
       ? refuseMockExchange
       : exchangeViaApi;
-    const loop = new RideLoop({ device, exchange, onStatus: setStatus });
+
+    // **走行を1つ開いてから始める。**`device_id` はデバイスのもので、スマホ側で
+    // 別の ID を作らない（`docs/interfaces/mobile-api.md`「走行後の同期」）。
+    //
+    // **開けなくても走行は始める。**記録できないことより、**検知が動かないことの方が
+    // 危険**である（警告はデバイスに出る）。**記録が落ちたことは画面に出す。**
+    let recording: RideRecording;
+    try {
+      recording = logs.startRide(device.deviceId, Date.now());
+    } catch (reason: unknown) {
+      setError(`走行ログを開けません（この走行は記録されません）: ${String(reason)}`);
+      recording = createDiscardingRideLogStore().startRide(device.deviceId, Date.now());
+    }
+    const session: Session = { stops: [], cancelled: false, recording };
+    sessionRef.current = session;
+
+    const loop = new RideLoop({
+      device,
+      exchange,
+      onStatus: setStatus,
+      // **書いた警告だけを記録する**（`./loop.ts` の `onWarn`）。
+      // **保存に失敗しても走行を止めない**——記録は副産物であって、目的ではない。
+      onWarn: (warning, t) => record(() => recording.addWarning(warning, t)),
+    });
     // **走行を始めた時点の口を使い続ける。**走行中に標識を取りに行かない
     // （`docs/interfaces/mobile-api.md`「走行中は取りに行かない」）。
     const nearby = createNearbySigns(signs);
@@ -97,6 +139,10 @@ export function useRideLoop(signs: SignStore): RideControl {
         // **手元の標識は前回のまま**にして走り続け、**止まったことは人に見せる。**
         setError(`一時停止の標識を読み出せません: ${String(reason)}`);
       }
+      // **走行ログに残すのは、ここへ届いた測位すべて**である（走行ループが
+      // 取り込まなかったものも含む）。**足切りは計算する側が、そのときのしきい値で行う**
+      // （`docs/adr/0007-keep-raw-ride-logs.md`）。**捨てると二度と戻らない。**
+      record(() => recording.addPoint(fix));
       // **待たない。**測位のコールバックの中で往復を待つと、次の測位が詰まる。
       void loop.onFix(fix);
     })
@@ -107,7 +153,7 @@ export function useRideLoop(signs: SignStore): RideControl {
         else session.stops.push(unwatch);
       })
       .catch((reason: unknown) => setError(String(reason)));
-  }, [signs]);
+  }, [signs, logs, record]);
 
   // 画面から離れたら止める。**心拍を出したまま忘れない**（デバイスは動いていると
   // 判断し続ける）。

@@ -218,6 +218,21 @@ describe("RideLoop の検知", () => {
     ]);
   });
 
+  it("走行ログに残すのは、実際にデバイスへ書いた警告だけ（#73）", async () => {
+    // **発火したものを全部記録すると、危険が続く間ずっと毎秒1件増える**——
+    // 1回の危険が数十件になり、集計の件数が「そこで何秒詰まったか」になる。
+    const onWarn = vi.fn();
+    const { loop, at } = setup({
+      detectors: [always({ kind: "approach", lv: 2, causeId: "b2000002" })],
+      onWarn,
+    });
+    await loop.onFix(fix(START));
+    at(START + 1_000);
+    await loop.onFix(fix(START + 1_000));
+
+    expect(onWarn.mock.calls).toEqual([[{ kind: "approach", lv: 2, causeId: "b2000002" }, START]]);
+  });
+
   it("同じ警告を毎周期書き直さない", async () => {
     const { loop, device, at } = setup({
       detectors: [always({ kind: "approach", lv: 2, causeId: "b2000002" })],

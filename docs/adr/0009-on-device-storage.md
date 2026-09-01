@@ -36,8 +36,10 @@
   **同じスキーマ定義を Node の `better-sqlite3` に差せる**ので、
   **実機なしで SQL そのものを Vitest から回せる**（下の「5」）。
   これが素の `expo-sqlite` を直に叩く案に対する決め手になった
-- マイグレーションは `drizzle-kit`（`driver: 'expo'`）+ `useMigrations`。
-  **`babel-plugin-inline-import` が別途要る**（マイグレーションを JS に取り込むため）
+- **マイグレーションは `PRAGMA user_version` を見て DDL を流す**（`apps/mobile/src/log/schema.ts`）。
+  **当初は `drizzle-kit`（`driver: 'expo'`）+ `useMigrations` と書いていたが、#73 で変えた**
+  （2026-09-01）——`babel-plugin-inline-import` と生成物が要るわりに、やることは
+  「版を見て DDL を流す」だけで、**この形なら同じ SQL を Node のテストでも実機でも流せる**
 - **小さな設定値（選んでいる都道府県、最後に更新した時刻）は `expo-sqlite/kv-store`。**
   AsyncStorage の drop-in なので、**`@react-native-async-storage/async-storage` は入れない**
 

@@ -117,6 +117,18 @@ export type RideDeps = {
   now?: () => number;
   /** 状態が変わったときに呼ばれる。走行前後の画面が購読する */
   onStatus?: (status: RideStatus) => void;
+  /**
+   * **書いた警告を1件ずつ渡す**（走行ログに残すため。#73）。
+   *
+   * **渡すのは実際にデバイスへ書いたものだけ**である。検知は危険が続く間ずっと
+   * 毎秒発火するので、**発火したものを全部記録すると、1回の危険が数十件になり、
+   * 集計の件数が「そこで何秒詰まったか」になる**（`./warn-gate.ts` が同じ理由で
+   * 書き込みを抑えている）。
+   *
+   * **例外を投げないこと。**投げると、そのあとの警告が1件も書かれない。
+   * 保存に失敗しても走行を止めない（記録は目的ではなく副産物である）。
+   */
+  onWarn?: (warning: Warning, t: number) => void;
   config?: Partial<RideConfig>;
 };
 
@@ -293,6 +305,9 @@ export class RideLoop {
     // 「起きなかったこと」になる（`docs/interfaces/detectors.md`）。
     for (const warning of this.gate.admit(fired, now)) {
       this.deps.device.writeAlert({ k: "warn", kind: warning.kind, lv: warning.lv });
+      // **書いたあとに記録する。**先に記録すると、書き込みが落ちたときに
+      // 「出ていない警告」が走行ログに残る。
+      this.deps.onWarn?.(warning, now);
     }
   }
 

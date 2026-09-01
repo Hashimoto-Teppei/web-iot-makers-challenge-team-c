@@ -1,6 +1,8 @@
 import { Link } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { getRideLogStore } from "@/log/expo";
+import { useRideLogSync } from "@/log/use-ride-log-sync";
 import { useRideLoop } from "@/ride/use-ride-loop";
 import { useSignStore, useSignsMeta } from "@/signs/expo";
 
@@ -23,7 +25,10 @@ const POST_FAILURE_ALERT = 3;
 
 export default function HomeScreen() {
   const signs = useSignStore();
-  const ride = useRideLoop(signs);
+  // **走行ログの置き場所は `signs.db` と別のファイル**（`docs/adr/0009-on-device-storage.md`）。
+  const { store: logs, error: logsError } = getRideLogStore();
+  const ride = useRideLoop(signs, logs);
+  const sync = useRideLogSync(logs);
   const status = ride.status;
   const signsMeta = useSignsMeta(signs);
   // **標識を持っていない端末で走らせない**（`docs/adr/0009-on-device-storage.md`）。
@@ -41,7 +46,17 @@ export default function HomeScreen() {
 
         <Pressable
           style={[styles.button, !hasSigns && !ride.running && styles.buttonDisabled]}
-          onPress={ride.running ? ride.stop : ride.start}
+          onPress={() => {
+            if (!ride.running) {
+              ride.start();
+              return;
+            }
+            // **走行を閉じてから送る。**終わっていない走行は送信の対象にならない
+            // （`docs/interfaces/web-service.md`「1回の送信は分割してよい」——
+            // 開始と終了は確定値で、あとから延ばせない）。
+            ride.stop();
+            sync.sync();
+          }}
           disabled={!hasSigns && !ride.running}
           accessibilityRole="button"
         >
@@ -55,6 +70,10 @@ export default function HomeScreen() {
             同梱物を作ってください）。
           </Text>
         )}
+
+        {/* **開けなかったことを走行の前に見せる。**走り終えてから「送るものが無い」と
+            分かるのでは遅い（`docs/interfaces/mobile-api.md`「失敗したときの約束」と同じ理由）。 */}
+        {logsError !== null && <Text style={styles.alert}>{logsError}</Text>}
 
         {ride.error !== null && <Text style={styles.alert}>{ride.error}</Text>}
 
@@ -76,6 +95,48 @@ export default function HomeScreen() {
           <Text style={styles.alert}>
             中継が続けて失敗しています。周りの自転車を使う検知は止まっています。
           </Text>
+        )}
+
+        {/*
+          **溜まっているものを走行前後に見せる。**送れていないことは、
+          **走ったのにデータが無いと分かるまで誰にも見えない**——`POST` の連続失敗を
+          出しているのと同じ理由である（`docs/interfaces/mobile-api.md`「失敗したときの約束」）。
+        */}
+        {sync.summary !== null && (
+          <View style={styles.rows}>
+            <Row
+              label="送っていない走行"
+              value={
+                sync.summary.pendingRides === 0
+                  ? "なし"
+                  : `${sync.summary.pendingRides} 件（測位 ${sync.summary.pendingPoints} 点 / 検知 ${sync.summary.pendingDetections} 件）`
+              }
+            />
+            <Row
+              label="最後に送れたとき"
+              value={
+                sync.summary.lastSentAt === null
+                  ? "まだ送れていません"
+                  : new Date(sync.summary.lastSentAt).toLocaleString("ja-JP")
+              }
+            />
+          </View>
+        )}
+
+        {sync.error !== null && <Text style={styles.alert}>{sync.error}</Text>}
+
+        {/* **走行中は押せないようにする。**数千点の送信が 1Hz の中継と同じ回線を奪う。 */}
+        {!ride.running && sync.summary !== null && sync.summary.pendingRides > 0 && (
+          <Pressable
+            style={[styles.button, sync.syncing && styles.buttonDisabled]}
+            onPress={sync.sync}
+            disabled={sync.syncing}
+            accessibilityRole="button"
+          >
+            <Text style={styles.buttonLabel}>
+              {sync.syncing ? "送っています…" : "走行ログを送る"}
+            </Text>
+          </Pressable>
         )}
 
         <Link href="/settings" style={styles.link}>
