@@ -3,6 +3,8 @@ import { drizzle } from "drizzle-orm/d1";
 import { Hono } from "hono";
 import type { HealthResponse, Ping, StopSignsResponse } from "../shared/api";
 import { pings } from "./db/schema";
+import { insertLogs } from "./logs/insert";
+import { type LogsResponse, logsErrorOf, logsRequest } from "./logs/request";
 import { etagOf, matchesIfNoneMatch } from "./stop-signs/etag";
 import { readStopSigns, readStopSignVersion } from "./stop-signs/query";
 import { stopSignsQuery } from "./stop-signs/request";
@@ -136,6 +138,46 @@ const routes = app
       const body: ExchangeResponse = { peers: await neighbors.exchange(id, self) };
 
       return c.json(body);
+    },
+  )
+  /**
+   * 走行後の同期。**スマホが走行ログ・検知をまとめて送る**受け口
+   * （`docs/interfaces/web-service.md`「データの取り込み」）。
+   *
+   * **配列で受ける。**1件ずつだと、1回の走行で数千往復することになる。
+   *
+   * **このリクエストの中で重い集計をしない。**不停止の判定（#85）も、集計表の更新も
+   * ここではやらない。**しきい値を変えて何度でも計算し直せることが、生ログを残す目的
+   * そのもの**であり（`docs/adr/0007-keep-raw-ride-logs.md`）、取り込みに埋め込むと
+   * **過去ぶんを作り直せなくなる。**
+   *
+   * **認証を置かない**（`docs/interfaces/web-service.md`「割り切っていること」）。
+   * `device_id` を知った人が偽の検知を投げられるが、**他人の走行を消すことはできない**
+   * （既にある行を上書きせず無視するため）。**再計算（#85）だけは `ADMIN_TOKEN` で守る**
+   * ——あちらは既存の行を丸ごと置き換えるので、壊せる範囲が違う。
+   */
+  .post(
+    "/api/logs",
+    zValidator("json", logsRequest, (result, c) => {
+      // **壊れた入力では 1 行も入れない**（検証を通ってからしか D1 を触らない）。
+      // **「多すぎる」と「形が違う」だけは区別して返す**（`logs/request.ts` の `LogsError`）。
+      // スマホはこの2つで正反対に振る舞う——前者は分けて送り直し、後者は送り直しても通らない。
+      if (!result.success) return c.json(logsErrorOf(result.error), 400);
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+
+      await insertLogs(drizzle(c.env.DB), body);
+
+      // **返すのは受け取った件数。**入った件数ではない（`logs/request.ts` の `LogsResponse`）。
+      const received: LogsResponse = {
+        received: {
+          rides: body.rides.length,
+          points: body.points.length,
+          detections: body.detections.length,
+        },
+      };
+      return c.json(received, 201);
     },
   );
 
