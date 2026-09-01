@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /**
  * D1 が動いていることを確かめるための仮のテーブル。
@@ -85,3 +85,188 @@ export const stopSignVersions = sqliteTable("stop_sign_versions", {
   /** 取り込んだ時刻（ISO 8601、UTC） */
   importedAt: text("imported_at").notNull().default(sql`(strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))`),
 });
+
+/**
+ * 1回の走行。**スマホが走行後にまとめて送る**（`POST /api/logs`）。
+ *
+ * **主キーは `(device_id, log_id)`。サーバー側で別の ID を振らない**
+ * （`docs/interfaces/web-service.md`「テーブル（D1）」）。振ると、同じ走行が
+ * 2回送られたときに**同じ走行だと分からないまま2行できる。**
+ *
+ * **`devices` テーブルは作らない。**`device_id` は BLE のアドバタイズに出ている
+ * 16進8文字で、誰でも名乗れる——登録してあることが何も保証しない以上、
+ * 登録の手続きは手間だけが残る（同上「端末の表を作らない」）。
+ */
+export const rides = sqliteTable(
+  "rides",
+  {
+    /** 端末ID（16進の小文字8文字）。**スマホ発の行でも、接続していたデバイスの ID** */
+    deviceId: text("device_id").notNull(),
+    /** 走行の識別子（16進の小文字8文字）。**スマホが走行ごとに作る** */
+    logId: text("log_id").notNull(),
+    /**
+     * 開始と終了（UTC ミリ秒）。
+     *
+     * **文字列の ISO 8601 にしない**（`pings` とは違う）。この列は `ride_points.t` や
+     * `detections.t` と引き算・比較をする——**デバイス発の検知を走行に結びつけるのは
+     * `(device_id, t)` だけ**なので（`docs/interfaces/web-service.md`）、
+     * **突き合わせる相手と同じ単位で持つ。**
+     */
+    startedAt: integer("started_at").notNull(),
+    endedAt: integer("ended_at").notNull(),
+    /**
+     * デモとスライドのために入れたデータか。
+     *
+     * **`POST /api/logs` はこの列を受け取らない。**常に「サンプルではない」として入れる
+     * （`docs/interfaces/web-service.md`「サンプルデータは列で見分ける」）。
+     * **受け取る形にすると誰でもサンプルを名乗れ、除いたつもりで除けていない集計ができる。**
+     * 立てられるのは投入スクリプトだけ。
+     */
+    sample: integer("sample", { mode: "boolean" }).notNull().default(false),
+  },
+  (t) => [
+    primaryKey({ columns: [t.deviceId, t.logId] }),
+    // 集計は期間で切って走行を数える（`docs/interfaces/web-service.md`「率で見る」）。
+    index("rides_started_at_idx").on(t.startedAt),
+  ],
+);
+
+/**
+ * 測位の連続点。**間引かずにそのまま残す**（`docs/adr/0007-keep-raw-ride-logs.md`）。
+ *
+ * **残しているのは、走り直さずにしきい値を変えて不停止を計算し直すため**であって、
+ * 画面に出すためではない。**生の点を画面に出さない**——出すのはセルに丸めたものだけで、
+ * それがこの表を持ってよい条件そのものである。
+ *
+ * **一意キーは `(device_id, log_id, seq)`。`source` の列を持たない**——
+ * 測位点はスマホ発しか無い（デバイスは位置を知らない）ので、`'phone'` しか入らない列は
+ * **入っていることを確かめる手間だけを増やす**（`docs/interfaces/web-service.md`）。
+ */
+export const ridePoints = sqliteTable(
+  "ride_points",
+  {
+    deviceId: text("device_id").notNull(),
+    logId: text("log_id").notNull(),
+    /** 走行の中での点の番号。**スマホが 1 から振る**。取り込みの一意キーを兼ねる */
+    seq: integer("seq").notNull(),
+    /** 測位した時刻（UTC ミリ秒）。打ったのはスマホの時計 */
+    t: integer("t").notNull(),
+    /** 緯度・経度（度、WGS84） */
+    lat: real("lat").notNull(),
+    lon: real("lon").notNull(),
+    /** 対地速度（m/s）。**不停止の判定はこの値を見る** */
+    spd: real("spd").notNull(),
+    /**
+     * 進行方角（度、真北 0）。**低速時は `null`。**
+     *
+     * **不停止の判定でこの列を使わない**（`docs/interfaces/web-service.md`「不停止の判定」）。
+     * **方角の無い測位が `0`（真北）として入っていることがある**（`docs/unverified.md` 57）。
+     * 走行の側の方角は**点の並びから出す。**
+     */
+    crs: real("crs"),
+    /** 水平位置精度（メートル） */
+    hacc: real("hacc").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.deviceId, t.logId, t.seq] }),
+    // 不停止の判定（#85）は走行ぶんを時刻順に読む。主キーの並びは seq なので、
+    // 時刻で引くための索引を別に置く（seq と t の順序は一致する想定だが、頼らない）。
+    index("ride_points_device_t_idx").on(t.deviceId, t.t),
+  ],
+);
+
+/**
+ * 検知。**端末が走行中に確定させたもので、あとから作り直せない**
+ * （`docs/interfaces/web-service.md`「検知と不停止は別物である」）。
+ *
+ * **走行（`rides`）を指さない。**外部キーも `ride_id` の列も持たない——
+ * **デバイス発の `log_id` は電源を入れ直すと変わり、走行と1対1で対応しない**
+ * （`docs/interfaces/ble-log-transfer.md`）。**`(device_id, t)` から `rides` の期間で引く。
+ * この規則1つで、スマホ発とデバイス発の両方を同じように扱う。**
+ *
+ * **位置も持たない。**スマホ発は知っているが、それでも入れない——入れると
+ * デバイス発だけが `NULL` の列ができ、**「位置が無い」と「突き合わせに失敗した」の
+ * 区別がつかなくなる。**
+ */
+export const detections = sqliteTable(
+  "detections",
+  {
+    deviceId: text("device_id").notNull(),
+    /**
+     * 出どころ（`phone` / `device`）。**主キーに入っている。**
+     *
+     * スマホは自分で `log_id` と `seq` を作るが、`device_id` はデバイスのものを使う
+     * （`docs/interfaces/mobile-api.md`）。**入れないと、デバイスの `log_id=1, seq=1` と
+     * スマホの `log_id=1, seq=1` が同じキーになり、片方が黙って消える。**
+     */
+    source: text("source", { enum: ["phone", "device"] }).notNull(),
+    logId: text("log_id").notNull(),
+    seq: integer("seq").notNull(),
+    /** 何を検知したか。値の正本は `docs/interfaces/ble-log-transfer.md`「検知ログの `body`」 */
+    kind: text("kind").notNull(),
+    /** 強さ（1〜3）。「確からしさ」ではない（`docs/interfaces/detectors.md`） */
+    lv: integer("lv").notNull(),
+    /** 検知した時刻（UTC ミリ秒） */
+    t: integer("t").notNull(),
+    /**
+     * `t` が実測ではなく**単調時計からの推定**か（`docs/interfaces/ble-log-transfer.md`）。
+     *
+     * BLE が切れている間、デバイスは最後に受け取った `beat` の `t` に経過を足して打つ。
+     * **切断が長いほどずれ、ずれた時刻に一番近い測位点＝別のセルに積まれる**ので、
+     * **地図とランキングの集計から除く**（詳細画面には出す。
+     * `docs/interfaces/web-service.md`「検知を場所に結びつける」）。
+     *
+     * **スマホ発の行では必ず `false`。**取り込みが受け取るのはデバイス発だけである
+     * （`src/worker/logs/request.ts`）。
+     */
+    tEst: integer("t_est", { mode: "boolean" }).notNull().default(false),
+    /** サンプルデータか。**`POST /api/logs` はこの列を受け取らない**（`rides` と同じ理由） */
+    sample: integer("sample", { mode: "boolean" }).notNull().default(false),
+  },
+  (t) => [
+    primaryKey({ columns: [t.deviceId, t.source, t.logId, t.seq] }),
+    // 場所に結びつけるときは `(device_id, t)` で引く（この表の唯一の引き方）。
+    index("detections_device_t_idx").on(t.deviceId, t.t),
+  ],
+);
+
+/**
+ * 不停止。**サーバーが走行ログと標識から計算したもので、何度でも作り直せる**
+ * （`docs/interfaces/web-service.md`「不停止の判定」）。
+ *
+ * **`POST /api/logs` からは絶対に書かない。**この表を作るのは
+ * `POST /api/admin/recompute`（#85）だけで、**再計算のたびに走行ぶんを消して入れ直す。**
+ * 追記だけの他の表とは性質が違う。
+ *
+ * **表を先に置いてあるのは、`ride_points` と対で使うものだから**である（#80 で作った）。
+ * **列は #85 が必要に応じて足してよい**——判定の中身はそちらが決める。
+ */
+export const stopViolations = sqliteTable(
+  "stop_violations",
+  {
+    /**
+     * 連番。**この表だけは代理キーを持つ。**
+     *
+     * `(device_id, log_id, sign_id)` を主キーにできないのは、**1回の走行が同じ標識を
+     * 2度通りうる**ため（周回すれば起こる）。主キーにすると、2度目が黙って消える。
+     */
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    deviceId: text("device_id").notNull(),
+    logId: text("log_id").notNull(),
+    /** どの標識か（`stop_signs.id`）。**場所はこの標識を辿って出す**（この表に持たない） */
+    signId: text("sign_id").notNull(),
+    /** 標識を通過したと判定した時刻（UTC ミリ秒） */
+    t: integer("t").notNull(),
+    /**
+     * 判定に使ったしきい値。**残さないと、どの設定で作られた行なのか分からなくなり、
+     * 作り直す判断ができない**（`docs/interfaces/web-service.md`）。
+     */
+    thrStopSpeedMps: real("thr_stop_speed_mps").notNull(),
+    thrRadiusM: real("thr_radius_m").notNull(),
+    thrBearingToleranceDeg: real("thr_bearing_tolerance_deg").notNull(),
+    /** 計算した時刻（ISO 8601、UTC） */
+    computedAt: text("computed_at").notNull().default(sql`(strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))`),
+  },
+  // 再計算は走行ぶんを消してから入れ直すので、その単位で引ける索引を置く。
+  (t) => [index("stop_violations_ride_idx").on(t.deviceId, t.logId)],
+);
