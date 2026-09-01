@@ -9,7 +9,7 @@
  * （`docs/adr/0009-on-device-storage.md`）。
  *
  * **CSV も、生成した SQL もコミットしない。**このリポジトリは public であり、
- * 置くと配布に当たる（`docs/interfaces/web-service.md`）。`.gitignore` で止めてある。
+ * 置くと配布に当たる（`docs/interfaces/stop-signs-source.md`）。`.gitignore` で止めてある。
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";

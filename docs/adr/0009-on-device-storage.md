@@ -5,7 +5,8 @@
 - 関連: `0006-decision-layer-on-mobile.md`（判断がスマホへ移った）/
   `0002-development-lifecycle.md`（実機なしで開発する）/
   `0007-keep-raw-ride-logs.md`（生ログを残す）/
-  `../interfaces/mobile-api.md`（配る経路）/ `../interfaces/web-service.md`（D1 と外部データ）
+  `../interfaces/mobile-api.md`（配る経路）/ `../interfaces/web-service.md`（D1 のテーブル）/
+  `../interfaces/stop-signs-source.md`（標識の出どころ）
 
 ## 背景
 
@@ -105,7 +106,7 @@ Metro の `assetExts` に `json` を足すと**リポジトリ内の全 JSON の
 ### 7. 同梱物は生成物。リポジトリに置かず、API から1コマンドで作る
 
 **`apps/mobile/assets/signs.db` は `.gitignore` に入れる。**
-`web-service.md` が「CSV も生成した SQL も置かない」と決めているのと同じ理由
+`../interfaces/stop-signs-source.md` が「CSV も生成した SQL も置かない」と決めているのと同じ理由
 （public リポジトリで配布に当たる置き方をしない）。
 
 **生成は `GET /api/stop-signs` から行う。**

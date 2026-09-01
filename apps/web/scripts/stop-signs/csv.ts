@@ -32,7 +32,7 @@ const COLUMN = {
 
 // **交差点名称（NO.27）は引かない。**岡山県警の 202607 では全 65,373 行が空で、
 // 「走行後の画面で場所が人に読める」という用途を満たさなかった
-// （`docs/interfaces/web-service.md`）。列が要るようになったらここに足す。
+// （`docs/interfaces/stop-signs-source.md`）。列が要るようになったらここに足す。
 
 /** 日本の範囲。ここを外れた座標は壊れているものとして捨てる */
 const LAT_RANGE = { min: 20, max: 46 } as const;

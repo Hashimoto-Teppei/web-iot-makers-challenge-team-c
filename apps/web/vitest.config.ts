@@ -17,7 +17,14 @@ export default defineConfig({
         plugins: [
           cloudflareTest({
             wrangler: { configPath: "./wrangler.jsonc" },
-            miniflare: { bindings: { TEST_MIGRATIONS: migrations } },
+            miniflare: {
+              bindings: {
+                TEST_MIGRATIONS: migrations,
+                // 管理用の共有トークン。**テストの中だけの値**で、実物とは関係がない
+                // （実物は `wrangler secret put`、ローカルは `.dev.vars`）。
+                ADMIN_TOKEN: "test-admin-token",
+              },
+            },
           }),
         ],
         test: {

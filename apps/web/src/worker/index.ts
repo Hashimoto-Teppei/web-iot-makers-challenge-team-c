@@ -5,6 +5,24 @@ import type { HealthResponse, Ping, StopSignsResponse } from "../shared/api";
 import { pings } from "./db/schema";
 import { insertLogs } from "./logs/insert";
 import { type LogsResponse, logsErrorOf, logsRequest } from "./logs/request";
+import { authorize } from "./recompute/auth";
+import { recomputeLimitDefaults } from "./recompute/config";
+import { judgeRide } from "./recompute/judge";
+import {
+  boundingBoxOf,
+  listRides,
+  readRidePoints,
+  readSignsInBox,
+  rideKey,
+  signsInBox,
+} from "./recompute/query";
+import {
+  type RecomputeError,
+  type RecomputeResponse,
+  type RideRef,
+  recomputeRequest,
+} from "./recompute/request";
+import { type RideResult, replaceViolations } from "./recompute/write";
 import { etagOf, matchesIfNoneMatch } from "./stop-signs/etag";
 import { readStopSigns, readStopSignVersion } from "./stop-signs/query";
 import { stopSignsQuery } from "./stop-signs/request";
@@ -178,6 +196,100 @@ const routes = app
         },
       };
       return c.json(received, 201);
+    },
+  )
+  /**
+   * 不停止の再計算。**走行ログと一時停止の標識を突き合わせて `stop_violations` を作り直す**
+   * （`docs/interfaces/web-service.md`「不停止の判定」「いつ計算するか」）。
+   *
+   * **スクリプトではなくここに置いてある。**判定は D1 の中身を読んで書き戻す処理で、
+   * **リモートの D1 を触れるのは Worker から**である（`wrangler d1 execute --remote` は
+   * SQL しか送れず、判定のコードを持ち込めない）。
+   *
+   * **しきい値はリクエストで受け取る。サーバーに既定値を持たない**（`recompute/request.ts`）
+   * ——**その場で数字を変えて叩き直せることが、この経路を持つ理由そのもの**である。
+   *
+   * **この1本だけ `ADMIN_TOKEN` で守る**（`recompute/auth.ts`）。
+   */
+  .post(
+    "/api/admin/recompute",
+    // **認証を検証より先に置く。**あとにすると、**トークンを持たない相手に
+    // 「リクエストの形は合っている」を教える**ことになる。
+    async (c, next) => {
+      const result = authorize(c.env.ADMIN_TOKEN, c.req.header("Authorization"));
+      if (result === "unauthorized") {
+        const body: RecomputeError = { error: "認証が必要です" };
+        return c.json(body, 401);
+      }
+      if (result === "not-configured") {
+        // **未設定を 401 にしない。**トークンを探して延々と試すことになる。
+        const body: RecomputeError = { error: "ADMIN_TOKEN が設定されていません" };
+        return c.json(body, 503);
+      }
+      await next();
+    },
+    zValidator("json", recomputeRequest, (result, c) => {
+      if (!result.success) {
+        const body: RecomputeError = { error: "リクエストの形式が正しくありません" };
+        return c.json(body, 400);
+      }
+    }),
+    async (c) => {
+      const { thresholds, rides: requested, skip } = c.req.valid("json");
+      const db = drizzle(c.env.DB);
+      const { maxRides } = recomputeLimitDefaults;
+
+      // **省略されたら古い順に上限ぶん。**1件多く読んで「続きがあるか」を数える
+      // （数えるためだけに `COUNT` をもう1クエリ使わない）。
+      const listed = requested ?? (await listRides(db, maxRides + 1, skip ?? 0));
+      const more = requested === undefined && listed.length > maxRides;
+
+      // **明示された走行が多すぎたら、1行も触らずに返す**——途中まで作り直すと、
+      // **どこまで置き換わったのかが呼んだ側に分からない。**`rides` を省略した側は
+      // 上で切ってあるので、ここへ来るのは呼んだ側が数を決めたときだけである。
+      if (requested && requested.length > maxRides) {
+        const body: RecomputeError = {
+          error: `走行が多すぎます（上限 ${maxRides}）。rides を分けて叩き直してください`,
+        };
+        return c.json(body, 400);
+      }
+
+      // **同じ走行が2度入っていたら1つにする。**そのままだと**同じ判定を2度書き込む**
+      // ——`DELETE` は1回しか効かないうえ、この表は代理キーを持つので**重複が残る。**
+      const targets: RideRef[] = [
+        ...new Map(listed.slice(0, maxRides).map((ride) => [rideKey(ride), ride])).values(),
+      ];
+
+      const pointsByRide = await readRidePoints(db, targets);
+      const allPoints = [...pointsByRide.values()].flat();
+
+      // **標識は1回だけ読む**（走行ごとに引くと、県ぶんの走査をそのぶん繰り返す）。
+      // 走行の範囲を半径ぶん広げた矩形で絞る（`recompute/query.ts`）。
+      const box = boundingBoxOf(allPoints, thresholds.radiusM);
+      const signs = box ? await readSignsInBox(db, box) : [];
+
+      const results: RideResult[] = targets.map((ride) => {
+        const points = pointsByRide.get(rideKey(ride)) ?? [];
+        // **走行ごとにもう一度絞る。**上の矩形は全走行を囲んだもので、
+        // **離れた場所を走った走行が混ざると県ぶんに膨らむ**（`recompute/query.ts`）。
+        const rideBox = boundingBoxOf(points, thresholds.radiusM);
+        const nearby = rideBox ? signsInBox(signs, rideBox) : [];
+        return { ride, violations: judgeRide(points, nearby, thresholds) };
+      });
+
+      // **不停止が0件だった走行も渡す。**前回の結果を消すために要る。
+      await replaceViolations(db, results, thresholds);
+
+      const body: RecomputeResponse = {
+        computed: {
+          rides: targets.length,
+          points: allPoints.length,
+          violations: results.reduce((n, r) => n + r.violations.length, 0),
+          more,
+        },
+        thresholds,
+      };
+      return c.json(body);
     },
   );
 

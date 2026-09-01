@@ -1,0 +1,7 @@
+# ローカル開発用の秘密値のひな形。
+# **`.dev.vars` にコピーして使う**（`.dev.vars` はコミットされない。CLAUDE.md「機密情報の扱い」）。
+# デプロイ先には `wrangler secret put <名前>` で登録する。**wrangler.jsonc に書かない。**
+
+# 管理用の共有トークン。`POST /api/admin/recompute`（不停止の再計算）だけが見る。
+# **未設定だと 503 を返して通さない**（空を「認証なし」として扱わない）。
+ADMIN_TOKEN=local-development-token
