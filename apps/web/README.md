@@ -50,6 +50,7 @@ pnpm --filter web exec wrangler login   # ブラウザが開いて Cloudflare �
 `db:migrate:remote` と `deploy:cf` はここを済ませた担当者のみが実行する。
 秘密値は `wrangler secret put` で登録し、`wrangler.jsonc` には書かない（このリポジトリは public）。
 ローカル用の値は `.dev.vars`（gitignore 済み）に置く。
+**登録のしかたには落とし穴がある**ので、下の「不停止の再計算」を読んでから実行すること。
 
 **デプロイ先の URL の正本は [`apps/mobile/src/lib/api-base.ts`](../mobile/src/lib/api-base.ts)。**
 モバイルと `signs:build` はここを既定に見る（[`docs/setup.md`](../../docs/setup.md)）。
@@ -195,9 +196,23 @@ curl -X POST http://localhost:5173/api/admin/recompute \
 
 **トークンの登録**（デプロイ担当のみ）。ローカルは `.dev.vars.example` を `.dev.vars` に写して使う。
 
+**値は標準入力から渡す。プロンプトに任せない。**
+
 ```sh
-pnpm --filter web exec wrangler secret put ADMIN_TOKEN
+TOKEN=$(openssl rand -hex 24)
+printf '%s' "$TOKEN" | pnpm --filter web exec wrangler secret put ADMIN_TOKEN
+echo "$TOKEN"   # .dev.vars に控える。Cloudflare 側から読み出す手段は無い
 ```
+
+**プロンプトに任せると、対話でないシェル（エディタの統合ターミナル、CI、エージェント経由の実行）
+では空の標準入力がそのまま値になる**——`wrangler` は「Success! Uploaded secret」と言い、
+`wrangler secret list` にも `wrangler versions view` の `Secrets:` にも名前が出るので、
+**登録できたようにしか見えない。**2026-09-02 に実際に踏んだ
+（同じシェルで `db:migrate:remote` が `Using fallback value in non-interactive context` を出していた
+のが、対話でないことの手がかり）。
+
+**気づけたのは、空の秘密値を「認証なし」ではなく「未設定」として扱っているから**である
+（`src/worker/recompute/auth.ts`）。**空を通す作りだと、誰でも叩ける再計算の口が黙って開く。**
 
 ## 注意
 
