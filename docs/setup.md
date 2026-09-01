@@ -271,6 +271,20 @@ pnpm --filter web db:migrate:local   # 手元の D1（SQLite）にマイグレ�
 
 - **`apps/mobile`（Android）** — Android Studio と JDK 17、そして数時間かかる初回ビルドが必要です。
   担当になったら [`apps/mobile/README.md`](../apps/mobile/README.md) に手順があります。
+  **Development Build を作る前に、同梱する一時停止の標識を1回だけ作ります**
+  （生成物なのでリポジトリには入っていません。`docs/adr/0009-on-device-storage.md`）。
+
+  ```sh
+  pnpm --filter web dev              # 別のターミナルで動かしたまま
+  pnpm --filter mobile signs:build   # apps/mobile/assets/signs.db ができる
+  ```
+
+  **作っていないとビルドが止まります**（そういう作りにしてあります）。
+  取得先を変えるときは `pnpm --filter mobile signs:build --base https://...`（`--` は挟みません）。
+
+  **標識を作り直したときは、端末からアプリを一度アンインストールしてください。**
+  同梱物は**端末に `signs.db` が無いときだけ**コピーされるため、上書きインストールでは
+  古いままになります（設定画面には古い版が「そろっている」顔で出ます）。
 - **Cloudflare へのデプロイ** — アカウントと秘密値は担当者1人が持ちます。
   手順は [`apps/web/README.md`](../apps/web/README.md)。
 
@@ -291,6 +305,10 @@ pnpm --filter web db:migrate:local   # 手元の D1（SQLite）にマイグレ�
 | CI だけ落ちて手元では通る | まず `pnpm lint:fix` を実行してコミットする。整形漏れがいちばん多い |
 | `pnpm dev` でポートが使えないと言われる | 5173 番を別のプロセスが使っている。前に起動した dev サーバーが残っていないか確認する |
 | Windows で `Filename too long` と言われる | `git config --global core.longpaths true` を実行してから clone し直す |
+| `signs:build` で「繋がりません」と言われる | 別のターミナルで `pnpm --filter web dev` が動いていない |
+| `signs:build` で「標識がサーバーにありません」と言われる | 手元の D1 に標識が入っていない。`apps/web` の担当に取り込みを頼む（`docs/interfaces/web-service.md`） |
+| `apps/mobile` のビルドが `signs.db` で止まる | 同梱物を作っていない。上の `signs:build` を実行する |
+| 標識を作り直したのにアプリの件数・版が変わらない | 上書きインストールでは同梱物が入れ替わらない。**アプリをアンインストールしてから**入れ直す |
 
 **30分詰まったら聞いてください。** これは推奨されている行動です。
 

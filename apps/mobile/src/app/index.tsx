@@ -1,6 +1,8 @@
+import { Link } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRideLoop } from "@/ride/use-ride-loop";
+import { useSignStore, useSignsMeta } from "@/signs/expo";
 
 /**
  * 走行前後に見る画面。**走行中に見る前提の表示を足さないこと**（`CLAUDE.md`）。
@@ -20,8 +22,16 @@ import { useRideLoop } from "@/ride/use-ride-loop";
 const POST_FAILURE_ALERT = 3;
 
 export default function HomeScreen() {
-  const ride = useRideLoop();
+  const signs = useSignStore();
+  const ride = useRideLoop(signs);
   const status = ride.status;
+  const signsMeta = useSignsMeta(signs);
+  // **標識を持っていない端末で走らせない**（`docs/adr/0009-on-device-storage.md`）。
+  // 走れてしまうと、一時停止の事前通知だけが黙ったまま走ることになり、
+  // **その黙り方はデバイスの表示では気づけない。**
+  // 走行前に確かめるものは他にもある（測位・デバイス・サーバー）が、
+  // それを1画面にまとめるのは #70。
+  const hasSigns = signsMeta !== null && signsMeta.count > 0;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -30,12 +40,21 @@ export default function HomeScreen() {
         <Text>自転車の事故と違反を未然に防ぐ。</Text>
 
         <Pressable
-          style={styles.button}
+          style={[styles.button, !hasSigns && !ride.running && styles.buttonDisabled]}
           onPress={ride.running ? ride.stop : ride.start}
+          disabled={!hasSigns && !ride.running}
           accessibilityRole="button"
         >
           <Text style={styles.buttonLabel}>{ride.running ? "走行を終える" : "走行を始める"}</Text>
         </Pressable>
+
+        {!hasSigns && (
+          // **理由を書く。**「押せません」だけだと、初めての人は何をすればよいか分からない。
+          <Text style={styles.alert}>
+            一時停止の標識を持っていないため、走行を始められません（docs/setup.md の手順で
+            同梱物を作ってください）。
+          </Text>
+        )}
 
         {ride.error !== null && <Text style={styles.alert}>{ride.error}</Text>}
 
@@ -59,6 +78,10 @@ export default function HomeScreen() {
           </Text>
         )}
 
+        <Link href="/settings" style={styles.link}>
+          設定と標識の状態
+        </Link>
+
         <Text style={styles.note}>
           走行中はこの画面を見ないでください。危険はデバイス側の表示・音でお知らせします。
         </Text>
@@ -81,6 +104,8 @@ const styles = StyleSheet.create({
   content: { flex: 1, gap: 12, justifyContent: "center", padding: 24 },
   title: { fontSize: 24, fontWeight: "bold" },
   button: { alignItems: "center", backgroundColor: "#1f2937", borderRadius: 8, padding: 16 },
+  buttonDisabled: { backgroundColor: "#9ca3af" },
+  link: { color: "#1d4ed8", fontWeight: "bold" },
   buttonLabel: { color: "#ffffff", fontSize: 16, fontWeight: "bold" },
   rows: { gap: 4 },
   row: { flexDirection: "row", gap: 8, justifyContent: "space-between" },

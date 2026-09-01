@@ -4,3 +4,6 @@
 
 expo-env.d.ts
 # @end expo-cli
+# 同梱する標識のデータベース。**生成物なのでコミットしない**
+# （作り方は docs/setup.md。docs/adr/0009-on-device-storage.md）。
+assets/signs.db

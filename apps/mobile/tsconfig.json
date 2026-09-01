@@ -2,6 +2,9 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    // 同梱物を作るスクリプトは Node から直接 .ts を読む（拡張子を省けない）。
+    // 詳しくは src/signs/store.ts の import の注記。
+    "allowImportingTsExtensions": true,
     "paths": {
       "@/*": ["./src/*"],
       "@/assets/*": ["./assets/*"]

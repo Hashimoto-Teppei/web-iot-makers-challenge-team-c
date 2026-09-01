@@ -3,6 +3,7 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "drizzle-orm": "^0.45.2",
     "expo": "~57.0.15",
     "expo-constants": "~57.0.13",
     "expo-font": "~57.0.1",
@@ -10,6 +11,7 @@
     "expo-location": "~57.0.14",
     "expo-router": "~57.0.15",
     "expo-splash-screen": "~57.0.7",
+    "expo-sqlite": "~57.0.2",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.2",
     "hono": "^4.13.3",
@@ -24,7 +26,9 @@
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/react": "~19.2.2",
+    "better-sqlite3": "^13.0.3",
     "typescript": "~6.0.3",
     "vitest": "^4.1.11",
     "web": "workspace:*"
@@ -35,6 +39,7 @@
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "prebuild": "expo prebuild",
+    "signs:build": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/build-signs-db.ts",
     "test": "vitest run"
   },
   "private": true
