@@ -51,8 +51,8 @@ export async function readStopSigns(db: DrizzleD1Database, pref: number): Promis
     .orderBy(stopSigns.id)
     .all();
 
-  // **交差点名称は配らない。**走行中のディスプレイに文章は出せず（`CLAUDE.md`）、
-  // 数万件ぶんの文字列は同梱物をそのまま重くする。D1 には残してある。
+  // **返すのは端末に配るぶんだけ**（`StopSign`）。いまは D1 の列もこれで全部だが、
+  // **配らない列を足したときにここへ混ぜない**こと——同梱物がそのぶん重くなる。
   return rows.map(({ id, lat, lon, approachLat, approachLon }) => ({
     id,
     lat,

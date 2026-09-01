@@ -11,9 +11,10 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiBaseUrl } from "../lib/api";
 import { createNearbySigns } from "../signs/nearby";
 import type { SignStore } from "../signs/store";
-import { exchangeViaApi } from "./api";
+import { blocksMockExchange, exchangeViaApi, refuseMockExchange } from "./api";
 import { createMockDeviceLink } from "./device";
 import { watchFixes } from "./location";
 import { RideLoop, type RideStatus } from "./loop";
@@ -67,7 +68,12 @@ export function useRideLoop(signs: SignStore): RideControl {
 
     // TODO(#38): 接続中のデバイスに差し替える。それまでは名乗る ID もモックのもの。
     const device = createMockDeviceLink();
-    const loop = new RideLoop({ device, exchange: exchangeViaApi, onStatus: setStatus });
+    // **モックのまま共有のデプロイ先へ位置を送らない**（理由は `./api.ts`）。
+    // 手元の apps/web に向けているときだけ実際に中継する。
+    const exchange = blocksMockExchange(device.deviceId, apiBaseUrl)
+      ? refuseMockExchange
+      : exchangeViaApi;
+    const loop = new RideLoop({ device, exchange, onStatus: setStatus });
     // **走行を始めた時点の口を使い続ける。**走行中に標識を取りに行かない
     // （`docs/interfaces/mobile-api.md`「走行中は取りに行かない」）。
     const nearby = createNearbySigns(signs);

@@ -30,6 +30,15 @@ describe("parseStopSignsResponse", () => {
     expect(parsed.signs[1]?.approach).toBeNull();
   });
 
+  it("弱い検証子（W/）は剥がして持つ（圧縮の有無で版が変わらない）", () => {
+    // Cloudflare は gzip した応答の ETag に W/ を付けて返す。剥がさないと、
+    // **同じ中身でも取得経路によって版が変わり**、起動時の更新が毎回落とし直す。
+    const weak = parseStopSignsResponse(ok, `W/${ETAG}`, BUILT_AT);
+    const strong = parseStopSignsResponse(ok, ETAG, BUILT_AT);
+    expect(weak.meta.version).toBe(ETAG);
+    expect(weak.meta.version).toBe(strong.meta.version);
+  });
+
   it("ETag が無ければ落とす（端末が版を作らない）", () => {
     expect(() => parseStopSignsResponse(ok, null, BUILT_AT)).toThrow(StopSignsResponseError);
   });

@@ -36,11 +36,16 @@ function numberAt(row: Record<string, unknown>, key: string, where: string): num
   return value;
 }
 
+/** `W/"..."` → `"..."`。**弱い検証子の印だけを外し、中身には触らない。** */
+function stripWeakValidator(etag: string): string {
+  return etag.startsWith("W/") ? etag.slice(2) : etag;
+}
+
 /**
  * 応答の本文と `ETag` から、`signs.db` に書くものを作る。
  *
  * @param body `GET /api/stop-signs` の JSON
- * @param etag 応答の `ETag` ヘッダ。**そのまま `meta.version` になる**
+ * @param etag 応答の `ETag` ヘッダ。**`W/` を剥がして `meta.version` になる**
  *   （`docs/interfaces/mobile-api.md`「版はサーバーが決める」）。端末側で作らない
  * @param builtAt 生成した時刻
  */
@@ -56,6 +61,17 @@ export function parseStopSignsResponse(
   if (etag === null || etag.length === 0) {
     fail("応答に ETag がありません（版はサーバーが決めるので、端末側では作れません）");
   }
+
+  // **`W/`（弱い検証子）を剥がしてから持つ。**サーバーは強い ETag を返すが
+  // （`apps/web/src/worker/stop-signs/etag.ts`）、**Cloudflare は応答を gzip した時点で
+  // `W/` を付けて返す。**`fetch` は `accept-encoding: gzip` を送るので圧縮され、
+  // `curl -I` や手元の `pnpm dev` とは違う文字列が返る——**同じ中身なのに、どこで作ったかで
+  // `meta.version` が変わる。**
+  //
+  // 剥がさないと、起動時の更新（#76）が**手元の版とサーバーの版を毎回「違う」と読み**、
+  // **起動のたびに数 MB を落とし直す。**304 の判定はサーバー側が `W/` を無視するので
+  // 通ってしまい、**壊れ方が「遅い」だけになって気づきにくい。**
+  const version = stripWeakValidator(etag);
 
   const pref = numberAt(body, "pref", "応答");
   const count = numberAt(body, "count", "応答");
@@ -82,7 +98,7 @@ export function parseStopSignsResponse(
   });
 
   return {
-    meta: { pref, version: etag, count, builtAt: builtAt.toISOString() },
+    meta: { pref, version, count, builtAt: builtAt.toISOString() },
     signs,
   };
 }

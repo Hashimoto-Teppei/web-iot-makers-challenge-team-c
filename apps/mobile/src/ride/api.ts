@@ -10,6 +10,8 @@
  */
 
 import { api } from "../lib/api";
+import { DEFAULT_API_BASE_URL } from "../lib/api-base";
+import { MOCK_DEVICE_ID } from "./device";
 import type { ExchangeFn } from "./loop";
 
 /**
@@ -26,3 +28,38 @@ export const exchangeViaApi: ExchangeFn = async (id, self) => {
   const body = await res.json();
   return body.peers;
 };
+
+/**
+ * **モックのデバイスのまま共有のデプロイ先へ中継しようとしているか。**
+ *
+ * #38 が入るまで走行ループは `createMockDeviceLink()` を使い、**全員が同じ
+ * {@link MOCK_DEVICE_ID} を名乗る。**そのまま既定のデプロイ先へ投げると、
+ *
+ * - **実際の緯度経度が共有の Durable Object に毎秒載り**、半径 300m の他人に周辺車両として見える
+ *   （位置情報は個人情報である。`CLAUDE.md`）
+ * - 同じ ID なので**開発者どうしが同じ枠を上書きし合う**（自分の ID は除いて返されるため、
+ *   お互いには見えないまま消し合う）
+ *
+ * **文書だけでは止まらない**ので、ここで止める。手元の `apps/web` に向けているとき
+ * （`.env.local` で `EXPO_PUBLIC_API_BASE_URL` を変えたとき）は通す——**自分のサーバーなら
+ * どちらの害も無い。**
+ */
+export function blocksMockExchange(deviceId: string, baseUrl: string): boolean {
+  return deviceId === MOCK_DEVICE_ID && baseUrl === DEFAULT_API_BASE_URL;
+}
+
+/**
+ * 中継を断る {@link ExchangeFn}。{@link blocksMockExchange} が真のときに使う。
+ *
+ * **失敗として返す**ので、走行ループは POST が落ちたときと同じ振る舞いをする
+ * （心拍は続き、近傍が空になり、失敗の回数が画面に出る。`./loop.ts`）。
+ * **黙って成功にしない**——「中継できている」と見えるまま位置が出ていかない状態が
+ * 一番たちが悪い。
+ */
+export const refuseMockExchange: ExchangeFn = () =>
+  Promise.reject(
+    new Error(
+      "モックのデバイスでは共有のデプロイ先へ中継しません（実際の位置が他人に見えるため）。" +
+        "手元で試すときは .env.local に EXPO_PUBLIC_API_BASE_URL を書いてください（docs/setup.md）",
+    ),
+  );

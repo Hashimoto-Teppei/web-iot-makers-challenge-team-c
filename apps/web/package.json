@@ -13,7 +13,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply team-c-db --remote",
     "stop-signs:extract": "node scripts/stop-signs/extract.ts",
     "cf-typegen": "wrangler types",
-    "deploy": "vite build && wrangler deploy"
+    "deploy:cf": "vite build && wrangler deploy"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.9.0",

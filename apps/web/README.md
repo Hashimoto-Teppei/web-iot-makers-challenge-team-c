@@ -34,7 +34,7 @@ CORS の設定や API の URL を環境変数で配線する必要はない。
 | `pnpm db:migrate:local` | ローカルの D1 にマイグレーションを適用 |
 | `pnpm db:migrate:remote` | Cloudflare 上の D1 に適用（**デプロイ担当のみ**） |
 | `pnpm stop-signs:extract` | JARTIC の CSV から一時停止の標識を抜き出し、D1 に流す SQL を作る（下） |
-| `pnpm deploy` | Cloudflare へデプロイ（**デプロイ担当のみ**） |
+| `pnpm deploy:cf` | Cloudflare へデプロイ（**デプロイ担当のみ**） |
 
 `wrangler.jsonc` にバインディングを足したら `pnpm cf-typegen` を実行して `Env` を更新する。
 
@@ -47,9 +47,18 @@ CORS の設定や API の URL を環境変数で配線する必要はない。
 pnpm --filter web exec wrangler login   # ブラウザが開いて Cloudflare の認証をする
 ```
 
-`db:migrate:remote` と `deploy` はここを済ませた担当者のみが実行する。
+`db:migrate:remote` と `deploy:cf` はここを済ませた担当者のみが実行する。
 秘密値は `wrangler secret put` で登録し、`wrangler.jsonc` には書かない（このリポジトリは public）。
 ローカル用の値は `.dev.vars`（gitignore 済み）に置く。
+
+**デプロイ先の URL の正本は [`apps/mobile/src/lib/api-base.ts`](../mobile/src/lib/api-base.ts)。**
+モバイルと `signs:build` はここを既定に見る（[`docs/setup.md`](../../docs/setup.md)）。
+**書き写さない**——Worker の名前を変えたときに書き写した側が黙って古くなる。
+
+**スクリプト名が `deploy` ではなく `deploy:cf` なのは、`deploy` が pnpm の組み込みコマンドだから。**
+組み込みが優先されるため、`pnpm deploy` は `ERR_PNPM_INVALID_DEPLOY_TARGET` で落ちて
+スクリプトに届かない。`pnpm run deploy` と書けば動くが、**この表の他の行はすべて `run` なしで書ける**——
+1行だけ違う書き方を覚えてもらうより、衝突しない名前にした。
 
 ## データベース（D1 + Drizzle）
 
@@ -119,8 +128,8 @@ pnpm db:migrate:local
 **仕様の正本は `docs/interfaces/mobile-api.md`「一時停止の標識をスマホに配る」と
 `docs/interfaces/web-service.md`「外部データ（一時停止の標識）」。** 理由はそちらにあるので繰り返さない。
 
-- **配るのは規制地点と進入方向**（`StopSign`）。**交差点名称は D1 に残すが配らない**——
-  走行中のディスプレイに文章は出せない（`CLAUDE.md`）
+- **配るのは規制地点と進入方向**（`StopSign`）。**D1 に入るのもこれだけ**——
+  交差点名称は元データが空だったので取り込んでいない（`docs/interfaces/web-service.md`）
 - **1つの交差点に複数の進入方向があれば、標識も方向のぶんだけ別の行になる**
   （元データは交差点単位で1レコード）。理由は `docs/interfaces/mobile-api.md`
 - **引数は都道府県コードだけ**（`?pref=33`）。**位置を取らない**
@@ -135,12 +144,18 @@ pnpm db:migrate:local
 ```sh
 # 1. JARTIC の交通規制情報オープンデータ（CSV）を scripts/stop-signs/data/ に置く
 #    https://www.jartic.or.jp/service/opendata/ （一時停止 = 共通規制種別コード 63、岡山県 = 33）
-#    ファイルは1都道府県警察につき1つ（例: okayama_202508_k_2.1.csv）。Shift-JIS / CR+LF
+#    ファイルは1都道府県警察につき1つ（例: 岡山県警_202607_k_2.1.csv）。Shift-JIS / CR+LF
 # 2. 抽出して SQL を作る
 pnpm stop-signs:extract --in scripts/stop-signs/data/<ファイル名>.csv --pref 33
-# 3. 手元の D1 に流し込む（Cloudflare 上へ入れるのはデプロイ担当だけ。--local を --remote に）
+# 3. 流し込む先に表を作っておく（**先に済ませないと no such table: stop_signs で止まる**）
+pnpm db:migrate:local
+# 4. 手元の D1 に流し込む（Cloudflare 上へ入れるのはデプロイ担当だけ。--local を --remote に）
 pnpm exec wrangler d1 execute team-c-db --local --file=scripts/stop-signs/out/stop-signs-33.sql
 ```
+
+**リモートに対する wrangler のコマンドが `[code: 7403] not valid or not authorized` で落ちることがある。**
+認証は切れておらず、**もう一度実行すると通る**（2026-09-01 に `db:migrate:remote` で発生）。
+**ログインをやり直す前に1回リトライする。**
 
 **CSV も、生成した SQL もコミットしない**（このリポジトリは public で、置くと配布に当たる）。
 `.gitignore` に置き場所と拡張子の両方を書いてあるので、意識しなくても入らない。
@@ -155,7 +170,8 @@ pnpm exec wrangler d1 execute team-c-db --local --file=scripts/stop-signs/out/st
 [交通規制情報（拡張版標準フォーマット）説明書](https://www.jartic.or.jp/d/opendata/typeD_kisei_73_k_2.1.pdf)。**
 実装が前提にしていること（経度と緯度が1つの項目に入る、複数座標はセミコロン区切り、
 一時停止は規制地点と進入方向の組で登録される）はすべてそこに書いてある。
-**ただし実データでは確かめていない**（`docs/unverified.md` 61〜63）。
+**列名・文字コード・「規制地点と進入方向の組」は実データで確認済み**
+（2026-09-01。岡山県警 202607）。**残る未確認は `docs/unverified.md` 62・63。**
 
 ## 注意
 

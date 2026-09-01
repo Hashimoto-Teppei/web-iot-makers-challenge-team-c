@@ -15,6 +15,13 @@
       "when": 1788224517883,
       "tag": "0001_heavy_hellfire_club",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788240327428,
+      "tag": "0002_charming_morlocks",
+      "breakpoints": true
     }
   ]
 }
