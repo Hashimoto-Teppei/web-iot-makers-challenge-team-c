@@ -17,9 +17,8 @@
     {
       "binding": "DB",
       "database_name": "team-c-db",
-      // 仮の値。デプロイ担当が実際のデータベースを作って差し替える（Issue #19）。
-      // ローカル開発（--local）とテストはこの値を使わないため、このままでも開発できる。
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      // Cloudflare 上の実際のデータベース。ローカル開発（--local）とテストはこの値を使わない。
+      "database_id": "3fd1b5ad-7a47-48b8-a3fe-c71d365e4cd3",
       "migrations_dir": "drizzle/migrations"
     }
   ],
