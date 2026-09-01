@@ -1,7 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    // scripts/ は Node が TypeScript をそのまま実行する（Node 24 の型剥がし）。
+    // その経路では import に .ts を書く必要があるため、型チェック側でも許可する。
+    "allowImportingTsExtensions": true
   },
-  "include": ["vite.config.ts", "vitest.config.ts"]
+  "include": ["vite.config.ts", "vitest.config.ts", "scripts/**/*.ts"]
 }

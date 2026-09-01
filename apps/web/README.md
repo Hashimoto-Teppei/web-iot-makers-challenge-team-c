@@ -33,6 +33,7 @@ CORS の設定や API の URL を環境変数で配線する必要はない。
 | `pnpm db:generate` | スキーマの変更から SQL のマイグレーションを生成 |
 | `pnpm db:migrate:local` | ローカルの D1 にマイグレーションを適用 |
 | `pnpm db:migrate:remote` | Cloudflare 上の D1 に適用（**デプロイ担当のみ**） |
+| `pnpm stop-signs:extract` | JARTIC の CSV から一時停止の標識を抜き出し、D1 に流す SQL を作る（下） |
 | `pnpm deploy` | Cloudflare へデプロイ（**デプロイ担当のみ**） |
 
 `wrangler.jsonc` にバインディングを足したら `pnpm cf-typegen` を実行して `Env` を更新する。
@@ -105,6 +106,53 @@ pnpm db:migrate:local
 **仕様の正本は `docs/interfaces/mobile-api.md` と `docs/interfaces/v2v.md`。**
 実装が守っていることの理由はすべてそちらにあるので、ここには書かない。
 半径・失効・値の範囲は `src/worker/v2v/config.ts` に集めてある（**直書きしない**）。
+
+## 一時停止の標識（`GET /api/stop-signs`）
+
+一時停止の事前通知（#27）は**スマホが手元の標識で判定する**ので、この API は**走行中には使われない。**
+それでも壊すと困るのは、**各自のアプリに同梱する `signs.db` がこの経路から作られる**ためで、
+**止まるのは走行ではなくビルド**になる（`docs/adr/0009-on-device-storage.md`）。
+
+**仕様の正本は `docs/interfaces/mobile-api.md`「一時停止の標識をスマホに配る」と
+`docs/interfaces/web-service.md`「外部データ（一時停止の標識）」。** 理由はそちらにあるので繰り返さない。
+
+- **配るのは規制地点と進入方向**（`StopSign`）。**交差点名称は D1 に残すが配らない**——
+  走行中のディスプレイに文章は出せない（`CLAUDE.md`）
+- **1つの交差点に複数の進入方向があれば、標識も方向のぶんだけ別の行になる**
+  （元データは交差点単位で1レコード）。理由は `docs/interfaces/mobile-api.md`
+- **引数は都道府県コードだけ**（`?pref=33`）。**位置を取らない**
+- **`ETag` を返し、`If-None-Match` に `304` で応える。**版はサーバーが決め、端末はそれをそのまま持ち帰る
+- **まだ取り込んでいない県は 404。**空の配列を返さない（「持っていない」と「0 件」を混ぜない）
+- **認証は無い。**公開されている交通規制情報である
+
+### 標識を取り込む（原本を持つ人だけ・月に1回）
+
+**他のメンバーはこの手順を踏まない。** `GET /api/stop-signs` から同梱物を作るので、原本を触らない。
+
+```sh
+# 1. JARTIC の交通規制情報オープンデータ（CSV）を scripts/stop-signs/data/ に置く
+#    https://www.jartic.or.jp/service/opendata/ （一時停止 = 共通規制種別コード 63、岡山県 = 33）
+#    ファイルは1都道府県警察につき1つ（例: okayama_202508_k_2.1.csv）。Shift-JIS / CR+LF
+# 2. 抽出して SQL を作る
+pnpm stop-signs:extract --in scripts/stop-signs/data/<ファイル名>.csv --pref 33
+# 3. 手元の D1 に流し込む（Cloudflare 上へ入れるのはデプロイ担当だけ。--local を --remote に）
+pnpm exec wrangler d1 execute team-c-db --local --file=scripts/stop-signs/out/stop-signs-33.sql
+```
+
+**CSV も、生成した SQL もコミットしない**（このリポジトリは public で、置くと配布に当たる）。
+`.gitignore` に置き場所と拡張子の両方を書いてあるので、意識しなくても入らない。
+
+**原本を自分の PC だけに置かない。** データは月次更新で、**前月ぶんは取得できない。**
+リポジトリ以外の共有の置き場所に上げるか、D1 に入れたあとのダンプを残すこと。
+
+抽出そのもの（CSV の解釈・版の計算・SQL の組み立て）は `scripts/stop-signs/` にあり、
+**ファイルも通信も持たない純粋な関数に分けてある**ので、**原本を持っていない人でも Vitest で直せる。**
+
+**CSV の形式の正本は JARTIC の
+[交通規制情報（拡張版標準フォーマット）説明書](https://www.jartic.or.jp/d/opendata/typeD_kisei_73_k_2.1.pdf)。**
+実装が前提にしていること（経度と緯度が1つの項目に入る、複数座標はセミコロン区切り、
+一時停止は規制地点と進入方向の組で登録される）はすべてそこに書いてある。
+**ただし実データでは確かめていない**（`docs/unverified.md` 61〜63）。
 
 ## 注意
 

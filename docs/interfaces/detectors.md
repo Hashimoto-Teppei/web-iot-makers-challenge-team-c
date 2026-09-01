@@ -55,8 +55,9 @@ type Track = {
 
 type StopSign = {
   id: string;
-  lat: number;
+  lat: number;                    // 規制地点。停止線とは限らず交差点中央部のこともある
   lon: number;
+  approach: { lat: number; lon: number } | null;  // この点から (lat, lon) へ向かう車両が対象
 };
 
 type DetectorInput = {
@@ -66,6 +67,13 @@ type DetectorInput = {
   signs: readonly StopSign[];     // 近傍の一時停止の標識。空でありうる
 };
 ```
+
+**`StopSign.approach` は「この標識が対象とする進入方向」**である。
+**単に近いだけで拾うと、対向車線や交差する道路の標識で警告が鳴る**ので、
+`approach` から規制地点へ向かうベクトルと自車の進行方角を突き合わせる。
+元データが方向ごとに座標を持っているため、**1つの交差点に複数の進入方向があれば、
+標識も方向のぶんだけ別々の `StopSign` になる**（[`mobile-api.md`](./mobile-api.md)）。
+**`null` は「全方向が対象」ではなく「元データに登録が無い」**——扱いは検知側が決める（#27）。
 
 **`Fix` は [`v2v.md`](./v2v.md) の `self` / `peer` から `k` と `id` を落とし、
 `rxAt` を足しただけのもの。** 別の形を作っていない。
