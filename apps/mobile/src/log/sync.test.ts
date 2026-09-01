@@ -15,6 +15,9 @@ import { syncRideLogs } from "./sync";
 
 const DEVICE = "a1000001";
 
+/** **送った直後に消える**設定。既定（3日）を待たずに掃除を確かめるためのもの。 */
+const ZERO_RETENTION = { sentRetentionMs: 0 };
+
 function fix(t: number): SelfMessage {
   return { k: "self", t, lat: 34.6612, lon: 133.9345, spd: 4.2, crs: 90, hacc: 8 };
 }
@@ -49,12 +52,17 @@ function recorder(results: PostLogsResult[] = []): PostLogsFn & { sent: PendingB
 describe("syncRideLogs", () => {
   it("送るものが無ければ何も投げない", async () => {
     const post = recorder();
-    const outcome = await syncRideLogs(storeWith(0), post);
+    // **走り終えた直後の時刻**で回す（既定の保持期間は3日。`./config.ts`）。
+    const outcome = await syncRideLogs(storeWith(0), post, { now: () => 2_000 });
 
     expect(post.sent).toHaveLength(0);
     expect(outcome).toEqual({
       sent: { rides: 0, points: 0, detections: 0 },
       requests: 0,
+      // **終えた直後の走行には触れない。**測位が1点も無くても、
+      // **置いておく期間を過ぎるまで消さない**（`./store.ts` の `purgeSent`）。
+      purged: { rides: 0, points: 0, detections: 0 },
+      purgeError: null,
       error: null,
     });
   });
@@ -134,6 +142,112 @@ describe("syncRideLogs", () => {
     // **残りは手元に残る。**次の機会に続きから送る。
     expect(logs.summary().pendingPoints).toBe(2);
     expect(logs.summary().lastSentAt).toBe(9_000);
+  });
+
+  it("送り終えて、置いておく期間を過ぎたぶんを端末から消す", async () => {
+    const logs = storeWith(5);
+    const post = recorder();
+
+    const outcome = await syncRideLogs(logs, post, { now: () => 9_000, retention: ZERO_RETENTION });
+
+    // **送った直後に消えるのは、保持期間を 0 にしたからである**（既定は3日。`./config.ts`）。
+    expect(outcome.purged).toEqual({ rides: 1, points: 5, detections: 0 });
+    expect(outcome.purgeError).toBeNull();
+    // **「最後に送れた時刻」は消えない**（走行ログとは別の表にある。`./schema.ts`）。
+    expect(logs.summary()).toEqual({
+      pendingRides: 0,
+      pendingPoints: 0,
+      pendingDetections: 0,
+      lastSentAt: 9_000,
+    });
+  });
+
+  it("既定では送った直後に消さない（取り込みの取りこぼしを確かめられる猶予）", async () => {
+    const logs = storeWith(5);
+
+    const outcome = await syncRideLogs(logs, recorder(), { now: () => 9_000 });
+
+    expect(outcome.purged).toEqual({ rides: 0, points: 0, detections: 0 });
+  });
+
+  it("送れなかったぶんは消さない（消すと二度と上がらない）", async () => {
+    const logs = storeWith(4);
+    const post = recorder([{ ok: false, kind: "unreachable", message: "送信できませんでした" }]);
+
+    const outcome = await syncRideLogs(logs, post, {
+      limits: { maxPoints: 2, maxDetections: 2 },
+      now: () => 9_000,
+      // **保持期間 0 でも、印の付いていない行には触れない。**
+      retention: ZERO_RETENTION,
+    });
+
+    expect(outcome.purged).toEqual({ rides: 0, points: 0, detections: 0 });
+    expect(logs.summary().pendingPoints).toBe(4);
+  });
+
+  it("掃除で落ちたら、送信の失敗とは分けて理由を残す", async () => {
+    // **送れているのに「送信に失敗しました」と出す方が誤解が大きい。**
+    // ただし**黙らない**——消せていないことは、どの件数にも現れない。
+    const logs = storeWith(2);
+    const broken: RideLogStore = {
+      ...logs,
+      purgeSent: () => {
+        throw new Error("消せません");
+      },
+    };
+
+    const outcome = await syncRideLogs(broken, recorder(), { now: () => 9_000 });
+
+    expect(outcome.error).toBeNull();
+    expect(outcome.sent.points).toBe(2);
+    expect(outcome.purged).toEqual({ rides: 0, points: 0, detections: 0 });
+    expect(outcome.purgeError).toMatch(/消せません/);
+  });
+
+  it("送る側が投げても、掃除は済ませてから通す", async () => {
+    // **保存層が投げたときにここへ来る。**掃除は送信の成否と関係が無いので、
+    // **通信が死んでいる日ほど手元は減らしておきたい。**
+    const logs = storeWith(2);
+    const sent = logs.pending({ maxPoints: 5, maxDetections: 5 });
+    if (sent === null) throw new Error("送るものがある");
+    logs.markSent(sent, 1);
+
+    let purged = 0;
+    const broken: RideLogStore = {
+      ...logs,
+      pending: () => {
+        throw new Error("読めません");
+      },
+      purgeSent: (before) => {
+        purged += 1;
+        return logs.purgeSent(before);
+      },
+    };
+
+    await expect(
+      syncRideLogs(broken, recorder(), { now: () => 9_000, retention: ZERO_RETENTION }),
+    ).rejects.toThrow("読めません");
+    expect(purged).toBe(1);
+    // **本当に消えている**（呼ばれただけではない）。
+    expect(logs.summary().lastSentAt).toBe(1);
+    expect(logs.purgeSent(9_000)).toEqual({ rides: 0, points: 0, detections: 0 });
+  });
+
+  it("送る側と掃除の両方が落ちたら、理由を両方とも運ぶ", async () => {
+    // **この経路では `SyncOutcome` を返せず、投げたものしか画面に届かない。**
+    // 落ちるときは同じ `db` の故障で両方が落ちるので、**ここが一番起きやすい。**
+    const logs = storeWith(2);
+    const broken: RideLogStore = {
+      ...logs,
+      pending: () => {
+        throw new Error("読めません");
+      },
+      purgeSent: () => {
+        throw new Error("消せません");
+      },
+    };
+
+    await expect(syncRideLogs(broken, recorder())).rejects.toThrow(/読めません.*消せません/s);
   });
 
   it("印が付かないときに投げ続けない（安全弁）", async () => {

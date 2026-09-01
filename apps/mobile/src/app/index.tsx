@@ -125,6 +125,14 @@ export default function HomeScreen() {
 
         {sync.error !== null && <Text style={styles.alert}>{sync.error}</Text>}
 
+        {/*
+          **消し損ねも出す。**送り終えたのに消えていない測位は、
+          **上の件数（送っていない走行）には現れない**ので、
+          ここで出さないと**位置情報が端末に溜まり続けていることに誰も気づけない**
+          （`docs/interfaces/mobile-api.md`「送り終えたものを端末に置き続けない」）。
+        */}
+        {sync.purgeError !== null && <Text style={styles.alert}>{sync.purgeError}</Text>}
+
         {/* **走行中は押せないようにする。**数千点の送信が 1Hz の中継と同じ回線を奪う。 */}
         {!ride.running && sync.summary !== null && sync.summary.pendingRides > 0 && (
           <Pressable

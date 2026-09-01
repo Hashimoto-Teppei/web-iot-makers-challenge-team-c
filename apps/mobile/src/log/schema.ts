@@ -113,6 +113,27 @@ export const detections = sqliteTable(
 );
 
 /**
+ * 走行ログそのものではなく、**走行ログをどう扱ったか**を1行ずつ持つ表（key-value）。
+ *
+ * **いま入るのは `last_sent_at` の1件だけ**である。**それでも表を分けているのは、
+ * 「最後に送れた時刻」が走行ログより長生きしなければならない**ため——
+ * **送信済みの行は保持期間を過ぎたら消える**（`./store.ts` の `purgeSent`）ので、
+ * `max(points.sent_at)` から出していると、**掃除のあとに「一度も送っていない」に戻る。**
+ * 走行後の画面はそれを見て**送れていないと表示する**（`./use-ride-log-sync.ts`）。
+ *
+ * **値は整数だけ。**いま要るのが時刻だけなので、**文字列も入る形にしない**
+ * （`CLAUDE.md`「早すぎる抽象化を避ける」）。要るものが出たら列を足す。
+ */
+export const appMeta = sqliteTable("app_meta", {
+  /** いまは `"last_sent_at"` だけ */
+  key: text("key").primaryKey(),
+  value: integer("value").notNull(),
+});
+
+/** 最後に送れた時刻（UTC ミリ秒）を入れておく鍵。 */
+export const LAST_SENT_AT_KEY = "last_sent_at";
+
+/**
  * `app.db` の移行。**1要素が1つの版で、中身は1文ずつ**に分ける。
  *
  * **`signs.db` と違い、こちらは育てていくもの**である（`./schema.ts` の DDL を
@@ -168,6 +189,26 @@ export const APP_DB_MIGRATIONS: readonly (readonly string[])[] = [
        PRIMARY KEY (device_id, source, log_id, seq)
      )`,
     `CREATE INDEX IF NOT EXISTS detections_unsent ON detections (sent_at)`,
+  ],
+  [
+    `CREATE TABLE IF NOT EXISTS app_meta (
+       key TEXT PRIMARY KEY,
+       value INTEGER NOT NULL
+     )`,
+    // **既にある印から埋める。**この版まで既に送ったことがある端末で、
+    // **「最後に送れた時刻」が空のまま始まらないようにする**
+    // （空だと走行後の画面が「一度も送っていない」と出す）。
+    // `HAVING` が要るのは、**1行も無くても集計は1行（`null`）を返す**ためで、
+    // そのまま入れると `NOT NULL` に触れる。
+    // `DO NOTHING` があるので、**途中で落ちて流し直しても上書きしない。**
+    `INSERT INTO app_meta (key, value)
+       SELECT 'last_sent_at', max(sent_at) FROM (
+         SELECT sent_at FROM points WHERE sent_at IS NOT NULL
+         UNION ALL
+         SELECT sent_at FROM detections WHERE sent_at IS NOT NULL
+       )
+       HAVING max(sent_at) IS NOT NULL
+     ON CONFLICT (key) DO NOTHING`,
   ],
 ];
 

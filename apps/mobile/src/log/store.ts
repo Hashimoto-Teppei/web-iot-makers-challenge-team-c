@@ -14,14 +14,14 @@
  * そのまま `POST /api/logs` の本文になる形にしてある。
  */
 
-import { and, asc, eq, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, lte, notExists, sql } from "drizzle-orm";
 // **リクエストの形を手で書き写さない**（`docs/interfaces/mobile-api.md`）。
 // 型だけを借りるので、Worker のコードはモバイルのバンドルに入らない。
 import type { DetectionRecord, PointRecord, RideRecord } from "web/src/worker/logs/request";
 import type { Warning } from "../detect/types";
 import type { SyncSqliteDatabase } from "../signs/store";
 import type { SelfMessage } from "../v2v/messages";
-import { detections, points, rides } from "./schema";
+import { appMeta, detections, LAST_SENT_AT_KEY, points, rides } from "./schema";
 
 /** スマホ発の検知の種別。**`rear_object` はデバイスの中でしか発生しない**（#40） */
 export type PhoneWarnKind = Extract<DetectionRecord, { source: "phone" }>["kind"];
@@ -84,7 +84,30 @@ export type RideLogStore = {
   pending(limits: PendingLimits): PendingBatch | null;
   /** 送れたぶんに印を付ける。 */
   markSent(batch: PendingBatch, at: number): void;
+  /**
+   * **送り終えて、置いておく期間を過ぎた行を消す。**
+   *
+   * **送っていない行は絶対に消さない**——消すと**二度と上がらない**
+   * （`pending()` は `sent_at` が `null` の行だけを見ている）。
+   *
+   * @param before この時刻**以前**に送れた行を消す
+   *   （**いつまで置くかはここが決めない**。`./config.ts` の `rideLogRetentionDefaults`）
+   */
+  purgeSent(before: number): PurgeResult;
   summary(): RideLogSummary;
+};
+
+/**
+ * 消した件数。**人に見せるためではなく、消えたことを確かめられるようにするため**にある。
+ *
+ * **消し損ねは、どの件数にも現れない。**{@link RideLogStore.summary} が数えるのは
+ * **送っていない行だけ**なので、**送り終えたのに消えていない行を数えるものは無い。**
+ * 見えるようにする唯一の口は `./sync.ts` の `purgeError` である。
+ */
+export type PurgeResult = {
+  rides: number;
+  points: number;
+  detections: number;
 };
 
 /**
@@ -116,6 +139,7 @@ export function createDiscardingRideLogStore(): RideLogStore {
     }),
     pending: () => null,
     markSent: () => {},
+    purgeSent: () => ({ rides: 0, points: 0, detections: 0 }),
     summary: () => ({
       pendingRides: 0,
       pendingPoints: 0,
@@ -342,6 +366,19 @@ export function createRideLogStore(
       // **走行ごとに突き合わせる。**いまは1回に1走行しか載せないが、
       // **`batch.points.at(-1)` を全部の走行に使い回すと、載せ方を変えた瞬間に
       // 送っていない行へ印が付く**（付いた行は二度と送られない）。
+      // **「最後に送れた時刻」を走行ログとは別に残す。**送信済みの行は保持期間を過ぎたら
+      // 消えるので（{@link RideLogStore.purgeSent}）、**行から出していると掃除のあとに
+      // 「一度も送っていない」に戻る**（`./schema.ts` の `appMeta`）。
+      db.insert(appMeta)
+        .values({ key: LAST_SENT_AT_KEY, value: at })
+        // **後から来た値で上書きしない。**時計が巻き戻ることがある（端末の時刻合わせ）ので、
+        // **大きい方を残す**——画面に出るのは「最後に送れたのはいつか」である。
+        .onConflictDoUpdate({
+          target: appMeta.key,
+          set: { value: sql`max(${appMeta.value}, excluded.value)` },
+        })
+        .run();
+
       for (const ride of batch.rides) {
         const lastPointSeq = lastSeqOf(batch.points, ride.logId);
         if (lastPointSeq !== null) {
@@ -379,6 +416,68 @@ export function createRideLogStore(
       }
     },
 
+    purgeSent(before) {
+      // **消した件数は、消す前に数える。**`run()` が返すものはドライバごとに違い
+      // （`better-sqlite3` と `expo-sqlite`）、**Vitest で通ったものが実機で通る保証が無い**
+      // ——この保存層が SQL を1つにしている意味が消える。
+      // **走行後に1回しか通らない**経路なので、1文増えても釣り合う。
+      // **出どころ（`source`）で絞らない。**印が付いているかどうかだけを見るので、
+      // **#40 がデバイス発の検知を足しても、ここは広げなくてよい**
+      // （まだ送っていない行は `sent_at` が `null` なので触れない）。
+      const sentPoints = and(isNotNull(points.sentAt), lte(points.sentAt, before));
+      const sentDetections = and(isNotNull(detections.sentAt), lte(detections.sentAt, before));
+
+      const purgedPoints = countOf(
+        db.select({ n: sql<number>`count(*)` }).from(points).where(sentPoints).all(),
+      );
+      const purgedDetections = countOf(
+        db.select({ n: sql<number>`count(*)` }).from(detections).where(sentDetections).all(),
+      );
+
+      db.delete(points).where(sentPoints).run();
+      db.delete(detections).where(sentDetections).run();
+
+      // **行が1つも残っていない走行だけを消す。**残すと「送るものが無い走行」が増え続け、
+      // `pending()` の探索が伸びる。
+      //
+      // **走行の行にも同じ期限を効かせる。**「行が残っていない」だけを条件にすると、
+      // **測位が1点も入っていない走行が、終えた直後に消える**——そして
+      // **測位の購読が始まるのは走り出したあと**（`../ride/use-ride-loop.ts`）なので、
+      // **消えたあとに1点目が届く**ことがある。その点は**走行の行が無いまま残り**、
+      // `pending()` は `rides` から辿るので**永久に送られず、走行後の画面には
+      // 「送っていない測位」として出続ける**（人には消しようがない）。
+      //
+      // **`ended_at` が `null` の走行も消さない。**走行中の1件がこれに当たる。
+      //
+      // **消した `log_id` は、以後の走行で引き当てられうる**（採番は `rides` に
+      // 残っているものだけを避ける。{@link uniqueLogId}）。**16進8文字なので
+      // 42億分の1**であり、**当たった場合はサーバー側で新しい走行が黙って消える**
+      // （取り込みは既にあるキーを無視する）。**確率と、行を残し続ける不利益を
+      // 秤にかけて、消す方を選んでいる。**
+      const emptyRide = and(
+        isNotNull(rides.endedAt),
+        lte(rides.endedAt, before),
+        notExists(
+          db
+            .select({ one: sql`1` })
+            .from(points)
+            .where(and(eq(points.deviceId, rides.deviceId), eq(points.logId, rides.logId))),
+        ),
+        notExists(
+          db
+            .select({ one: sql`1` })
+            .from(detections)
+            .where(and(eq(detections.deviceId, rides.deviceId), eq(detections.logId, rides.logId))),
+        ),
+      );
+      const purgedRides = countOf(
+        db.select({ n: sql<number>`count(*)` }).from(rides).where(emptyRide).all(),
+      );
+      db.delete(rides).where(emptyRide).run();
+
+      return { rides: purgedRides, points: purgedPoints, detections: purgedDetections };
+    },
+
     summary() {
       const [rideCounts] = db
         .select({ n: sql<number>`count(*)` })
@@ -395,25 +494,24 @@ export function createRideLogStore(
         .from(points)
         .where(isNull(points.sentAt))
         .all();
-      const [lastPointSentAt] = db
-        .select({ at: sql<number | null>`max(${points.sentAt})` })
-        .from(points)
-        .all();
       const [unsentDetections] = db
         .select({ n: sql<number>`count(*)` })
         .from(detections)
         .where(and(eq(detections.source, "phone"), isNull(detections.sentAt)))
         .all();
-      const [lastDetectionSentAt] = db
-        .select({ at: sql<number | null>`max(${detections.sentAt})` })
-        .from(detections)
+      // **行から `max(sent_at)` を出さない。**送信済みの行は保持期間を過ぎたら消えるので、
+      // **掃除のあとに「一度も送っていない」に戻る**（`./schema.ts` の `appMeta`）。
+      const [lastSentAt] = db
+        .select({ value: appMeta.value })
+        .from(appMeta)
+        .where(eq(appMeta.key, LAST_SENT_AT_KEY))
         .all();
 
       return {
         pendingRides: rideCounts?.n ?? 0,
         pendingPoints: unsentPoints?.n ?? 0,
         pendingDetections: unsentDetections?.n ?? 0,
-        lastSentAt: maxOrNull(lastPointSentAt?.at ?? null, lastDetectionSentAt?.at ?? null),
+        lastSentAt: lastSentAt?.value ?? null,
       };
     },
   };
@@ -467,8 +565,7 @@ function uniqueLogId(db: SyncSqliteDatabase, deviceId: string, random: () => num
   throw new Error("走行の識別子を作れませんでした（同じ値が続けて出ています）");
 }
 
-function maxOrNull(a: number | null, b: number | null): number | null {
-  if (a === null) return b;
-  if (b === null) return a;
-  return Math.max(a, b);
+/** `count(*)` の結果。**行が返らないこと自体は正常**（数え上げる表が空でも1行返るが、備える）。 */
+function countOf(rows: readonly { n: number }[]): number {
+  return rows[0]?.n ?? 0;
 }
