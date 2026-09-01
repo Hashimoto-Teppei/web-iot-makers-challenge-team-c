@@ -223,12 +223,136 @@ describe("開けなかったときの保存層", () => {
     ride.end(2_000);
 
     expect(logs.pending(LIMITS)).toBeNull();
+    expect(logs.purgeSent(9_999_999)).toEqual({ rides: 0, points: 0, detections: 0 });
     expect(logs.summary()).toEqual({
       pendingRides: 0,
       pendingPoints: 0,
       pendingDetections: 0,
       lastSentAt: null,
     });
+  });
+});
+
+describe("送り終えたぶんを消す", () => {
+  /** 点と検知を1件ずつ持つ走行を作って、`at` に送ったことにする。 */
+  function sentRide(logs: RideLogStore, startedAt: number, at: number) {
+    const ride = logs.startRide(DEVICE, startedAt);
+    ride.addPoint(fix(startedAt));
+    ride.addWarning(WARNING, startedAt + 100);
+    ride.end(startedAt + 1_000);
+    const batch = logs.pending(LIMITS);
+    if (batch === null) throw new Error("送るものがある");
+    logs.markSent(batch, at);
+    return ride;
+  }
+
+  it("送り終えた行と、空になった走行の行を消す", () => {
+    const logs = store();
+    sentRide(logs, 1_000, 5_000);
+
+    // **消すのは「その時刻までに送れた行」**（いつまで置くかは `./config.ts`）。
+    expect(logs.purgeSent(5_000)).toEqual({ rides: 1, points: 1, detections: 1 });
+    // 二度目は何も残っていない。**行数が増え続けないのはここ。**
+    expect(logs.purgeSent(5_000)).toEqual({ rides: 0, points: 0, detections: 0 });
+  });
+
+  it("送っていない行は消さない（消すと二度と上がらない）", () => {
+    const logs = store();
+    const ride = logs.startRide(DEVICE, 1_000);
+    ride.addPoint(fix(1_000));
+    ride.addWarning(WARNING, 1_200);
+    ride.end(2_000);
+
+    // **未来の時刻で掃除しても触らない。**印が付いていない行は保持期間の話ではない。
+    expect(logs.purgeSent(9_999_999)).toEqual({ rides: 0, points: 0, detections: 0 });
+    expect(logs.pending(LIMITS)?.points).toHaveLength(1);
+    expect(logs.summary().pendingPoints).toBe(1);
+  });
+
+  it("置いておく期間の内に送ったぶんは残す", () => {
+    const logs = store();
+    sentRide(logs, 1_000, 5_000);
+
+    // 5,000 に送ったものは、4,999 までの掃除では消えない。
+    expect(logs.purgeSent(4_999)).toEqual({ rides: 0, points: 0, detections: 0 });
+  });
+
+  it("送っていない行が残っている走行の行を消さない", () => {
+    const logs = store();
+    const ride = logs.startRide(DEVICE, 1_000);
+    ride.addPoint(fix(1_000));
+    ride.addPoint(fix(1_100));
+    ride.end(2_000);
+
+    // 1点だけ送る（残り1点は手元に残る）。
+    const batch = logs.pending({ maxPoints: 1, maxDetections: 1 });
+    if (batch === null) throw new Error("送るものがある");
+    logs.markSent(batch, 5_000);
+
+    expect(logs.purgeSent(5_000)).toEqual({ rides: 0, points: 1, detections: 0 });
+    // **走行の行が消えていない**——消すと、残った点を送るときに一緒に送る行が無くなる。
+    expect(logs.pending(LIMITS)?.rides).toEqual([
+      { logId: ride.logId, startedAt: 1_000, endedAt: 2_000 },
+    ]);
+  });
+
+  it("いま記録している走行を消さない（まだ1点も入っていない）", () => {
+    const logs = store();
+    const running = logs.startRide(DEVICE, 1_000);
+
+    // **走り出した直後は点が0件。**「行が残っていない走行」として消してはいけない。
+    expect(logs.purgeSent(9_999_999)).toEqual({ rides: 0, points: 0, detections: 0 });
+
+    running.addPoint(fix(1_500));
+    running.end(2_000);
+    expect(logs.pending(LIMITS)?.points).toHaveLength(1);
+  });
+
+  it("終えたばかりの走行を消さない（置いておく期間を過ぎるまで）", () => {
+    // **測位の購読が始まるのは走り出したあと**なので、**点が1つも無いまま終わる走行**が
+    // ありうる（`../ride/use-ride-loop.ts`）。ここで消すと、
+    // **そのあとに届いた1点目が、走行の行の無いまま残る**——`pending()` は `rides` から
+    // 辿るので**永久に送られず、画面には「送っていない測位」として出続ける。**
+    const logs = store();
+    const ride = logs.startRide(DEVICE, 1_000);
+    ride.end(2_000);
+
+    expect(logs.purgeSent(1_999)).toEqual({ rides: 0, points: 0, detections: 0 });
+
+    // 遅れて届いた1点目。**走行の行が残っているので、ちゃんと送られる。**
+    ride.addPoint(fix(2_100));
+    expect(logs.pending(LIMITS)?.points).toHaveLength(1);
+  });
+
+  it("期間を過ぎた空の走行は消す（「送るものが無い走行」を溜めない）", () => {
+    const logs = store();
+    logs.startRide(DEVICE, 1_000).end(2_000);
+
+    // 終わりの時刻が期限に達したら消える。**残すと `pending()` の探索が伸びる。**
+    expect(logs.purgeSent(2_000)).toEqual({ rides: 1, points: 0, detections: 0 });
+  });
+
+  it("消しても「最後に送れた時刻」が残る", () => {
+    const logs = store();
+    sentRide(logs, 1_000, 5_000);
+    logs.purgeSent(5_000);
+
+    // **行から `max(sent_at)` を出していたら、ここで `null` に戻り、
+    // 走行後の画面が「一度も送っていない」と出す。**
+    expect(logs.summary()).toEqual({
+      pendingRides: 0,
+      pendingPoints: 0,
+      pendingDetections: 0,
+      lastSentAt: 5_000,
+    });
+  });
+
+  it("時計が巻き戻っても、最後に送れた時刻を古い方へ書き換えない", () => {
+    const logs = store();
+    sentRide(logs, 1_000, 5_000);
+    sentRide(logs, 6_000, 3_000);
+
+    expect(logs.summary().lastSentAt).toBe(5_000);
   });
 });
 
