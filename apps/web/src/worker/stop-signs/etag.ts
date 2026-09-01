@@ -13,6 +13,12 @@
  *
  * 県コードを混ぜるのは、**別の県の版と偶然一致したときに 304 を返さないため**である。
  * 版は取り込んだ中身から決まるので、空の県が2つあれば同じ値になりうる。
+ *
+ * **ここで強い ETag を返しても、端末に届くのは `W/` 付きになりうる。**
+ * Cloudflare は応答を gzip した時点で弱い検証子に書き換えるためで、
+ * `accept-encoding: gzip` を送る `fetch` は必ずそちらを受け取る。
+ * **端末は `W/` を剥がしてから保存する**こと（`apps/mobile/src/signs/response.ts`）——
+ * 剥がさないと、**圧縮された経路と `curl -I` とで版の文字列が食い違う。**
  */
 export function etagOf(pref: number, version: string): string {
   return `"${pref}.${version}"`;

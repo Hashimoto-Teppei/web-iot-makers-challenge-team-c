@@ -57,9 +57,16 @@ export type MockDeviceLink = DeviceLink & {
 };
 
 /**
+ * モックが名乗る端末ID。**全員が同じ値を名乗る**ので、これを名乗ったまま共有の
+ * デプロイ先へ中継すると、**開発者どうしが Durable Object の同じ枠を上書きし合う**
+ * （`../lib/api.ts` の歯止めが止める）。#38 で実機の ID に差し替わる。
+ */
+export const MOCK_DEVICE_ID = "a1000001";
+
+/**
  * @param deviceId 名乗る端末ID。既定は合成した値（実在の機器の ID ではない）
  */
-export function createMockDeviceLink(deviceId = "a1000001"): MockDeviceLink {
+export function createMockDeviceLink(deviceId = MOCK_DEVICE_ID): MockDeviceLink {
   const written: AlertMessage[] = [];
   return {
     deviceId,

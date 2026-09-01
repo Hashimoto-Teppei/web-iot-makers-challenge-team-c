@@ -1,0 +1,1 @@
+ALTER TABLE `stop_signs` DROP COLUMN `name`;

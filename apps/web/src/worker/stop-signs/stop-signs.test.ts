@@ -10,9 +10,8 @@ const SIGNS = [
     lat: 34.665,
     lon: 133.918,
     approach: { lat: 34.664, lon: 133.918 },
-    name: "岡山交差点",
   },
-  { id: "33-K2", lat: 34.666, lon: 133.919, approach: null, name: null },
+  { id: "33-K2", lat: 34.666, lon: 133.919, approach: null },
 ];
 
 /**
@@ -44,14 +43,14 @@ describe("GET /api/stop-signs", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as StopSignsResponse;
     expect(body.count).toBe(2);
-    // **交差点名称は配らない**（走行中のディスプレイに文章は出せない）。
-    expect(body.signs).toEqual(SIGNS.map(({ name: _name, ...sign }) => sign));
+    // **取り込んだものがそのまま配られる**（D1 に配らない列は無い）。
+    expect(body.signs).toEqual(SIGNS);
     expect(body.pref).toBe(33);
   });
 
   it("別の県の標識を混ぜない", async () => {
     await importSigns(SIGNS, 33);
-    await importSigns([{ id: "34-B1", lat: 34.396, lon: 132.459, approach: null, name: null }], 34);
+    await importSigns([{ id: "34-B1", lat: 34.396, lon: 132.459, approach: null }], 34);
 
     const res = await app.request("/api/stop-signs?pref=33", {}, env);
 
@@ -81,10 +80,7 @@ describe("GET /api/stop-signs", () => {
     const first = await app.request("/api/stop-signs?pref=33", {}, env);
     const etag = first.headers.get("ETag") ?? "";
 
-    await importSigns([
-      ...SIGNS,
-      { id: "33-K3", lat: 34.667, lon: 133.92, approach: null, name: null },
-    ]);
+    await importSigns([...SIGNS, { id: "33-K3", lat: 34.667, lon: 133.92, approach: null }]);
     const second = await app.request(
       "/api/stop-signs?pref=33",
       { headers: { "If-None-Match": etag } },

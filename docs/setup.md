@@ -275,12 +275,48 @@ pnpm --filter web db:migrate:local   # 手元の D1（SQLite）にマイグレ�
   （生成物なのでリポジトリには入っていません。`docs/adr/0009-on-device-storage.md`）。
 
   ```sh
-  pnpm --filter web dev              # 別のターミナルで動かしたまま
   pnpm --filter mobile signs:build   # apps/mobile/assets/signs.db ができる
   ```
 
   **作っていないとビルドが止まります**（そういう作りにしてあります）。
-  取得先を変えるときは `pnpm --filter mobile signs:build --base https://...`（`--` は挟みません）。
+  **`apps/web` を動かす必要はありません。** 既定の取得先は**デプロイ先の Worker**です
+  （URL の正本は `apps/mobile/src/lib/api-base.ts`。実行すると取得先が表示されます）。
+
+  手元の `apps/web` から取りたいときだけ、別のターミナルで `pnpm --filter web dev` を
+  動かしたうえで `pnpm --filter mobile signs:build --base http://localhost:5173` を実行します
+  （`--` は挟みません）。**その場合、手元の D1 に標識を取り込んでおく必要があります。**
+
+  アプリ実行時に API を叩く先も同じデプロイ先が既定です。**手元の `apps/web` に向けたいときだけ**
+  `apps/mobile/.env.local` に書きます（gitignore 済み。**`EXPO_PUBLIC_` はバンドルに
+  埋め込まれますが、URL は秘密ではありません**）。
+
+  ```sh
+  # apps/mobile/.env.local
+  EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:5173   # Android エミュレータからホスト PC を指す
+  # 実機からは PC の LAN 内 IP にする（例: http://192.168.1.5:5173）
+  ```
+
+  **手元に向けるときは、同梱物も一緒に手元から作り直してください**
+  （`signs:build --base http://localhost:5173`）。**片方だけ向けると、アプリは手元の D1・
+  同梱の標識はデプロイ先という食い違いが残り**、手元の D1 が空だったり別の県だったりしても
+  **画面上は「標識がそろっている」顔のまま**になります。
+
+  **書き換えたら Metro を `--clear` 付きで再起動してください**（`npx expo start --clear`）。
+  環境変数はバンドル時に埋め込まれ、**Metro の変換キャッシュは古い値を持ち続けます。**
+
+  > **走行ループを手元で試すときは、必ず手元に向けてください（#38 が入るまでは特に）。**
+  > 既定のままだと `POST /api/v2v/exchange` が**共有の Durable Object に実際の位置を毎秒送り**、
+  > 半径 300m 以内の他の人に周辺車両として見えます（`docs/interfaces/mobile-api.md`）。
+  > **位置情報は個人情報**です（`CLAUDE.md`）。
+  >
+  > **#38 が入るまで、走行ループは全員がモックの `a1000001` を名乗ります。**
+  > そのまま送ると**開発者どうしが DO の同じ枠を上書きし合い**（自分の ID は除いて
+  > 返されるため、お互いには見えないまま消し合う）、**デモ中なら本番の近傍を汚します。**
+  >
+  > **これはコードでも止めてあります**（`apps/mobile/src/ride/api.ts` の `blocksMockExchange`）。
+  > 既定のまま開始すると中継は毎回失敗し、画面に失敗の回数が出ます——**壊れているのではなく、
+  > 手元に向けろという合図**です。検知そのものはネットワーク無しで
+  > シミュレータから確かめられます（`apps/mobile/src/sim/`）。
 
   **標識を作り直したときは、端末からアプリを一度アンインストールしてください。**
   同梱物は**端末に `signs.db` が無いときだけ**コピーされるため、上書きインストールでは
@@ -305,10 +341,11 @@ pnpm --filter web db:migrate:local   # 手元の D1（SQLite）にマイグレ�
 | CI だけ落ちて手元では通る | まず `pnpm lint:fix` を実行してコミットする。整形漏れがいちばん多い |
 | `pnpm dev` でポートが使えないと言われる | 5173 番を別のプロセスが使っている。前に起動した dev サーバーが残っていないか確認する |
 | Windows で `Filename too long` と言われる | `git config --global core.longpaths true` を実行してから clone し直す |
-| `signs:build` で「繋がりません」と言われる | 別のターミナルで `pnpm --filter web dev` が動いていない |
-| `signs:build` で「標識がサーバーにありません」と言われる | 手元の D1 に標識が入っていない。`apps/web` の担当に取り込みを頼む（`docs/interfaces/web-service.md`） |
+| `signs:build` で「繋がりません」と言われる | デプロイ先に届いていない。回線を確かめる。`--base http://localhost:5173` を付けているなら、別のターミナルで `pnpm --filter web dev` が動いていない |
+| `signs:build` で「標識がありません」と言われる | 取得先の D1 に標識が入っていない。`apps/web` の担当に取り込みを頼む（`docs/interfaces/web-service.md`） |
 | `apps/mobile` のビルドが `signs.db` で止まる | 同梱物を作っていない。上の `signs:build` を実行する |
 | 標識を作り直したのにアプリの件数・版が変わらない | 上書きインストールでは同梱物が入れ替わらない。**アプリをアンインストールしてから**入れ直す |
+| アプリが API に繋がらない／古い値を見ている | `.env.local` を書き換えたあと Metro を再起動していない。環境変数はバンドル時に埋め込まれる |
 
 **30分詰まったら聞いてください。** これは推奨されている行動です。
 

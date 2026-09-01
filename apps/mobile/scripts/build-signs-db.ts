@@ -1,7 +1,7 @@
 /**
  * アプリに同梱する `signs.db` を作る。
  *
- *   pnpm --filter mobile signs:build [--base http://localhost:5173] [--pref 33]
+ *   pnpm --filter mobile signs:build [--base https://...] [--pref 33]
  *
  * ```
  * JARTIC の原本 --(抽出。原本を持つ人が1回)--> D1
@@ -19,6 +19,7 @@
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { DEFAULT_API_BASE_URL } from "../src/lib/api-base.ts";
 import { buildSignsDatabase, openSignsDatabase } from "../src/signs/node.ts";
 import { parseStopSignsResponse } from "../src/signs/response.ts";
 
@@ -26,12 +27,15 @@ import { parseStopSignsResponse } from "../src/signs/response.ts";
 const DEFAULT_PREF = 33;
 
 /**
- * 既定の取得先。**`pnpm dev` で立つ Vite の開発サーバー**（Worker も同じ口で動く）。
+ * 既定の取得先。**デプロイ先の Worker**（`../src/lib/api-base.ts`）。
+ *
+ * **手元の `pnpm dev` を既定にしない。** `apps/mobile` を触る人の多くは `apps/web` を
+ * 動かしておらず、**最初の1コマンドが必ず失敗する**ことになる（`docs/adr/0002-development-lifecycle.md`）。
  *
  * **環境変数に依存しない**（Windows では mise の `[env]` が効かない。`CLAUDE.md`）ので、
- * 別の場所から取るときは `--base` で渡す。
+ * 手元の dev サーバーから取るときは `--base http://localhost:5173` を渡す。
  */
-const DEFAULT_BASE = "http://localhost:5173";
+const DEFAULT_BASE = DEFAULT_API_BASE_URL;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_OUT = join(here, "..", "assets", "signs.db");
@@ -56,15 +60,18 @@ async function main(): Promise<void> {
   const response = await fetch(url).catch((cause: unknown) => {
     // **繋がらない理由をここで補う。**初めての人が一番詰まるのはこの1歩である。
     throw new Error(
-      `${url} に繋がりません。別のターミナルで pnpm dev を動かしてください（cause: ${String(cause)}）`,
+      `${url} に繋がりません。デプロイ先が落ちているか、回線が届いていません。` +
+        "手元の apps/web から取るなら、別のターミナルで pnpm --filter web dev を動かしたうえで " +
+        `--base http://localhost:5173 を付けてください（cause: ${String(cause)}）`,
     );
   });
 
   if (response.status === 404) {
     // **D1 に標識が入っていない。**取り込みは Web/API 側の仕事なので、そちらへ案内する。
     throw new Error(
-      `都道府県コード ${pref} の標識がサーバーにありません。` +
-        "D1 への取り込み（apps/web の stop-signs:extract）が先に要ります。",
+      `都道府県コード ${pref} の標識が ${values.base} にありません。` +
+        "D1 への取り込みが先に要ります（原本を持つ人が apps/web の stop-signs:extract を実行し、" +
+        "生成された SQL を wrangler d1 execute で流す。apps/web/README.md）。",
     );
   }
   if (!response.ok) throw new Error(`取得に失敗しました: ${response.status}`);

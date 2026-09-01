@@ -6,7 +6,7 @@
  */
 
 import { createHash } from "node:crypto";
-import type { ExtractedSign } from "./csv";
+import type { StopSign } from "../../src/shared/api";
 
 /**
  * 1つの INSERT 文の上限（バイト）。
@@ -14,9 +14,13 @@ import type { ExtractedSign } from "./csv";
  * **D1 は1文 100,000 バイトまで**しか受け付けない。数万行を1文にすると数 MB になって
  * 丸ごと拒まれ、逆に1行ずつにすると往復が数万行ぶんになる。
  *
- * **行数ではなくバイト長で切る。**交差点名称は元データ由来で長さに上限が無いため、
- * 「500 行」のような固定の行数だと、**名前の長い塊が1つあるだけで上限を超える。**
- * 超えた文だけが拒まれ、**トランザクションが無いので版だけ新しく中身が欠ける**
+ * **行数ではなくバイト長で切る。**いまの実データなら1行 90 バイト前後なので、
+ * 「500 行」で切っても上限には遠い。**それでも行数で切らないのは、行の長さが
+ * 元データ次第だから**——id は元データのユニークキーから作られ、**その付与規則は
+ * 版で改訂されている**（`docs/unverified.md` 63）。**行数で切ると、上限を守れる根拠を
+ * 元データの形に預けることになる。**
+ *
+ * 超えた文だけが拒まれると、**トランザクションが無いので版だけ新しく中身が欠ける**
  * （API はそれを 500 で捕まえるが、原因は手元では分かりにくい）。
  */
 const MAX_STATEMENT_BYTES = 80_000;
@@ -30,10 +34,10 @@ const MAX_STATEMENT_BYTES = 80_000;
  * 長さを 16 桁に切るのは ETag として読みやすくするため。衝突の心配は、
  * 月に1度しか変わらないものに対しては問題にならない。
  */
-export function versionOf(signs: readonly ExtractedSign[]): string {
+export function versionOf(signs: readonly StopSign[]): string {
   const hash = createHash("sha256");
-  // **端末に配る値だけを混ぜる。**交差点名称は端末へ行かないので、それだけが直った
-  // 取り込みで版が変わると、**全端末が同じ中身を数 MB 落とし直す。**
+  // **端末に配る値だけを混ぜる。**配らない列を足すときは、ここに混ぜないこと——
+  // その列だけが直った取り込みで版が変わると、**全端末が同じ中身を数 MB 落とし直す。**
   for (const s of signs) {
     hash.update(`${s.id},${s.lat},${s.lon},${s.approach?.lat ?? ""},${s.approach?.lon ?? ""}\n`);
   }
@@ -47,7 +51,7 @@ function quote(value: string): string {
 
 export type ImportSqlOptions = {
   pref: number;
-  signs: readonly ExtractedSign[];
+  signs: readonly StopSign[];
   version: string;
   /** 取り込んだ時刻（ISO 8601、UTC）。呼び出し側から渡す——**テストが時刻に左右されないように** */
   importedAt: string;
@@ -70,8 +74,7 @@ export function buildImportSql({ pref, signs, version, importedAt }: ImportSqlOp
   ];
 
   const encoder = new TextEncoder();
-  const insertInto =
-    "INSERT INTO stop_signs (id, pref, lat, lon, approach_lat, approach_lon, name)";
+  const insertInto = "INSERT INTO stop_signs (id, pref, lat, lon, approach_lat, approach_lon)";
   let batch: string[] = [];
   let batchBytes = 0;
 
@@ -85,8 +88,7 @@ export function buildImportSql({ pref, signs, version, importedAt }: ImportSqlOp
   for (const s of signs) {
     const row =
       `(${quote(s.id)}, ${pref}, ${s.lat}, ${s.lon}, ` +
-      `${s.approach?.lat ?? "NULL"}, ${s.approach?.lon ?? "NULL"}, ` +
-      `${s.name === null ? "NULL" : quote(s.name)})`;
+      `${s.approach?.lat ?? "NULL"}, ${s.approach?.lon ?? "NULL"})`;
     // 区切りと改行のぶんを少し多めに見ておく。
     const size = encoder.encode(row).length + 4;
 

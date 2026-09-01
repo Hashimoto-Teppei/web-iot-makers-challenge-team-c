@@ -2,8 +2,8 @@
  * JARTIC の交通規制情報オープンデータ（CSV）から一時停止の標識を抜き出す。
  *
  * **形式の正本は JARTIC の「交通規制情報（拡張版標準フォーマット）説明書 ver k_2.1」。**
- * 守っている前提はこのファイルのコメントに書くが、**実データで確かめてはいない**
- * （`docs/unverified.md` 61）。
+ * 守っている前提はこのファイルのコメントに書く。**列名と文字コードは実データで確認済み**
+ * （2026-09-01。岡山県警 202607、170 列・Shift-JIS）。**残る未確認は `docs/unverified.md` 62・63。**
  *
  * **ここにはファイルも通信も出てこない。**入力は文字列、出力は行の配列で、
  * **モックデータだけで Vitest から回せる**ようにしてある（`docs/adr/0002-development-lifecycle.md`）。
@@ -28,9 +28,11 @@ const COLUMN = {
   place: "規制場所の経度緯度",
   /** 規制地点に対する車両の進入方向（NO.35）。**複数入りうる** */
   approach: "進入方向(座標)",
-  /** 交差点名称（NO.27）。端末には配らないが D1 には残す */
-  name: "交差点名称(踏切名含む)",
 } as const;
+
+// **交差点名称（NO.27）は引かない。**岡山県警の 202607 では全 65,373 行が空で、
+// 「走行後の画面で場所が人に読める」という用途を満たさなかった
+// （`docs/interfaces/web-service.md`）。列が要るようになったらここに足す。
 
 /** 日本の範囲。ここを外れた座標は壊れているものとして捨てる */
 const LAT_RANGE = { min: 20, max: 46 } as const;
@@ -46,15 +48,9 @@ export type ExtractOptions = {
   regulationCode: number;
 };
 
-/** D1 に入れる1件。端末に配るのは `StopSign` のぶんだけで、`name` は配らない */
-export type ExtractedSign = StopSign & {
-  /** 交差点名称。無ければ null */
-  name: string | null;
-};
-
 export type ExtractResult = {
   /** id の昇順。**並びを固定するのは、版が並び順で変わらないようにするため** */
-  signs: ExtractedSign[];
+  signs: StopSign[];
   /** 捨てた行の内訳。**黙って捨てない**——0 件になった理由がここに出る */
   skipped: {
     /** 別の都道府県の行。**1都道府県警察1ファイルなので、本来は 0 になる** */
@@ -195,10 +191,9 @@ function indexColumns(header: readonly string[]): Record<keyof typeof COLUMN, nu
     key: at(COLUMN.key),
     place: at(COLUMN.place),
     approach: at(COLUMN.approach),
-    name: at(COLUMN.name),
   };
 
-  // 進入方向と交差点名称は無くても取り込める（方向で絞れなくなるだけ）。
+  // 進入方向は無くても取り込める（方向で絞れなくなるだけ）。
   // **止めないのは、方向が無いことより「1件も取り込めないこと」の方が悪いから。**
   const missing = (["pref", "regulation", "key", "place"] as const).filter((k) => found[k] < 0);
   if (missing.length > 0) {
@@ -257,7 +252,7 @@ export function extractStopSigns(text: string, options: ExtractOptions): Extract
   // **ヘッダ全体の幅を要求しない。**末尾の空欄を省く出力や、ヘッダにだけ余分な列がある
   // 出力に当たると、**全データ行が「列が足りない」になって 0 件**になる。
   const requiredWidth = Math.max(at.pref, at.regulation, at.key, at.place) + 1;
-  const byId = new Map<string, ExtractedSign>();
+  const byId = new Map<string, StopSign>();
   let withoutApproach = 0;
 
   for (const row of body) {
@@ -287,7 +282,6 @@ export function extractStopSigns(text: string, options: ExtractOptions): Extract
       continue;
     }
 
-    const name = (at.name >= 0 ? row[at.name]?.trim() : "") || null;
     const approaches = at.approach >= 0 ? parseCoordinates(row[at.approach]) : [];
     if (approaches.length === 0) withoutApproach++;
 
@@ -305,7 +299,7 @@ export function extractStopSigns(text: string, options: ExtractOptions): Extract
         skipped.duplicate++;
         continue;
       }
-      byId.set(id, { id, lat: place.lat, lon: place.lon, approach, name });
+      byId.set(id, { id, lat: place.lat, lon: place.lon, approach });
     }
   }
 

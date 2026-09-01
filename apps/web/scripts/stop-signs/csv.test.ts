@@ -59,7 +59,6 @@ describe("extractStopSigns", () => {
         lat: 34.665,
         lon: 133.918,
         approach: { lat: 34.664, lon: 133.918 },
-        name: "岡山交差点",
       },
     ]);
     expect(result.skipped).toMatchObject({ otherPref: 1, otherRegulation: 1 });
@@ -82,7 +81,7 @@ describe("extractStopSigns", () => {
 
     // 共通規制種別コードは6バイトなので "000063" もありうる。数値で比べている。
     expect(result.signs).toHaveLength(1);
-    expect(result.signs[0]?.name).toBeNull();
+    expect(result.signs[0]).toMatchObject({ id: "33-K1@34.664000_133.918000" });
   });
 
   it("列名の括弧が全角でも引ける", () => {
@@ -234,7 +233,7 @@ describe("extractStopSigns", () => {
     );
   });
 
-  it("進入方向と交差点名称の列が無くても取り込める（方向で絞れなくなるだけ）", () => {
+  it("進入方向の列が無くても取り込める（方向で絞れなくなるだけ）", () => {
     const minimal = [
       "都道府県コード,共通規制種別コード,ユニークキー,規制場所の経度緯度",
       "33,63,K1,133.918 34.665",
@@ -243,7 +242,6 @@ describe("extractStopSigns", () => {
     expect(extractStopSigns(minimal, OPTIONS).signs[0]).toMatchObject({
       id: "33-K1",
       approach: null,
-      name: null,
     });
   });
 

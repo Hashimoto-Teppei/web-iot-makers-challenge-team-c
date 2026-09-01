@@ -15,8 +15,6 @@ export const pings = sqliteTable("pings", {
   createdAt: text("created_at").notNull().default(sql`(strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))`),
 });
 
-export type Ping = typeof pings.$inferSelect;
-
 /**
  * 一時停止の標識。JARTIC の交通規制情報オープンデータ（共通規制種別コード 63）から
  * 抽出したもの。取り込みは `scripts/stop-signs/`、配るのは `GET /api/stop-signs`。
@@ -56,22 +54,13 @@ export const stopSigns = sqliteTable(
      */
     approachLat: real("approach_lat"),
     approachLon: real("approach_lon"),
-    /**
-     * 交差点名称（元データの「交差点名称（踏切名含む）」）。
-     *
-     * **端末には配らない**——走行中のディスプレイに文章は出せない（`CLAUDE.md`）。
-     * ここに残すのは**走行後の振り返りで場所が人に読めるようにする**ためで、
-     * 緯度経度のセルだけでは土地勘とつながらない（`docs/interfaces/web-service.md`）。
-     *
-     * **取り込みで捨てると取り戻せない。**元データは月次更新で、前月ぶんは取得できない。
-     */
-    name: text("name"),
+    // **交差点名称の列は置かない。**元データ（JARTIC）の該当列は岡山県では全行が空で、
+    // 走行後の画面で場所を人に読ませる用途には使えなかった
+    // （`docs/interfaces/web-service.md`「外部データ（一時停止の標識）」）。
   },
   // 配るときは常に都道府県ぶんを丸ごと引く（`docs/interfaces/mobile-api.md`）。
   (t) => [index("stop_signs_pref_idx").on(t.pref)],
 );
-
-export type StopSignRow = typeof stopSigns.$inferSelect;
 
 /**
  * 標識の版。**都道府県ごとに1行**で、取り込みのたびに置き換える。
@@ -96,5 +85,3 @@ export const stopSignVersions = sqliteTable("stop_sign_versions", {
   /** 取り込んだ時刻（ISO 8601、UTC） */
   importedAt: text("imported_at").notNull().default(sql`(strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))`),
 });
-
-export type StopSignVersionRow = typeof stopSignVersions.$inferSelect;
