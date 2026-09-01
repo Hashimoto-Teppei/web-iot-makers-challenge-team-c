@@ -157,11 +157,9 @@ pnpm exec wrangler d1 execute team-c-db --local --file=scripts/stop-signs/out/st
 認証は切れておらず、**もう一度実行すると通る**（2026-09-01 に `db:migrate:remote` で発生）。
 **ログインをやり直す前に1回リトライする。**
 
-**CSV も、生成した SQL もコミットしない**（このリポジトリは public で、置くと配布に当たる）。
-`.gitignore` に置き場所と拡張子の両方を書いてあるので、意識しなくても入らない。
-
-**原本を自分の PC だけに置かない。** データは月次更新で、**前月ぶんは取得できない。**
-リポジトリ以外の共有の置き場所に上げるか、D1 に入れたあとのダンプを残すこと。
+**原本の扱い（コミットしない理由、失うと取り返しがつかないこと、いま何が置いてあるか）の正本は
+[`scripts/stop-signs/data/README.md`](./scripts/stop-signs/data/README.md)。**
+置く前に読むこと。
 
 抽出そのもの（CSV の解釈・版の計算・SQL の組み立て）は `scripts/stop-signs/` にあり、
 **ファイルも通信も持たない純粋な関数に分けてある**ので、**原本を持っていない人でも Vitest で直せる。**

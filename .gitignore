@@ -47,7 +47,10 @@ data/recordings/
 # 一時停止の標識（JARTIC の原本と、そこから作った SQL）。
 # public リポジトリに置くと配布に当たる（docs/interfaces/web-service.md）。
 # 記憶ではなく仕組みで止めるため、置き場所と拡張子の両方を書く。
-apps/web/scripts/stop-signs/data/
+# data/ は中身だけを無視する。ディレクトリごと無視すると、
+# 「ここに置く」と書いた README すら追跡できなくなるため。
+apps/web/scripts/stop-signs/data/*
+!apps/web/scripts/stop-signs/data/README.md
 apps/web/scripts/stop-signs/out/
 apps/web/scripts/stop-signs/**/*.csv
 apps/web/scripts/stop-signs/**/*.sql
