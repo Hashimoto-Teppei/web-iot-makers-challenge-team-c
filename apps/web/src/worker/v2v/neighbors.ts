@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
+import { distanceM } from "../geo";
 import { type NeighborConfig, neighborDefaults } from "./config";
-import { distanceM } from "./geo";
 import type { PeerMessage, SelfMessage } from "./messages";
 
 /**

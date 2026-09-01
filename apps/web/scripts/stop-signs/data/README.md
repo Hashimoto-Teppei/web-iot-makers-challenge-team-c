@@ -9,7 +9,7 @@
 ## このディレクトリの中身はコミットされません
 
 **このリポジトリは public です。** 原本を置くと**再配布に当たる**ので、
-`.gitignore` で止めてあります（`docs/interfaces/web-service.md`）。
+`.gitignore` で止めてあります（`docs/interfaces/stop-signs-source.md`）。
 **追跡されるのはこの README だけ**で、`.csv` も、`../out/` に出る `.sql` も入りません。
 
 **`git add --force` で押し込まないでください。** 一度コミットすると履歴に残り、
@@ -22,7 +22,7 @@
 
 **リポジトリ外へのバックアップは取らないと決めてあります。**
 判断とその理由の正本は
-[`docs/interfaces/web-service.md`](../../../../../docs/interfaces/web-service.md)「外部データ（一時停止の標識）」。
+[`docs/interfaces/stop-signs-source.md`](../../../../../docs/interfaces/stop-signs-source.md)。
 
 - **新しい月を取り込んでも、前の月のファイルを消さないでください。**
   ユニークキーが月をまたいで安定しているかの確認に要ります（`docs/unverified.md` 63）

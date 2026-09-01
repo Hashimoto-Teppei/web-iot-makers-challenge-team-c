@@ -56,7 +56,7 @@ export const stopSigns = sqliteTable(
     approachLon: real("approach_lon"),
     // **交差点名称の列は置かない。**元データ（JARTIC）の該当列は岡山県では全行が空で、
     // 走行後の画面で場所を人に読ませる用途には使えなかった
-    // （`docs/interfaces/web-service.md`「外部データ（一時停止の標識）」）。
+    // （`docs/interfaces/stop-signs-source.md`）。
   },
   // 配るときは常に都道府県ぶんを丸ごと引く（`docs/interfaces/mobile-api.md`）。
   (t) => [index("stop_signs_pref_idx").on(t.pref)],
@@ -264,6 +264,14 @@ export const stopViolations = sqliteTable(
     thrStopSpeedMps: real("thr_stop_speed_mps").notNull(),
     thrRadiusM: real("thr_radius_m").notNull(),
     thrBearingToleranceDeg: real("thr_bearing_tolerance_deg").notNull(),
+    /**
+     * 判定から外した測位精度の下限（メートル）。**#85 が足した列**（2026-09-02）。
+     *
+     * **取り込みは精度で足切りをしない**（`src/worker/logs/config.ts`）ので、
+     * **切るのは判定のときだけ**であり、**どこで切ったかは他の3つと同じだけ結果を変える。**
+     * 残さないと、**同じしきい値で作り直したつもりの行が別のものになる。**
+     */
+    thrMaxHaccM: real("thr_max_hacc_m").notNull(),
     /** 計算した時刻（ISO 8601、UTC） */
     computedAt: text("computed_at").notNull().default(sql`(strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))`),
   },

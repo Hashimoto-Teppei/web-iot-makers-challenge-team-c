@@ -126,10 +126,10 @@ pnpm db:migrate:local
 **止まるのは走行ではなくビルド**になる（`docs/adr/0009-on-device-storage.md`）。
 
 **仕様の正本は `docs/interfaces/mobile-api.md`「一時停止の標識をスマホに配る」と
-`docs/interfaces/web-service.md`「外部データ（一時停止の標識）」。** 理由はそちらにあるので繰り返さない。
+`docs/interfaces/stop-signs-source.md`。** 理由はそちらにあるので繰り返さない。
 
 - **配るのは規制地点と進入方向**（`StopSign`）。**D1 に入るのもこれだけ**——
-  交差点名称は元データが空だったので取り込んでいない（`docs/interfaces/web-service.md`）
+  交差点名称は元データが空だったので取り込んでいない（`docs/interfaces/stop-signs-source.md`）
 - **1つの交差点に複数の進入方向があれば、標識も方向のぶんだけ別の行になる**
   （元データは交差点単位で1レコード）。理由は `docs/interfaces/mobile-api.md`
 - **引数は都道府県コードだけ**（`?pref=33`）。**位置を取らない**
@@ -170,6 +170,34 @@ pnpm exec wrangler d1 execute team-c-db --local --file=scripts/stop-signs/out/st
 一時停止は規制地点と進入方向の組で登録される）はすべてそこに書いてある。
 **列名・文字コード・「規制地点と進入方向の組」は実データで確認済み**
 （2026-09-01。岡山県警 202607）。**残る未確認は `docs/unverified.md` 62・63。**
+
+## 不停止の再計算（`POST /api/admin/recompute`）
+
+**走行ログと一時停止の標識を突き合わせて `stop_violations` を作り直す。**
+**取り込み（`POST /api/logs`）の中では計算しない**——**しきい値を変えて何度でも計算し直せることが、
+生ログを残している理由そのもの**である（`docs/adr/0007-keep-raw-ride-logs.md`）。
+
+**仕様の正本は `docs/interfaces/web-service.md`「不停止の判定」と「いつ計算するか」。**
+判定の中身（`src/worker/recompute/judge.ts`）は **D1 にも Hono にも触らない純粋な関数**にしてある
+ので、合成した点列だけでテストを回せる。
+
+- **しきい値は4つとも必須。**サーバーに既定値を持たない（暫定の既定値はドキュメントの側にある）
+- **`rides` を省略すると古い順に 20 走行ぶん。**続きがあれば応答の `more` が `true` になるので、
+  **`skip` を 20 ずつ足して `more` が `false` になるまで叩く**
+- **`ADMIN_TOKEN` が要る。**未設定なら 503 を返して通さない（空を「認証なし」として扱わない）
+
+```sh
+# ローカルで叩く（.dev.vars に ADMIN_TOKEN を置いてから pnpm dev）
+curl -X POST http://localhost:5173/api/admin/recompute \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"thresholds":{"stopSpeedMps":1.5,"radiusM":20,"bearingToleranceDeg":60,"maxHaccM":30}}'
+```
+
+**トークンの登録**（デプロイ担当のみ）。ローカルは `.dev.vars.example` を `.dev.vars` に写して使う。
+
+```sh
+pnpm --filter web exec wrangler secret put ADMIN_TOKEN
+```
 
 ## 注意
 

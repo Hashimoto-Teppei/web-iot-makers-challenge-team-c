@@ -28,6 +28,7 @@
 | [`interfaces/ble-log-transfer.md`](./interfaces/ble-log-transfer.md) | `log` で流すレコードの形と、転送を最後までやりきるための約束 |
 | [`interfaces/v2v.md`](./interfaces/v2v.md) | 車車間で流すメッセージ、送る間隔、受信側の約束、デバイスへ渡すもの、心拍の見せ方 |
 | [`interfaces/mobile-api.md`](./interfaces/mobile-api.md) | モバイル ⇄ API の運び方、Worker と Durable Object の約束、受け取ってから警告までの手順 |
-| [`interfaces/web-service.md`](./interfaces/web-service.md) | 集計の単位と指標、しきい値の既定値、取り込み、D1 のテーブル、外部データ |
+| [`interfaces/web-service.md`](./interfaces/web-service.md) | 集計の単位と指標、不停止の判定と再計算の経路、しきい値の既定値、取り込み、D1 のテーブル |
+| [`interfaces/stop-signs-source.md`](./interfaces/stop-signs-source.md) | 一時停止の標識の出どころ（JARTIC）、原本の置き場所、取り込む列と捨てた列 |
 | [`interfaces/web-ui.md`](./interfaces/web-ui.md) | 走行後の画面、地図の描き方、場所の示し方、地図の鍵 |
 | [`interfaces/detectors.md`](./interfaces/detectors.md) | 検知アルゴリズムの入出力の型、`kind` と `lv`、しきい値の注入、ファイル構成 |
