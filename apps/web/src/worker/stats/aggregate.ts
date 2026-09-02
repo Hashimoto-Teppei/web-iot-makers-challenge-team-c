@@ -5,7 +5,7 @@
  * 率と順位の決め方は**実データを見て動かす**ところなので、
  * **モックデータだけで回せる形**にしておかないと、そのたびに D1 が要る。
  *
- * 数え方の正本は `docs/interfaces/web-service.md`「率で見る」。
+ * 数え方の正本は `docs/interfaces/web-stats.md`「率で見る」。
  */
 
 import type { StatsCell } from "../../shared/api";
@@ -52,7 +52,7 @@ export type LocatedEvent = {
    * **出来事そのものの時刻**（UTC ミリ秒）。突き合わせた測位点の時刻ではない。
    *
    * **使うのは場所の詳細画面（#87）だけ**である——地図とランキングは
-   * **時刻の次元を持たない**（`docs/interfaces/web-service.md`「集計を配る経路」）。
+   * **時刻の次元を持たない**（`docs/interfaces/web-stats.md`「集計を配る経路」）。
    */
   t: number;
 };
@@ -60,7 +60,7 @@ export type LocatedEvent = {
 /**
  * 走行を1つに指す鍵。`rides` の主キー `(device_id, log_id)` をそのまま文字列にしたもの。
  *
- * **通過を数えるのはこの単位**（`docs/interfaces/web-service.md`「率で見る」）。
+ * **通過を数えるのはこの単位**（`docs/interfaces/web-stats.md`「率で見る」）。
  * **`detail.ts` も同じものを使う**——別に書くと、**一覧と詳細で通過の数え方が割れる。**
  */
 export function rideKey(ref: { deviceId: string; logId: string }): string {
@@ -75,7 +75,7 @@ export type MatchResult = {
   /**
    * 場所に結びつかなかった検知。**数ではなく行そのものを返す。**
    *
-   * **黙って捨てない**（`docs/interfaces/web-service.md`「検知を場所に結びつける」）。
+   * **黙って捨てない**（`docs/interfaces/web-stats.md`「検知を場所に結びつける」）。
    * 測位が出ていない（`nofix`）間の検知がこれに当たり、**捨てると
    * 「集計に出ていない」が「起きていない」に見える。**
    *
@@ -89,7 +89,7 @@ export type MatchResult = {
 /**
  * 検知を測位点に突き合わせて場所を決める。
  *
- * **突き合わせるのは `device_id` と `t` だけ**（`docs/interfaces/web-service.md`）。
+ * **突き合わせるのは `device_id` と `t` だけ**（`docs/interfaces/web-stats.md`）。
  * デバイス発の `log_id` は電源を入れ直すと変わり、走行と1対1で対応しないので、
  * **検知が持つ `log_id` を信じない。走行は、当たった測位点の側から決まる。**
  *
@@ -169,7 +169,7 @@ export type AggregateResult = {
  * ```
  *
  * **分子も分母も「走行の数」で数える。件数で数えない**
- * （`docs/interfaces/web-service.md`「率で見る」）。**件数にすると 100% を超え、
+ * （`docs/interfaces/web-stats.md`「率で見る」）。**件数にすると 100% を超え、
  * 順位が「危ない確率」ではなく「そこで何秒詰まったか」の順位になる**——
  * 後方物体検知のように連続して発火するものがあるためである。
  */

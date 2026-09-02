@@ -179,7 +179,7 @@ pnpm exec wrangler d1 execute team-c-db --local --file=scripts/stop-signs/out/st
 **取り込み（`POST /api/logs`）の中では計算しない**——**しきい値を変えて何度でも計算し直せることが、
 生ログを残している理由そのもの**である（`docs/adr/0007-keep-raw-ride-logs.md`）。
 
-**仕様の正本は `docs/interfaces/web-service.md`「不停止の判定」と「いつ計算するか」。**
+**仕様の正本は `docs/interfaces/web-stats.md`「不停止の判定」と「いつ計算するか」。**
 判定の中身（`src/worker/recompute/judge.ts`）は **D1 にも Hono にも触らない純粋な関数**にしてある
 ので、合成した点列だけでテストを回せる。
 
@@ -221,7 +221,7 @@ echo "$TOKEN"   # .dev.vars に控える。Cloudflare 側から読み出す手�
 （`src/worker/stats/`）はこの1本でつながっている——**地図と順位表は同じ応答の2つの見せ方**で、
 2本に分けると2つがずれる。
 
-**仕様の正本は `docs/interfaces/web-service.md`「集計」（数え方）と
+**仕様の正本は `docs/interfaces/web-stats.md`（数え方）と
 `docs/interfaces/web-ui.md`（見せ方）。**
 
 | クエリ | 既定 | 意味 |

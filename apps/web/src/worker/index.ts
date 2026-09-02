@@ -215,7 +215,7 @@ const routes = app
   )
   /**
    * 不停止の再計算。**走行ログと一時停止の標識を突き合わせて `stop_violations` を作り直す**
-   * （`docs/interfaces/web-service.md`「不停止の判定」「いつ計算するか」）。
+   * （`docs/interfaces/web-stats.md`「不停止の判定」「いつ計算するか」）。
    *
    * **スクリプトではなくここに置いてある。**判定は D1 の中身を読んで書き戻す処理で、
    * **リモートの D1 を触れるのは Worker から**である（`wrangler d1 execute --remote` は
@@ -335,7 +335,7 @@ const routes = app
       const db = drizzle(c.env.DB);
 
       // **測位点はレイヤーによらず読む。**通過（率の分母）はこれだけで決まる
-      // （`docs/interfaces/web-service.md`「率で見る」）。
+      // （`docs/interfaces/web-stats.md`「率で見る」）。
       const points = await readRidePoints(db, sample);
       if (!points) {
         // **打ち切って返さない。**途中まで読んだ点で数えると**分母だけが小さい率**
@@ -369,7 +369,7 @@ const routes = app
         minRides,
         cells,
         // **検知の側は行のまま返る**（詳細画面が種別ごとに数えるため。`stats/aggregate.ts`）。
-        // **この応答が返すのは数だけ**である（`docs/interfaces/web-service.md`）。
+        // **この応答が返すのは数だけ**である（`docs/interfaces/web-stats.md`）。
         unlocated: Array.isArray(found.unlocated) ? found.unlocated.length : found.unlocated,
         truncated,
       };
@@ -391,7 +391,7 @@ const routes = app
    * - **生の測位点を返さない**
    *
    * **`t_est` の検知もここには出す**（地図とランキングからは除く。
-   * `docs/interfaces/web-service.md`「検知を場所に結びつける」）。
+   * `docs/interfaces/web-stats.md`「検知を場所に結びつける」）。
    */
   .get(
     "/api/stats/cell",

@@ -66,7 +66,7 @@ export async function readRidePoints(
 /**
  * 場所に結びつける前の検知を読む。
  *
- * **既定では `t_est` が立った検知を外す**（`docs/interfaces/web-service.md`
+ * **既定では `t_est` が立った検知を外す**（`docs/interfaces/web-stats.md`
  * 「検知を場所に結びつける」）。BLE が切れている間デバイスが打つ推定の時刻で、
  * **切断が長いほどずれ、ずれた時刻に一番近い点＝別のセル**に積まれる。
  * **地図とランキングからは除き、場所の詳細画面（#87）には出す。**

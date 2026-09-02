@@ -1,7 +1,7 @@
 /**
  * 集計（`GET /api/stats/cells`）の設定値。**コードに直書きしない**（`CLAUDE.md`）。
  *
- * **数字の意味と既定値の根拠は `docs/interfaces/web-service.md`「しきい値の既定値」が正本。**
+ * **数字の意味と既定値の根拠は `docs/interfaces/web-stats.md`「しきい値の既定値」が正本。**
  * ここに書くのは、**その値をどこで受け取り、なぜ上限が要るか**だけである。
  *
  * **不停止のしきい値（`recompute/config.ts`）とは性質が違う。**あちらは
@@ -19,7 +19,7 @@ export type StatsLimits = {
    * 順位に出す通過の下限（既定5走行）。
    *
    * **1回しか通っていない場所で1件出れば率は 100%** になり、ランキングの上位が
-   * そればかりになる（`docs/interfaces/web-service.md`「率で見る」）。
+   * そればかりになる（`docs/interfaces/web-stats.md`「率で見る」）。
    * **クエリで上書きできる**——実データを見て動かす数字なので、叩く側から変えられる。
    */
   minRides: number;
@@ -42,7 +42,7 @@ export const statsDefaults: StatsLimits = {
  * 検知を測位点に突き合わせるときに許す時刻のずれ（ミリ秒、既定 5,000）。
  *
  * **デバイス発の検知には位置が入っていない**ので、`t` で測位点に突き合わせて場所を決める
- * （`docs/interfaces/web-service.md`「検知を場所に結びつける」）。
+ * （`docs/interfaces/web-stats.md`「検知を場所に結びつける」）。
  * **測位は 1Hz** なので、正常なら 1 秒以内に点がある。
  *
  * **上限を置かないと、測位が出ていない（`nofix`）間の検知が、

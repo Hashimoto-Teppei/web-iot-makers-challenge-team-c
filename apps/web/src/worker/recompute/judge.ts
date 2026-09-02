@@ -5,7 +5,7 @@ import { MIN_BEARING_SPAN_M } from "./config";
  * 不停止の判定。**D1 にも Hono にも触らない純粋な関数**にしてある
  * （`CLAUDE.md`「検知ロジックを入出力から分離する」）。合成した点列だけで Vitest を回せる。
  *
- * **仕様の正本は `docs/interfaces/web-service.md`「不停止の判定」。**
+ * **仕様の正本は `docs/interfaces/web-stats.md`「不停止の判定」。**
  * ここはその実装であって、決め直す場所ではない。
  */
 
@@ -71,7 +71,7 @@ type Visit = {
  * さかのぼる範囲は距離で切ってあるので、**周回して同じ標識を2度通っても前の周まで戻らない。**
  *
  * **決められなければ `null`。**呼ぶ側はその訪問を対象外にする——
- * **見逃す側に倒す**（`docs/interfaces/web-service.md`「しきい値の既定値」）。
+ * **見逃す側に倒す**（`docs/interfaces/web-stats.md`「しきい値の既定値」）。
  */
 function travelBearingOf(points: readonly JudgePoint[], visit: Visit): number | null {
   const target = points[visit.closestIndex];

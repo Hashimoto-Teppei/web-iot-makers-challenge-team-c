@@ -204,7 +204,7 @@ expect(frames.flatMap((f) => f.warns).length).toBeGreaterThan(0);
 
 ```
 src/signs/
-  cell.ts      セル（緯度経度を小数第3位で切り捨てた升目）。切り方の正本は docs/interfaces/web-service.md
+  cell.ts      セル（緯度経度を小数第3位で切り捨てた升目）。切り方の正本は docs/interfaces/web-stats.md
   schema.ts    signs.db の Drizzle スキーマと、作るときの DDL
   store.ts     SignStore の口 / メモリ実装 / SQL 実装（better-sqlite3 と expo-sqlite で共通）
   node.ts      better-sqlite3（Node のテストと同梱物の生成。**アプリから import しない**）

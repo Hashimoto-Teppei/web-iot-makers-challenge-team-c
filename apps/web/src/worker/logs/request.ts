@@ -122,7 +122,7 @@ export function logsRequestSchema(limits: LogLimits) {
       // **点は、同じリクエストに走行の行があるものだけ受け取る。**
       // 走行を分けて送るときは、**毎回その走行の行を一緒に送る**こと（同じ行を何度送っても
       // 増えない）。**認めると、どの走行にも属さない測位点が D1 に溜まる**——
-      // 通過の分母は走行を数えるので（`docs/interfaces/web-service.md`「率で見る」）、
+      // 通過の分母は走行を数えるので（`docs/interfaces/web-stats.md`「率で見る」）、
       // **その点は集計に出ないまま位置情報だけが残る。**
       .refine((body) => body.points.every((p) => body.rides.some((r) => r.logId === p.logId)), {
         message: "points の log_id は、同じリクエストの rides に含めてください",

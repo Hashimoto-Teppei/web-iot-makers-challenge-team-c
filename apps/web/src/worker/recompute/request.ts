@@ -5,14 +5,14 @@ import type { Thresholds } from "./judge";
 /**
  * `POST /api/admin/recompute` のリクエストの検証。
  *
- * **仕様の正本は `docs/interfaces/web-service.md`「不停止の判定」と「いつ計算するか」。**
+ * **仕様の正本は `docs/interfaces/web-stats.md`「不停止の判定」と「いつ計算するか」。**
  * ここはその実装であって、決め直す場所ではない。
  *
  * **しきい値をサーバーの既定値で埋めない。**4つとも必須にしてある——
  * **その場で数字を変えて叩き直せることがこの経路を持つ理由**であり
  * （`docs/adr/0007-keep-raw-ride-logs.md`）、既定値を置くと
  * **「省略して叩いた結果」と「その数字を選んだ結果」が区別できなくなる。**
- * 暫定の既定値は `docs/interfaces/web-service.md`「しきい値の既定値」にある。
+ * 暫定の既定値は `docs/interfaces/web-stats.md`「しきい値の既定値」にある。
  */
 
 /** 端末ID・走行の識別子の形（16進の小文字8文字）。`docs/interfaces/ble-gatt.md` */
@@ -28,7 +28,7 @@ function thresholdsSchema(limits: RecomputeLimits) {
   return z.object({
     /**
      * **0 を許さない。**1Hz の測位は止まっていても数十 cm/s のゆらぎを出すので、
-     * **0 にすると誰も停止したことにならない**（`docs/interfaces/web-service.md`）。
+     * **0 にすると誰も停止したことにならない**（`docs/interfaces/web-stats.md`）。
      */
     stopSpeedMps: z.number().gt(0).lte(10),
     radiusM: z.number().gt(0).lte(limits.maxRadiusM),

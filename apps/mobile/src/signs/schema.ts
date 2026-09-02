@@ -49,7 +49,7 @@ export const signs = sqliteTable(
      * 規制地点が入るセル（`./cell.ts`）。**走行中はこの2列だけで絞る。**
      *
      * **緯度経度そのもので範囲検索しない。**セルにしておくと整数の索引1つで済み、
-     * 切り方が集計（`docs/interfaces/web-service.md`）と同じになる。
+     * 切り方が集計（`docs/interfaces/web-stats.md`）と同じになる。
      */
     latCell: integer("lat_cell").notNull(),
     lonCell: integer("lon_cell").notNull(),

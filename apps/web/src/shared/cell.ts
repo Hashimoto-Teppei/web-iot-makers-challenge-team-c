@@ -1,5 +1,5 @@
 /**
- * セル（集計の升目）。**切り方の正本は `docs/interfaces/web-service.md`「セルの切り方」。**
+ * セル（集計の升目）。**切り方の正本は `docs/interfaces/web-stats.md`「セルの切り方」。**
  *
  * **`src/shared/` に置いてある**のは、**画面と API の両方が丸めるから**である——
  * API は集計のために（`src/worker/stats/`）、画面は円を置く点を出すために（`src/client/stats/`）
@@ -35,7 +35,7 @@ export type Cell = {
  * 緯度経度が入るセルを返す。
  *
  * **切り捨て（`Math.floor`）で統一する。**四捨五入と混ぜるとセルの境界が半セルずれ、
- * **地図の円・ランキング・詳細画面が別のセルを指す**（`docs/interfaces/web-service.md`）。
+ * **地図の円・ランキング・詳細画面が別のセルを指す**（`docs/interfaces/web-stats.md`）。
  */
 export function cellOf(lat: number, lon: number): Cell {
   return {

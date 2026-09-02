@@ -13,7 +13,7 @@ import type { RideRef } from "./request";
  * 16進8文字（`request.ts`）と標識の識別子だけだが、素通しにはしない。
  *
  * **この表だけは追記ではなく置き換えである**（`db/schema.ts`）。同じ走行を計算し直したら、
- * **その走行ぶんを消してから入れる**（`docs/interfaces/web-service.md`「いつ計算するか」）。
+ * **その走行ぶんを消してから入れる**（`docs/interfaces/web-stats.md`「いつ計算するか」）。
  */
 
 /** SQL の文字列リテラル。 */

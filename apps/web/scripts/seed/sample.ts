@@ -17,7 +17,7 @@
  * サンプルの走行は**実在する標識の進入方向から**作る。
  *
  * **`stop_violations` も書かない。**あの表を作るのは `POST /api/admin/recompute` だけで、
- * **再計算のたびに走行ぶんを消して入れ直す**（`docs/interfaces/web-service.md`）。
+ * **再計算のたびに走行ぶんを消して入れ直す**（`docs/interfaces/web-stats.md`）。
  * ここで書いても、次の再計算で消える。**不停止のタブを見るには、投入のあとで再計算を叩く。**
  */
 
@@ -70,7 +70,7 @@ const { values } = parseArgs({
 /**
  * 標識を `GET /api/stop-signs` から読む。**`approach` がある行だけ**を使う——
  * **進入方向が登録されていない標識は不停止の判定の対象にならない**ので
- * （`docs/interfaces/web-service.md`）、軸にしても不停止のタブが空のままになる。
+ * （`docs/interfaces/web-stats.md`）、軸にしても不停止のタブが空のままになる。
  *
  * **`wrangler` を子プロセスで起動しない。****Windows では `pnpm` が `pnpm.cmd` に解決され、
  * Node は `.cmd` を直接起動できない**——**チームの半分でこのスクリプトが動かなくなる**
