@@ -16,7 +16,7 @@ import { prefLabel } from "@/signs/pref";
  *
  * **標識の件数と版をここに出す。**標識を持っていない端末では一時停止の事前通知だけが
  * 黙るが、**`link` は `up`、`beat` も出ているのでデバイスの表示では絶対に気づけない**
- * （`docs/interfaces/mobile-api.md`「『持っていない』と『0件』を混ぜない」）。
+ * （`docs/interfaces/stop-signs-delivery.md`「『持っていない』と『0件』を混ぜない」）。
  * **静かに効かなくなるものは、走る前に人が見られる場所に出す。**
  */
 
@@ -25,7 +25,7 @@ import { prefLabel } from "@/signs/pref";
  *
  * **「変わっていなかった」と「取りに行けなかった」を同じ文にしない。**
  * 前者は正常な終わり方で、後者は**古い標識のまま走ることになる**
- * （`docs/interfaces/mobile-api.md`「『持っていない』と『0件』を混ぜない」と同じ理由）。
+ * （`docs/interfaces/stop-signs-delivery.md`「『持っていない』と『0件』を混ぜない」と同じ理由）。
  *
  * **「起動時に」と書かない。**同じ場所に**人が県を選び直した結果も出る**ようになった
  * （#71）ので、**書くと、たったいま自分でやったことを起動のせいにして見せる。**
@@ -63,7 +63,7 @@ export default function SettingsScreen() {
           <Row label="対象の都道府県" value={prefLabel(meta?.pref ?? null)} />
         </View>
         {/* **選択肢はこの画面に持たない。**取り込んである県はサーバーが決めるので、
-            向こうで取りに行く（`docs/interfaces/mobile-api.md`）。 */}
+            向こうで取りに行く（`docs/interfaces/stop-signs-delivery.md`）。 */}
         <Link href="/prefs" style={styles.link}>
           都道府県を選び直す
         </Link>

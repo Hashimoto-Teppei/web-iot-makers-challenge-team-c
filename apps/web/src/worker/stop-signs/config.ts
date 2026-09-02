@@ -7,7 +7,7 @@ export const PREF_CODE_MIN = 1;
 export const PREF_CODE_MAX = 47;
 
 /**
- * 岡山県。当面はこの県だけを取り込む（`docs/interfaces/mobile-api.md`）。
+ * 岡山県。当面はこの県だけを取り込む（`docs/interfaces/stop-signs-delivery.md`）。
  * **API の引数には既定値を置かない**——県コードを必ず経路に載せるための器なので、
  * 省略できるようにすると「送っていないのに岡山が返る」実装が端末側に生まれる。
  */

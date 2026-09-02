@@ -48,14 +48,14 @@ export type StopSign = {
 
 /**
  * `GET /api/stop-signs` の応答。**都道府県ぶんを丸ごと返す**
- * （`docs/interfaces/mobile-api.md`「都道府県ぶんを一度に配る。地域で分割しない」）。
+ * （`docs/interfaces/stop-signs-delivery.md`「都道府県ぶんを一度に配る。地域で分割しない」）。
  */
 export type StopSignsResponse = {
   /** 都道府県コード（岡山県 = 33） */
   pref: number;
   /**
    * 版。**この値が ETag の元**で、端末はそのまま持ち帰って次回 `If-None-Match` に載せる。
-   * 端末側で作らない（`docs/interfaces/mobile-api.md`「版はサーバーが決める」）。
+   * 端末側で作らない（`docs/interfaces/stop-signs-delivery.md`「版はサーバーが決める」）。
    */
   version: string;
   /** `signs` の件数。**0 件なら端末は走行を始めさせない**（`docs/adr/0009-on-device-storage.md`） */
@@ -65,7 +65,7 @@ export type StopSignsResponse = {
 
 /**
  * `GET /api/stop-signs/prefs` の応答。**D1 に取り込んである県だけ**を返す
- * （`docs/interfaces/mobile-api.md`「どの県を選べるかはサーバーが決める」）。
+ * （`docs/interfaces/stop-signs-delivery.md`「どの県を選べるかはサーバーが決める」）。
  *
  * **端末はこれを見て選択肢を作る。**47 県を端末に焼き込むと、
  * **取り込んでいない県が一覧に並び、選んだ瞬間に 404 になる。**
@@ -79,7 +79,7 @@ export type StopSignPrefsResponse = {
  * 取り込んである県が1つ。
  *
  * **名前を返さない。**都道府県の名前は JIS X 0401 で固定されており変わらないので
- * 端末が持つ（`docs/interfaces/mobile-api.md`）。数十バイトのために往復を増やさない。
+ * 端末が持つ（`docs/interfaces/stop-signs-delivery.md`）。数十バイトのために往復を増やさない。
  */
 export type StopSignPref = {
   /** 都道府県コード（岡山県 = 33） */

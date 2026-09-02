@@ -37,7 +37,7 @@ export type SignsDatabase = {
 /**
  * `signs.db` をまっさらから作る。**既にあれば消してから作り直す。**
  *
- * **更新は丸ごと入れ替え**（`docs/interfaces/mobile-api.md`「差分を作らない」）なので、
+ * **更新は丸ごと入れ替え**（`docs/interfaces/stop-signs-delivery.md`「差分を作らない」）なので、
  * 追記も移行もしない。`file` に `":memory:"` を渡せばファイルを作らずに済む（テスト用）。
  *
  * @param meta `count` は渡された `signs` の件数と一致すること（呼び出し側で突き合わせる）

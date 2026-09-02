@@ -75,7 +75,7 @@ export type StopSignConfig = {
    * 進入方向が分からない標識を拾うか。
    *
    * **`StopSign.approach` が `null` は「全方向が対象」ではなく「元データに登録が無い」**
-   * （`docs/interfaces/mobile-api.md`）。方向で絞れないので、**扱いをここで決める。**
+   * （`docs/interfaces/stop-signs-delivery.md`）。方向で絞れないので、**扱いをここで決める。**
    *
    * **既定は拾う（`true`）。**落とすと、**その標識だけが黙る**——`link` は `up` で、
    * 標識の件数も足りているように見え、**「標識が無い」と見分けがつかない。**
@@ -148,7 +148,7 @@ type Candidate = { warning: Warning; distanceM: number };
  * その標識が**自分の進入方向を対象にしているか。**
  *
  * **`approach` から `(lat, lon)` へ向かうベクトルが、規制の対象になる進行方向**である
- * （`docs/interfaces/mobile-api.md`）。自分の `crs` がそれとおおむね揃っていれば、
+ * （`docs/interfaces/stop-signs-delivery.md`）。自分の `crs` がそれとおおむね揃っていれば、
  * 自分はその標識の対象である。
  *
  * **単に近いだけで拾わない理由がここ。**1つの交差点には方向のぶんだけ標識の行があり、

@@ -17,7 +17,7 @@
  *
  * **読む口（`SignStore`）と書く口（`SignWriter`）を分けてある。**走行ループと検知が
  * 触れるのは読む方だけで、**書けるものを渡すと、1Hz の経路から標識を書き換えられる**
- * ——更新は起動時にしか走らない（`docs/interfaces/mobile-api.md`
+ * ——更新は起動時にしか走らない（`docs/interfaces/stop-signs-delivery.md`
  * 「取るのはアプリの起動時。走行中は取りに行かない」）。
  */
 
@@ -34,7 +34,7 @@ import { meta as metaTable, signs as signsTable } from "./schema.ts";
 export type SignsMeta = {
   /** 都道府県コード（岡山県 = 33） */
   pref: number;
-  /** サーバーが返した `ETag` そのまま（`docs/interfaces/mobile-api.md`） */
+  /** サーバーが返した `ETag` そのまま（`docs/interfaces/stop-signs-delivery.md`） */
   version: string;
   /** 件数。**0 なら走行を始めさせない**（`docs/adr/0009-on-device-storage.md`） */
   count: number;
@@ -63,7 +63,7 @@ export type SignStore = {
 
 /**
  * 標識の入れ替え口。**丸ごと差し替えるだけで、差分を当てる道は持たない**
- * （`docs/interfaces/mobile-api.md`「差分を作らない」）。
+ * （`docs/interfaces/stop-signs-delivery.md`「差分を作らない」）。
  *
  * **1件でも失敗したら1件も変わらないこと。**途中まで書けた状態を残すと、
  * **どこが古いのか誰にも分からない `signs.db`** が端末に残る。
@@ -74,7 +74,7 @@ export type SignWriter = {
    * 手元の標識を、渡されたもので丸ごと置き換える。
    *
    * @param meta 新しい素性。**`version` はサーバーが返した ETag そのまま**
-   *   （端末で作らない。`docs/interfaces/mobile-api.md`「版はサーバーが決める」）
+   *   （端末で作らない。`docs/interfaces/stop-signs-delivery.md`「版はサーバーが決める」）
    * @param signs 新しい標識の全件。**空を渡さない**——0 件で入れ替えると
    *   **何も持っていない端末**ができる。呼ぶ前に弾くのは `./update.ts` の仕事
    */
@@ -203,7 +203,7 @@ export function createDrizzleSignStore(db: SyncSqliteDatabase): SignStore {
       const [row] = metaQuery.all();
 
       // **行が無いことを 0 件に潰さない。**「まだ持っていない」と
-      // 「その県に標識が無い」は別のこと（`docs/interfaces/mobile-api.md`）。
+      // 「その県に標識が無い」は別のこと（`docs/interfaces/stop-signs-delivery.md`）。
       return row ?? null;
     },
   };
@@ -221,7 +221,7 @@ const INSERT_CHUNK = 500;
  * SQL の入れ替え実装。**`better-sqlite3`（生成・テスト）と `expo-sqlite`（実機）で同じもの。**
  *
  * **トランザクションで囲む。**囲まないと、**消したあとで落ちた端末が「何も持っていない端末」**
- * になる（`docs/interfaces/mobile-api.md`「差分を作らない」）。
+ * になる（`docs/interfaces/stop-signs-delivery.md`「差分を作らない」）。
  * Drizzle の同期ドライバは `begin` / `commit` / `rollback` をそのまま流すので、
  * **落ちれば消す前の状態に戻る**（`drizzle-orm/expo-sqlite` の `session.js` で確認済み）。
  */

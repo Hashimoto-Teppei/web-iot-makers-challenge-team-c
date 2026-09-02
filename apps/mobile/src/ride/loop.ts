@@ -112,7 +112,7 @@ export type RideDeps = {
    *
    * **県ぶんの全件を渡さない。**端末の SQLite からセルで絞って渡すのは呼び出し側で、
    * 置き方は `docs/adr/0009-on-device-storage.md`、配り方は
-   * `docs/interfaces/mobile-api.md`「一時停止の標識をスマホに配る」。
+   * `docs/interfaces/stop-signs-delivery.md`「一時停止の標識をスマホに配る」。
    */
   signs?: readonly StopSign[];
   /**

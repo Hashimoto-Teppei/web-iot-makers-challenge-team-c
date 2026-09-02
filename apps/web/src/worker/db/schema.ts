@@ -58,7 +58,7 @@ export const stopSigns = sqliteTable(
     // 走行後の画面で場所を人に読ませる用途には使えなかった
     // （`docs/interfaces/stop-signs-source.md`）。
   },
-  // 配るときは常に都道府県ぶんを丸ごと引く（`docs/interfaces/mobile-api.md`）。
+  // 配るときは常に都道府県ぶんを丸ごと引く（`docs/interfaces/stop-signs-delivery.md`）。
   (t) => [index("stop_signs_pref_idx").on(t.pref)],
 );
 
@@ -66,7 +66,7 @@ export const stopSigns = sqliteTable(
  * 標識の版。**都道府県ごとに1行**で、取り込みのたびに置き換える。
  *
  * **版をサーバーが持つことが、この表がある理由のすべて**である
- * （`docs/interfaces/mobile-api.md`「版はサーバーが決める」）。ここで作らないと
+ * （`docs/interfaces/stop-signs-delivery.md`「版はサーバーが決める」）。ここで作らないと
  * 端末が独自の版番号を作り始め、`If-None-Match` で突き合わせられなくなる。
  *
  * `count` は**取り込んだ時点の件数の記録**。`GET /api/stop-signs` は配る前にこの値と

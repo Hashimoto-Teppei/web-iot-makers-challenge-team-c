@@ -23,7 +23,7 @@ import { DEFAULT_API_BASE_URL } from "../src/lib/api-base.ts";
 import { buildSignsDatabase, openSignsDatabase } from "../src/signs/node.ts";
 import { parseStopSignsResponse } from "../src/signs/response.ts";
 
-/** 岡山県。当面はこの県だけを配る（`docs/interfaces/mobile-api.md`）。 */
+/** 岡山県。当面はこの県だけを配る（`docs/interfaces/stop-signs-delivery.md`）。 */
 const DEFAULT_PREF = 33;
 
 /**

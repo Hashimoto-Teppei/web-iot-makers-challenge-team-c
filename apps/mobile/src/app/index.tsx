@@ -38,7 +38,7 @@ export default function HomeScreen() {
   const ride = useRideLoop(signs, logs, device);
   const sync = useRideLogSync(logs);
   const status = ride.status;
-  // **起動時に1回だけ標識の更新を取りに行く**（`docs/interfaces/mobile-api.md`）。
+  // **起動時に1回だけ標識の更新を取りに行く**（`docs/interfaces/stop-signs-delivery.md`）。
   // **走行中かを渡すのはこの画面だけが知っているから**——設定画面は見るだけである。
   const signsUpdate = useSignsUpdate(signs, { riding: ride.running });
   const signsMeta = useSignsMeta(signs);
@@ -118,7 +118,7 @@ export default function HomeScreen() {
 
         {/*
           **更新できなかったことを走行の前に見せる。**手元の標識で走れるので
-          **点検は赤くしない**（`docs/interfaces/mobile-api.md`「取得に失敗しても
+          **点検は赤くしない**（`docs/interfaces/stop-signs-delivery.md`「取得に失敗しても
           走行を止めない」）が、**黙ると古い標識のまま走り続けていることに誰も気づけない。**
         */}
         {signsMeta !== null && signsUpdate.outcome?.error != null && (

@@ -9,9 +9,9 @@ import { stopSigns, stopSignVersions } from "../db/schema";
  * **標識の本体と分けて読めるようにしてある。**ETag は版だけで決まるので、
  * `304` を返すときに数万行を D1 から引く必要がない——**アプリの起動のたびに
  * 県ぶんを読み出して捨てることになる**（`304` は例外ではなく通常の応答である。
- * `docs/interfaces/mobile-api.md`「版はサーバーが決める」）。
+ * `docs/interfaces/stop-signs-delivery.md`「版はサーバーが決める」）。
  *
- * **「取り込まれていない」と「0 件」を混ぜない**（`docs/interfaces/mobile-api.md`
+ * **「取り込まれていない」と「0 件」を混ぜない**（`docs/interfaces/stop-signs-delivery.md`
  * 「『持っていない』と『0件』を混ぜない」）。空の配列を返すと、端末からは
  * 「その県には標識が1つも無い」と区別が付かず、**静かに黙るアプリが出来上がる。**
  * 呼び出し側はこの `null` を 404 にする。
@@ -33,7 +33,7 @@ export async function readStopSignVersion(
  * その都道府県の標識を丸ごと読む。
  *
  * **絞り込みは都道府県コードだけ。位置を引数に取らない**——取ると、走り出す前に
- * 現在地をサーバーへ送ることになる（`docs/interfaces/mobile-api.md`）。
+ * 現在地をサーバーへ送ることになる（`docs/interfaces/stop-signs-delivery.md`）。
  */
 export async function readStopSigns(db: DrizzleD1Database, pref: number): Promise<StopSign[]> {
   // id で並べるのは、同じ版なら毎回同じ並びで返すため。端末は丸ごと入れ替えるので
@@ -65,7 +65,7 @@ export async function readStopSigns(db: DrizzleD1Database, pref: number): Promis
 
 /**
  * 取り込んである県を全部読む。**選択肢を作るのはこの結果だけ**
- * （`docs/interfaces/mobile-api.md`「どの県を選べるかはサーバーが決める」）。
+ * （`docs/interfaces/stop-signs-delivery.md`「どの県を選べるかはサーバーが決める」）。
  *
  * **標識の本体は読まない。**読むのは版の表だけなので、県が増えても数十行で済む。
  *

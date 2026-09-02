@@ -98,7 +98,7 @@ export type PreRideInput = {
    * 走行前のサーバー疎通（`./server-reach.ts`）。**届かない理由、届けば `null`。**
    *
    * **標識の更新の成否で代用しない。**あちらは失敗しても走行を止めないと決めてある
-   * （`docs/interfaces/mobile-api.md`）。
+   * （`docs/interfaces/stop-signs-delivery.md`）。
    */
   serverReason: string | null;
   /** サーバーへ届くかを確かめている最中か */
@@ -236,7 +236,7 @@ function fix({ status, locationReason, locationChecking }: PreRideInput): PreRid
 
 function signs({ signsMeta }: PreRideInput): PreRideCheck {
   const label = "標識";
-  // **「持っていない」と「0 件」を混ぜない**（`docs/interfaces/mobile-api.md`）。直し方が違う。
+  // **「持っていない」と「0 件」を混ぜない**（`docs/interfaces/stop-signs-delivery.md`）。直し方が違う。
   if (signsMeta === null) {
     return {
       key: "signs",

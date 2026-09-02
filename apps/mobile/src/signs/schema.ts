@@ -14,7 +14,7 @@ import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core
 
 /**
  * 一時停止の標識。**1件が1つの進入方向**を表す
- * （`docs/interfaces/mobile-api.md`「進入方向を一緒に配る」）。
+ * （`docs/interfaces/stop-signs-delivery.md`「進入方向を一緒に配る」）。
  */
 export const signs = sqliteTable(
   "signs",
@@ -66,7 +66,7 @@ export const signs = sqliteTable(
  *
  * **件数と版は人に見せるためのもの**でもある——標識を持っていないことは
  * 「近くに標識が無い」と区別が付かず、デバイスの表示では絶対に気づけない
- * （`docs/interfaces/mobile-api.md`「『持っていない』と『0件』を混ぜない」）。
+ * （`docs/interfaces/stop-signs-delivery.md`「『持っていない』と『0件』を混ぜない」）。
  */
 export const meta = sqliteTable("meta", {
   /**
@@ -79,7 +79,7 @@ export const meta = sqliteTable("meta", {
   /**
    * 版。**サーバーが返した `ETag` をそのまま入れる**（引用符ごと）。
    *
-   * **端末が独自の版番号を作らない**（`docs/interfaces/mobile-api.md`
+   * **端末が独自の版番号を作らない**（`docs/interfaces/stop-signs-delivery.md`
    * 「版はサーバーが決める」）。次に更新を取りに行くとき、この値をそのまま
    * `If-None-Match` に載せる。
    */
@@ -100,7 +100,7 @@ export const meta = sqliteTable("meta", {
  *
  * **drizzle-kit のマイグレーションを使わない。**`signs.db` は毎回まっさらから作る
  * **生成物**であり、育てていくものではない（更新は丸ごと入れ替え。
- * `docs/interfaces/mobile-api.md`「差分を作らない」）。マイグレーションが要るのは
+ * `docs/interfaces/stop-signs-delivery.md`「差分を作らない」）。マイグレーションが要るのは
  * アプリが書く `app.db` の方で、そちらは走行ログのテーブルと一緒に入る（#73）。
  *
  * **上のスキーマ定義と食い違うと、`SELECT` は実行時に落ちる。**そうならないことは

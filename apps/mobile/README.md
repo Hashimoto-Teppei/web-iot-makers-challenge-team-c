@@ -223,7 +223,7 @@ expect(frames.flatMap((f) => f.warns).length).toBeGreaterThan(0);
 
 **県ぶんの標識をアプリに同梱し、走行中は SQLite（`expo-sqlite`）で近傍だけを引きます。**
 **決めた理由の正本は [`docs/adr/0009-on-device-storage.md`](../../docs/adr/0009-on-device-storage.md)**、
-配り方は [`docs/interfaces/mobile-api.md`](../../docs/interfaces/mobile-api.md)。ここには置き場所だけを書きます。
+配り方は [`docs/interfaces/stop-signs-delivery.md`](../../docs/interfaces/stop-signs-delivery.md)。ここには置き場所だけを書きます。
 
 ```
 src/signs/
