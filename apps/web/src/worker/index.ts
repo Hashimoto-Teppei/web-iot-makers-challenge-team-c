@@ -7,6 +7,7 @@ import type {
   StatsCellDetailResponse,
   StatsResponse,
   StatsSample,
+  StopSignPrefsResponse,
   StopSignsResponse,
 } from "../shared/api";
 import { cellOf } from "../shared/cell";
@@ -39,7 +40,7 @@ import { aggregateCellDetail } from "./stats/detail";
 import { readDetections, readRidePoints, readViolations } from "./stats/query";
 import { cellDetailQuery, type StatsError, statsQuery } from "./stats/request";
 import { etagOf, matchesIfNoneMatch } from "./stop-signs/etag";
-import { readStopSigns, readStopSignVersion } from "./stop-signs/query";
+import { readStopSignPrefs, readStopSigns, readStopSignVersion } from "./stop-signs/query";
 import { stopSignsQuery } from "./stop-signs/request";
 import { NEIGHBORS_DO_NAME, NEIGHBORS_LOCATION_HINT } from "./v2v/config";
 import { type ExchangeResponse, exchangeRequest } from "./v2v/messages";
@@ -135,6 +136,31 @@ const routes = app
       return c.json(body, 200, headers);
     },
   )
+  /**
+   * **取り込んである県の一覧。**端末の県の選択肢はこれだけで作る
+   * （`docs/interfaces/mobile-api.md`「どの県を選べるかはサーバーが決める」）。
+   *
+   * **47 県を端末に焼き込ませないための口である。**焼き込むと、
+   * **取り込んでいない県が一覧に並び、選んだ瞬間に 404 が返る。**
+   *
+   * **名前は返さない。**都道府県の名前は変わらないので端末が持つ
+   * ——数十バイトのために往復を増やさない。
+   *
+   * **ETag を付けない。**返すのは数十行で、`GET /api/stop-signs` のように
+   * 数 MB を節約する相手がいない。**版の表そのものを配っている**ので、
+   * ここに条件付き取得を足すと**版の版**を持つことになる。
+   */
+  .get("/api/stop-signs/prefs", async (c) => {
+    const db = drizzle(c.env.DB);
+    const prefs = await readStopSignPrefs(db);
+
+    // **空でも 200 を返す。**`GET /api/stop-signs` が 404 を返すのは
+    // 「その県が入っていない」を「標識が 0 件」と混ぜないためだが、
+    // **こちらは「選べる県が無い」ことそのものが答え**である
+    // （端末はこれを見て「選べない」と出す）。
+    const body: StopSignPrefsResponse = { prefs };
+    return c.json(body);
+  })
   /**
    * 走行中の位置の中継。1Hz で自分の位置を受け取り、**同じレスポンスで半径内の
    * 周辺車両を返す**（`docs/adr/0005-realtime-transport.md`）。

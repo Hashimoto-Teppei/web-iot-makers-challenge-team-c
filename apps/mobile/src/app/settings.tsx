@@ -1,4 +1,4 @@
-import { Stack } from "expo-router";
+import { Link, Stack } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -7,6 +7,7 @@ import {
   useSignsMeta,
   useSignsUpdateState,
 } from "@/signs/expo";
+import { prefLabel } from "@/signs/pref";
 
 /**
  * 設定と、手元の標識の素性を見る画面。
@@ -20,31 +21,14 @@ import {
  */
 
 /**
- * 都道府県コードと名前。**いまは岡山県だけ。**
- *
- * 選べるようにするのは #71。**器だけを先に用意してある**——
- * 「選べるのに反映されない」状態を作らないため（`docs/interfaces/mobile-api.md`）。
- */
-const PREF_NAMES: Record<number, string> = { 33: "岡山県" };
-
-/**
- * 県コードを人に見せる形にする。
- *
- * **知らないコードを岡山県と言わない。**この画面は「いま何を持っているか」を
- * 見るためのものなので、**名前を知らないなら番号のまま出す**——
- * 別の県の同梱物を持っている端末に「岡山県」と表示するのが一番まずい。
- */
-function prefLabel(pref: number | null): string {
-  if (pref === null) return "不明";
-  return PREF_NAMES[pref] ?? `都道府県コード ${pref}`;
-}
-
-/**
- * 起動時の更新がどうなったかを1行にする。
+ * 標識の更新がどうなったかを1行にする。
  *
  * **「変わっていなかった」と「取りに行けなかった」を同じ文にしない。**
  * 前者は正常な終わり方で、後者は**古い標識のまま走ることになる**
  * （`docs/interfaces/mobile-api.md`「『持っていない』と『0件』を混ぜない」と同じ理由）。
+ *
+ * **「起動時に」と書かない。**同じ場所に**人が県を選び直した結果も出る**ようになった
+ * （#71）ので、**書くと、たったいま自分でやったことを起動のせいにして見せる。**
  */
 function updateLabel(update: SignsUpdateState): string {
   if (update.running) return "サーバーの版を確かめています…";
@@ -52,13 +36,13 @@ function updateLabel(update: SignsUpdateState): string {
 
   switch (update.outcome.status) {
     case "replaced":
-      return "起動時に新しい標識へ入れ替えました。";
+      return "新しい標識へ入れ替えました。";
     case "not-modified":
-      return "起動時に確かめました。サーバーの版と同じです。";
+      return "確かめました。サーバーの版と同じです。";
     // **理由をそのまま出す。**「失敗しました」だけだと、何をすればよいか分からない。
     case "failed":
     case "skipped":
-      return update.outcome.error ?? "起動時には取りに行きませんでした。";
+      return update.outcome.error ?? "標識を取りに行っていません。";
   }
 }
 
@@ -76,9 +60,13 @@ export default function SettingsScreen() {
         <Text style={styles.title}>設定</Text>
 
         <View style={styles.rows}>
-          {/* 値は固定。選び直せるようにするのは #71。 */}
           <Row label="対象の都道府県" value={prefLabel(meta?.pref ?? null)} />
         </View>
+        {/* **選択肢はこの画面に持たない。**取り込んである県はサーバーが決めるので、
+            向こうで取りに行く（`docs/interfaces/mobile-api.md`）。 */}
+        <Link href="/prefs" style={styles.link}>
+          都道府県を選び直す
+        </Link>
 
         <Text style={styles.title}>一時停止の標識</Text>
         {meta === null ? (
@@ -120,6 +108,7 @@ function Row({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  link: { color: "#1d4ed8", fontWeight: "bold" },
   content: { flex: 1, gap: 12, padding: 24 },
   title: { fontSize: 20, fontWeight: "bold" },
   rows: { gap: 4 },

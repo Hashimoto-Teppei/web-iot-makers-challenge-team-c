@@ -20,6 +20,7 @@ import { exchangeViaApi, refuseMockExchange } from "./api";
 import type { DeviceLink } from "./device";
 import { watchFixes } from "./location";
 import { RideLoop, type RideStatus } from "./loop";
+import { setRiding, useRiding } from "./riding";
 
 /** 開始と停止の一回ぶん。**止め忘れを防ぐために、止める関数をここに集める。** */
 type Session = { stops: (() => void)[]; cancelled: boolean; recording: RideRecording };
@@ -56,7 +57,9 @@ export function useRideLoop(
 ): RideControl {
   const [status, setStatus] = useState<RideStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
+  // **走行中かはアプリで1つだけ持つ**（`./riding.ts`）——設定画面から走行中に
+  // 標識を入れ替えられないようにするため、画面の外からも見える必要がある。
+  const running = useRiding();
   const sessionRef = useRef<Session | null>(null);
 
   /**
@@ -82,7 +85,7 @@ export function useRideLoop(
     // ——**終わっていない走行の点は、誰にも見えないまま端末に溜まり続ける。**
     record(() => session.recording.end(Date.now()));
     sessionRef.current = null;
-    setRunning(false);
+    setRiding(false);
     // **古い状態を残さない。**残すと、走行を終えたあとも「測位: 取れている」や
     // 中継の失敗の赤字が出たままになり、**動いていないのに動いているように見える。**
     setStatus(null);
@@ -137,7 +140,7 @@ export function useRideLoop(
     // 伝わっていなければならない（`docs/interfaces/v2v.md`「心拍を必ず見せる」）。
     session.stops.push(loop.startHeartbeat());
     setStatus(loop.status());
-    setRunning(true);
+    setRiding(true);
 
     watchFixes((fix) => {
       // **近傍の標識を先に差し替える。**同じセルにいる間は引き直さないので、
