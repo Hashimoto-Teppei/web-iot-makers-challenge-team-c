@@ -64,6 +64,33 @@ export type StopSignsResponse = {
 };
 
 /**
+ * `GET /api/stop-signs/prefs` の応答。**D1 に取り込んである県だけ**を返す
+ * （`docs/interfaces/mobile-api.md`「どの県を選べるかはサーバーが決める」）。
+ *
+ * **端末はこれを見て選択肢を作る。**47 県を端末に焼き込むと、
+ * **取り込んでいない県が一覧に並び、選んだ瞬間に 404 になる。**
+ */
+export type StopSignPrefsResponse = {
+  /** 取り込んである県。**空の配列もありうる**（1件も取り込んでいない） */
+  prefs: StopSignPref[];
+};
+
+/**
+ * 取り込んである県が1つ。
+ *
+ * **名前を返さない。**都道府県の名前は JIS X 0401 で固定されており変わらないので
+ * 端末が持つ（`docs/interfaces/mobile-api.md`）。数十バイトのために往復を増やさない。
+ */
+export type StopSignPref = {
+  /** 都道府県コード（岡山県 = 33） */
+  pref: number;
+  /** その県のいまの版。`GET /api/stop-signs` の ETag の元になる値と同じ */
+  version: string;
+  /** 取り込んだ時点の件数。**選ぶ前に「何件入っているか」を人に見せられる** */
+  count: number;
+};
+
+/**
  * 集計のレイヤー。**検知と不停止を同時に重ねない**（`docs/interfaces/web-ui.md`）。
  *
  * 同じ交差点に2つの円が重なると、**どちらの濃さを見ているのか分からなくなる。**

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { buildImportSql, versionOf } from "../../../scripts/stop-signs/sql";
-import type { StopSignsResponse } from "../../shared/api";
+import type { StopSignPrefsResponse, StopSignsResponse } from "../../shared/api";
 import app from "../index";
 
 const SIGNS = [
@@ -130,5 +130,38 @@ describe("GET /api/stop-signs", () => {
 
     expect(res.status).toBe(200);
     expect(((await res.json()) as StopSignsResponse).count).toBe(2);
+  });
+});
+
+describe("GET /api/stop-signs/prefs", () => {
+  it("取り込んである県だけを、県コード順に返す", async () => {
+    // 順に取り込まない。**返す側が並べ替えていること**を確かめたい。
+    await importSigns([{ id: "34-B1", lat: 34.396, lon: 132.459, approach: null }], 34);
+    await importSigns(SIGNS, 33);
+
+    const res = await app.request("/api/stop-signs/prefs", {}, env);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as StopSignPrefsResponse;
+    expect(body.prefs.map((p) => p.pref)).toEqual([33, 34]);
+    expect(body.prefs[0]?.count).toBe(2);
+  });
+
+  it("1件も取り込んでいなければ空の配列を返す（404 にしない）", async () => {
+    // **「選べる県が無い」ことそのものが答え**である。ここを 404 にすると、
+    // 端末は「取りに行けなかった」と混ぜる——**片方は選ばせない、もう片方は待てば直る。**
+    const res = await app.request("/api/stop-signs/prefs", {}, env);
+
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as StopSignPrefsResponse).prefs).toEqual([]);
+  });
+
+  it("配る版と同じ版を返す", async () => {
+    // **食い違うと、選択画面に出た版で入れ替えたつもりの端末が別の版を持つ。**
+    const version = await importSigns(SIGNS);
+
+    const res = await app.request("/api/stop-signs/prefs", {}, env);
+
+    expect(((await res.json()) as StopSignPrefsResponse).prefs[0]?.version).toBe(version);
   });
 });

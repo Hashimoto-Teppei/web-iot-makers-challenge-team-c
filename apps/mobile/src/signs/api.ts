@@ -10,6 +10,7 @@
  * **応答を読む部分（`./response.ts`）だけを共有している。**
  */
 
+import type { StopSignPref } from "web/src/shared/api";
 import { api } from "../lib/api";
 import type { FetchStopSignsFn } from "./update";
 
@@ -33,7 +34,10 @@ export function fetchStopSignsViaApi(signal?: AbortSignal): FetchStopSignsFn {
           // **手元の版をそのまま送り返す。**端末で作らない
           // （`docs/interfaces/mobile-api.md`「版はサーバーが決める」）。
           // **同梱直後の最初の起動はここで 304 になり、無駄な数 MB を落とさない。**
-          headers: { "If-None-Match": version },
+          //
+          // **`null` のときは載せない。**頼む県が手元と違うとき（県を選び直した、
+          // まだ何も持っていない）に載せると、**別の県の版を送り返す**ことになる。
+          headers: version === null ? {} : { "If-None-Match": version },
           init: { signal },
         },
       );
@@ -61,4 +65,36 @@ export function fetchStopSignsViaApi(signal?: AbortSignal): FetchStopSignsFn {
     const body: unknown = await res.json().catch(() => null);
     return { kind: "body", body, etag: res.headers.get("etag") };
   };
+}
+
+/**
+ * 選べる県を取りに行った結果。**「無い」と「取れなかった」を混ぜない**——
+ * 前者は選ばせない理由が取り込みで、後者は電波である
+ * （`docs/interfaces/mobile-api.md`「どの県を選べるかはサーバーが決める」）。
+ */
+export type StopSignPrefsResult =
+  /** 取れた。**空の配列もありうる**（1件も取り込んでいない） */
+  | { kind: "prefs"; prefs: readonly StopSignPref[] }
+  /** 取りに行けなかった。**選ばせない**（手元の県のまま走る） */
+  | { kind: "failed"; message: string };
+
+/**
+ * 取り込んである県の一覧（`GET /api/stop-signs/prefs`）。
+ *
+ * **端末に 47 県を焼き込まないための口。**焼き込むと、**取り込んでいない県が
+ * 一覧に並び、選んだ瞬間に 404 になる**（`docs/interfaces/mobile-api.md`）。
+ *
+ * **名前はサーバーから来ない。**都道府県の名前は変わらないので端末が持つ（`./pref.ts`）。
+ */
+export async function fetchStopSignPrefs(signal?: AbortSignal): Promise<StopSignPrefsResult> {
+  try {
+    const res = await api.api["stop-signs"].prefs.$get({}, { init: { signal } });
+    if (!res.ok) return { kind: "failed", message: `サーバーが ${res.status} を返しました` };
+
+    const body = await res.json();
+    return { kind: "prefs", prefs: body.prefs };
+  } catch (reason: unknown) {
+    // **回線が無いのは異常ではない。**選ばせないだけで、手元の県のまま走れる。
+    return { kind: "failed", message: `選べる県を取りに行けませんでした: ${String(reason)}` };
+  }
 }

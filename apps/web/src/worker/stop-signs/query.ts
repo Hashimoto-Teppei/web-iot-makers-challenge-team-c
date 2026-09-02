@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import type { StopSign } from "../../shared/api";
+import type { StopSign, StopSignPref } from "../../shared/api";
 import { stopSigns, stopSignVersions } from "../db/schema";
 
 /**
@@ -61,4 +61,27 @@ export async function readStopSigns(db: DrizzleD1Database, pref: number): Promis
     approach:
       approachLat !== null && approachLon !== null ? { lat: approachLat, lon: approachLon } : null,
   }));
+}
+
+/**
+ * 取り込んである県を全部読む。**選択肢を作るのはこの結果だけ**
+ * （`docs/interfaces/mobile-api.md`「どの県を選べるかはサーバーが決める」）。
+ *
+ * **標識の本体は読まない。**読むのは版の表だけなので、県が増えても数十行で済む。
+ *
+ * **1件も無いときは空の配列。**ここは `null` と分けない——**上の
+ * {@link readStopSignVersion} と違い、「県を1つも取り込んでいない」ことは
+ * そのまま「選べる県が無い」**であって、区別すべき2つの状態が無い。
+ */
+export async function readStopSignPrefs(db: DrizzleD1Database): Promise<StopSignPref[]> {
+  // 県コード順に返す。**並びが揺れると、選択画面の並びが起動のたびに変わる。**
+  return await db
+    .select({
+      pref: stopSignVersions.pref,
+      version: stopSignVersions.version,
+      count: stopSignVersions.count,
+    })
+    .from(stopSignVersions)
+    .orderBy(stopSignVersions.pref)
+    .all();
 }

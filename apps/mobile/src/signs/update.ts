@@ -35,11 +35,14 @@ export type StopSignsFetchResult =
  * 取りに行く関数。**実装は `./api.ts`。**テストはここに偽物を渡す。
  *
  * @param version 手元の `meta.version`。**そのまま `If-None-Match` に載せる**
- *   （端末が版を作らない。`docs/interfaces/mobile-api.md`「版はサーバーが決める」）
+ *   （端末が版を作らない。`docs/interfaces/mobile-api.md`「版はサーバーが決める」）。
+ *   **`null` なら載せない**——**頼む県が手元と違うとき**（県を選び直した、
+ *   まだ何も持っていない）は、**別の県の版を送り返すことになる**
+ *   （`docs/interfaces/mobile-api.md`「県を選び直したときも、丸ごと取り直す」）
  */
 export type FetchStopSignsFn = (args: {
   pref: number;
-  version: string;
+  version: string | null;
 }) => Promise<StopSignsFetchResult>;
 
 export type SignsUpdateStatus =
@@ -75,12 +78,16 @@ export type SignsUpdateOutcome = {
  * @param options.canReplace 入れ替えてよいか。**走行中は `false` を返すこと**——
  *   数万行の入れ替えは 1Hz の走行ループと同じ接続を握る
  *   （`docs/interfaces/mobile-api.md`「走行中は取りに行かない」）
+ * @param options.pref 頼む県。**省くと手元の県**（起動時の更新はこちら）。
+ *   **人が選び直したときだけ渡す**（#71）——渡すと、**まだ何も持っていない端末でも
+ *   取りに行く**。選べる県を決めるのはサーバーで、端末は一覧から選ばせる
+ *   （`docs/interfaces/mobile-api.md`「どの県を選べるかはサーバーが決める」）
  */
 export async function updateStopSigns(
   store: SignStore,
   writer: SignWriter,
   fetchStopSigns: FetchStopSignsFn,
-  options: { now?: () => Date; canReplace?: () => boolean } = {},
+  options: { now?: () => Date; canReplace?: () => boolean; pref?: number } = {},
 ): Promise<SignsUpdateOutcome> {
   const now = options.now ?? (() => new Date());
   const canReplace = options.canReplace ?? (() => true);
@@ -94,16 +101,21 @@ export async function updateStopSigns(
     return { status: "failed", meta: null, error: `手元の標識を読めません: ${String(reason)}` };
   }
 
-  if (current === null) {
+  // **頼む県。人が選んだものが優先で、無ければ手元の県。**
+  // どちらも無ければ頼みようがない（下）。
+  const requested = options.pref ?? current?.pref ?? null;
+
+  if (requested === null) {
     // **ここで取りに行かない。**API は更新だけを担い、初回の取得を担わない
     // （`docs/interfaces/mobile-api.md`）。**そもそも頼む県コードが無い**——
-    // 県は手元の `meta` が持っており、選べるようにするのは #71 である。
+    // 県は手元の `meta` が持っている。**人が選べば `options.pref` で入ってくる**ので、
+    // そのときはここを通らずに取りに行く（#71）。
     return {
       status: "skipped",
       meta: null,
       error:
         "標識を持っていないため、更新も取りに行けません" +
-        "（docs/setup.md の手順で同梱物を作り直してください）",
+        "（docs/setup.md の手順で同梱物を作り直すか、設定から都道府県を選んでください）",
     };
   }
 
@@ -112,13 +124,19 @@ export async function updateStopSigns(
     return { status: "skipped", meta: current, error: null };
   }
 
-  const result = await fetchStopSigns({ pref: current.pref, version: current.version });
+  // **頼む県が手元と違うなら、版を載せない。**載せると**別の県の版を送り返す**ことになる
+  // （`docs/interfaces/mobile-api.md`「県を選び直したときも、丸ごと取り直す」）。
+  // いまのサーバーの ETag は県を含むので 304 にはならないが、
+  // **こちら側の正しさをサーバーの実装に預けない。**
+  const version = current !== null && current.pref === requested ? current.version : null;
+
+  const result = await fetchStopSigns({ pref: requested, version });
   if (result.kind === "not-modified") return { status: "not-modified", meta: current, error: null };
   // **`keeping()` を通す。**取りに行けなかっただけなので、**手元のもので走れる**ことを
   // 必ず添える——サーバーが返す「都道府県コード 33 の標識がまだありません」を
   // そのまま出すと、**この端末に標識が無いと読まれる**（実際にはある）。
   if (result.kind === "failed")
-    return { status: "failed", meta: current, error: keeping(result.message) };
+    return { status: "failed", meta: current, error: keeping(result.message, current) };
 
   let parsed: ReturnType<typeof parseStopSignsResponse>;
   try {
@@ -126,17 +144,18 @@ export async function updateStopSigns(
     // **正しく揃っている手元を、欠けたもので置き換える。**
     parsed = parseStopSignsResponse(result.body, result.etag, now());
   } catch (reason: unknown) {
-    return { status: "failed", meta: current, error: keeping(String(reason)) };
+    return { status: "failed", meta: current, error: keeping(String(reason), current) };
   }
 
   // **頼んだ県が返ってきたことを確かめる。**別の県で入れ替えると、
   // **画面は入れ替わった `meta` を信じる**ので、どの画面からも見分けが付かない。
-  if (parsed.meta.pref !== current.pref) {
+  if (parsed.meta.pref !== requested) {
     return {
       status: "failed",
       meta: current,
       error: keeping(
-        `頼んだ県と違うものが返りました（頼んだ ${current.pref} / 返った ${parsed.meta.pref}）`,
+        `頼んだ県と違うものが返りました（頼んだ ${requested} / 返った ${parsed.meta.pref}）`,
+        current,
       ),
     };
   }
@@ -145,7 +164,7 @@ export async function updateStopSigns(
   // （`apps/web/src/worker/index.ts`）、**受け取った側で確かめるのをやめない**——
   // 通すと、**走れる端末を走れない端末に変える**のがこの更新になる。
   if (parsed.meta.count === 0) {
-    return { status: "failed", meta: current, error: keeping("0 件が返りました") };
+    return { status: "failed", meta: current, error: keeping("0 件が返りました", current) };
   }
 
   // **落としきってから、もう一度確かめる。**取得に数秒かかるので、
@@ -175,7 +194,11 @@ export async function updateStopSigns(
  * 実際には1か月古い標識でも道路の一時停止はほとんど変わらない
  * （`docs/interfaces/mobile-api.md`「取得に失敗しても走行を止めない」）。
  */
-function keeping(reason: string): string {
+function keeping(reason: string, current: SignsMeta | null): string {
+  // **手元に何も無いときに「手元のものを使います」と言わない。**嘘になるうえ、
+  // **走れないことを走れるように見せる**——県を選んだのに取れなかった端末は、
+  // **一時停止の事前通知が動かないまま**である（#71）。
+  if (current === null) return `標識を受け取れませんでした（手元にも標識がありません）: ${reason}`;
   return `新しい標識を受け取れませんでした（手元のものを使います）: ${reason}`;
 }
 
