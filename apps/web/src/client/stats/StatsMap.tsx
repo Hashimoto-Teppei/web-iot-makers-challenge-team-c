@@ -6,6 +6,7 @@ import {
   DEFAULT_CENTER,
   DEFAULT_ZOOM,
   FOCUS_ZOOM,
+  MAP_STYLES,
   MAX_FILL_OPACITY,
   MIN_FILL_OPACITY,
   RADIUS_PER_SQRT_RIDE,
@@ -73,6 +74,9 @@ export function StatsMap({ cells, selected, onSelect }: StatsMapProps) {
             // 走行後に振り返る画面なので、余計な操作系は出さない。
             streetViewControl: false,
             mapTypeControl: false,
+            // **彩度を落とす。**既定の黄色い道路の上では、赤い円の濃さが読めない
+            // （`./config.ts` の `MAP_STYLES`）。
+            styles: MAP_STYLES,
           }),
         );
       })

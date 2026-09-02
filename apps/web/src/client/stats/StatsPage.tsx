@@ -123,7 +123,9 @@ export function StatsPage({ sample }: StatsPageProps) {
 
       <div className="panels">
         <StatsMap cells={cells} selected={stillThere ? selected : null} onSelect={onSelect} />
-        <div className="ranking-panel">
+        {/* **順位表は面に載せる。**地図は自分で面を持っている（`.map` に枠と影がある）ので、
+            並べたときに片方だけ地の上に浮いていると、2つが同じものの2つの見せ方に見えない。 */}
+        <div className="card ranking-panel">
           <Ranking
             cells={cells}
             selected={stillThere ? selected : null}

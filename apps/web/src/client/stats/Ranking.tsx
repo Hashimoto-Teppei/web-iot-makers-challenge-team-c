@@ -23,9 +23,21 @@ export type RankingProps = {
   sample: StatsSample;
 };
 
-const percent = (rate: number): string => `${(rate * 100).toFixed(0)}%`;
+/**
+ * 表示する率（整数のパーセント）。**色の判定もこの値から出す**（下）。
+ *
+ * **率そのもので色を決めてはいけない。**`0.004` は **「0%」と表示されるのに 0 より大きい**ので、
+ * **「0%」の行が赤くなる**——**危険が1件も出ていない行が赤い**という、
+ * 避けたかったものがそのまま出る（通過が 200 走行を超えれば起こる）。
+ */
+const percent = (rate: number): number => Math.round(rate * 100);
 /** 代表座標。**小数第3位まで**（それ以上出すと、丸めた意味が無くなる） */
 const coords = (cell: StatsCell): string => `${cell.lat.toFixed(3)}, ${cell.lon.toFixed(3)}`;
+
+/** 率のセル。**表示と色を同じ値から出す**ための小さな入れ物。 */
+function Rate({ value }: { value: number }) {
+  return <td className={value > 0 ? "rate" : "rate rate--zero"}>{value}%</td>;
+}
 
 export function Ranking({ cells, selected, onSelect, sample }: RankingProps) {
   if (cells.length === 0) {
@@ -61,7 +73,10 @@ export function Ranking({ cells, selected, onSelect, sample }: RankingProps) {
                 {coords(cell)}
               </button>
             </td>
-            <td>{percent(cell.rate)}</td>
+            {/* **率 0 を赤で強めない。**赤はこの画面で「危ない」を指す色に予約してある
+                （`../index.css` の `--danger`）ので、**危険が1件も出ていない行が赤い**と、
+                色の意味がその場で壊れる。**表示と同じ値で判定する**（上の `percent`）。 */}
+            <Rate value={percent(cell.rate)} />
             <td>{cell.hits}</td>
             <td>{cell.rides}</td>
             <td>

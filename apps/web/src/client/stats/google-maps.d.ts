@@ -18,6 +18,24 @@ declare namespace google.maps {
     zoom?: number;
     streetViewControl?: boolean;
     mapTypeControl?: boolean;
+    /**
+     * 既定の地図の配色を上書きする。**`mapId` を渡すと効かなくなる**
+     * （そのときはクラウド側のスタイルが正本になる）。この画面は `mapId` を使っていない。
+     */
+    styles?: MapTypeStyle[];
+  };
+
+  /**
+   * 地図の配色の規則を1つ。公式のリファレンスどおり、**必須なのは `stylers` だけ**で、
+   * `featureType` と `elementType` は省くと `'all'` として扱われる。
+   *
+   * **`stylers` の中身は `Object` の配列**としか定義されていない（`color` / `visibility` /
+   * `saturation` など、指定できる鍵は要素によって違う）。**ここで狭めない。**
+   */
+  type MapTypeStyle = {
+    featureType?: string;
+    elementType?: string;
+    stylers: Record<string, unknown>[];
   };
 
   // 実物の名前が `google.maps.Map` であり、**名前を変えると宣言が実物と合わなくなる。**

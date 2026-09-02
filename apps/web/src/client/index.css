@@ -1,73 +1,275 @@
+/*
+ * 画面全体のトーン（決定済み・2026-09-02。`docs/interfaces/web-ui.md`「画面のトーン」）。
+ *
+ * **明るい・公共/啓発型。**白とオフホワイトの2層で、**影ではなく余白と罫線**で構造を作る。
+ *
+ * **UI ライブラリを入れていない**（shadcn/ui も Tailwind も StyleX も入れない）。
+ * 画面が2つしか無く、部品ライブラリの導入コストが回収されないためである
+ * （`CLAUDE.md`「早すぎる抽象化を避ける」）。**3つ目・4つ目の画面が出て、
+ * 同じ部品を作り直し始めたら、そのときに入れる。**
+ *
+ * **色は下のカスタムプロパティだけを使う。**値を直に書くと、
+ * **次にトーンを触る人が、拾い残した色を1つずつ探すことになる。**
+ */
+
 :root {
+  /* 明るい面。**純白にしない**——白いカードを載せたときに、カードが浮かなくなる。 */
+  --bg: #f6f7f5;
+  --surface: #ffffff;
+  --border: #e3e6e3;
+  --border-strong: #ccd2cd;
+
+  /* **純黒にしない。**明るい背景の上で #000 は硬く、読み続けると目が疲れる。 */
+  --text: #1b1f1d;
+  --text-muted: #5c6560;
+
+  /*
+   * **UI のアクセント。危険の赤とは別の色を使う**
+   * （決定済み・2026-09-02。`docs/interfaces/web-ui.md`「色の割り当て」）。
+   *
+   * **赤はデータ専用に予約してある。**タブの選択やリンクを赤にすると、
+   * **「赤い＝危ない」なのか「赤い＝選ばれている」なのかが画面の上で区別できない。**
+   * 青緑を選んだのは、**赤の補色側にあり、同じ画面に置いても混同されない**ため。
+   */
+  --accent: #0f6f6c;
+
+  /*
+   * **危険（データ）。**地図の円と、率にまつわる表示だけに使う。
+   * **`src/client/stats/config.ts` の `CIRCLE_COLOR` と同じ値**——
+   * 円は Google Maps に直接渡すので CSS からは触れず、**2箇所に同じ値がある。**
+   * **片方だけ変えないこと。**
+   */
+  --danger: #d7263d;
+  --danger-weak: #fdeaec;
+
+  /* 注意書き（黄）。**危険の赤と競わせない**ので彩度を落としてある。 */
+  --note-bg: #fdf6e3;
+  --note-text: #6b5310;
+  --note-border: #ece0bd;
+
+  /* 余白は 4px 基準の段階。**中間の値を書かない**——揃わないと余白が濁る。 */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  --radius: 0.5rem;
+  --radius-sm: 0.375rem;
+
+  /* 影は1段だけ。**罫線で区切るトーンなので、影を重ねると別のトーンになる。** */
+  --shadow: 0 1px 2px rgba(27, 31, 29, 0.04), 0 1px 3px rgba(27, 31, 29, 0.06);
+
+  /* **Web フォントを入れない**（決定済み・2026-09-02）。日本語の Web フォントは
+     数百 KB 落としてから文字が出るので、**第一印象を良くする目的に逆行する。**
+     `system-ui` は各 OS の日本語フォントをそのまま使う。 */
   font-family: system-ui, sans-serif;
-  line-height: 1.6;
+  line-height: 1.7;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  padding: 2rem;
 }
 
-/* マップ + ランキング（docs/interfaces/web-ui.md「画面」）。1ページに2つ並べる。 */
+a {
+  color: var(--accent);
+}
+
+/*
+ * 数字は等幅で出す。**順位表と時間帯の表は桁を縦に読む**ので、
+ * **プロポーショナルのままだと 1 の行だけ詰まって、桁が揃わない。**
+ */
+.ranking,
+.hours,
+.totals {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 全体の骨格 ───────────────────────────────────────────── */
+
+/*
+ * **ヘッダー帯。**画面の一番上に置く。
+ * **プロダクト名は置かない**（未確定。決めるのはこの画面の外）。
+ */
+.site-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.site-header__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-6);
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-6);
+}
+
+.site-header__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.site-header__tagline {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+/* **`body` に直接 padding を置かない。**中央寄せの器で受ける。 */
+.stats {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6) var(--space-16);
+}
+
+.stats > header {
+  margin-bottom: var(--space-8);
+}
+
+.stats h1 {
+  margin: 0 0 var(--space-2);
+  font-size: 2.25rem;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
 
 .stats header p {
   max-width: 60rem;
-  color: #333;
+  margin: 0;
+  color: var(--text-muted);
 }
+
+.stats header strong {
+  color: var(--text);
+}
+
+/* ── 面（カード）───────────────────────────────────────────── */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* ── 操作列 ────────────────────────────────────────────────── */
 
 .controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 1.5rem;
-  margin: 1rem 0;
+  gap: var(--space-3) var(--space-6);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.controls label {
+  color: var(--text-muted);
+  font-size: 0.875rem;
 }
 
 .tabs {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--bg);
+  border-radius: var(--radius-sm);
 }
 
 .tabs button {
-  padding: 0.4rem 1.2rem;
-  border: 1px solid #ccc;
-  background: #fff;
+  padding: var(--space-2) var(--space-6);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
   cursor: pointer;
   font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
 }
 
+.tabs button:hover {
+  color: var(--text);
+}
+
+/* **選択は青緑。**赤はデータに予約してある（上の `--accent` の注記）。 */
 .tabs button[aria-selected="true"] {
-  background: #d7263d;
-  border-color: #d7263d;
-  color: #fff;
+  background: var(--accent);
+  color: var(--surface);
 }
 
 .controls input[type="number"] {
-  width: 4rem;
-  margin: 0 0.4rem;
+  width: 4.5rem;
+  margin: 0 var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
   font: inherit;
+  font-size: 0.9375rem;
 }
+
+.controls input[type="checkbox"] {
+  margin-right: var(--space-1);
+  accent-color: var(--accent);
+}
+
+/* **フォーカスを消さない。**キーボードで辿れることが順位表の前提になっている。 */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── 地図と順位表 ──────────────────────────────────────────── */
 
 .panels {
   display: grid;
   /* 地図と順位表を横に並べる。狭い画面では縦に積む（下の media query）。 */
   grid-template-columns: 3fr 2fr;
-  gap: 1rem;
+  gap: var(--space-4);
   align-items: start;
 }
 
 .map {
   height: 32rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
 }
 
 .map--empty {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 2rem;
-  background: #fafafa;
-  color: #555;
+  gap: var(--space-3);
+  padding: var(--space-8);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.map--empty code {
+  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
+  background: var(--bg);
+  font-size: 0.875em;
 }
 
 .ranking-panel {
@@ -79,14 +281,31 @@ body {
 .ranking {
   width: 100%;
   border-collapse: collapse;
+  font-size: 0.875rem;
 }
 
 .ranking th,
 .ranking td {
-  padding: 0.3rem 0.5rem;
-  border-bottom: 1px solid #eee;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
   text-align: right;
   white-space: nowrap;
+}
+
+.ranking thead th {
+  position: sticky;
+  /* **見出しを貼り付ける。**順位表は中でスクロールするので、
+     貼り付けないと**何の列を見ているのかが途中で分からなくなる。** */
+  top: 0;
+  background: var(--surface);
+  /* **罫線を `box-shadow` で描く。**`border-collapse: collapse` では
+     **罫線が表のものになり、貼り付いたセルに付いてこない**——
+     スクロールすると、最初の行が見出しの文字の真下に貼り付く。 */
+  box-shadow: inset 0 -1px 0 var(--border);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .ranking th:nth-child(2),
@@ -94,62 +313,191 @@ body {
   text-align: left;
 }
 
-.ranking tr.is-selected {
-  background: #fdeaec;
+/* 順位の番号は控えめに。**読ませたいのは率の方。** */
+.ranking td:first-child {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+/* **率だけ赤で強める。**この画面で一番読ませたい数字であり、
+   地図の円の濃さと同じものを指している。
+   **ただし 0 は赤くしない**——危険が出ていない行が赤いと、色の意味が壊れる
+   （`stats/Ranking.tsx`）。 */
+.ranking .rate {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.ranking .rate--zero {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.ranking tbody tr:hover {
+  background: var(--bg);
+}
+
+/* **選択はデータ側の色。**選ばれた行は、地図の上でも縁が濃くなっている円と同じものを指す。 */
+.ranking tr.is-selected,
+.ranking tr.is-selected:hover {
+  background: var(--danger-weak);
 }
 
 .ranking button {
   padding: 0;
   border: 0;
   background: none;
-  color: #0b62c4;
+  color: var(--accent);
   cursor: pointer;
   font: inherit;
   text-decoration: underline;
+  text-underline-offset: 0.2em;
 }
+
+.ranking__empty {
+  margin: 0;
+  padding: var(--space-8);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ── 注記・状態 ───────────────────────────────────────────── */
 
 .note {
-  color: #7a5b00;
-  background: #fff8e1;
-  padding: 0.5rem 0.75rem;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--note-border);
+  border-radius: var(--radius);
+  background: var(--note-bg);
+  color: var(--note-text);
+  font-size: 0.875rem;
 }
 
+/*
+ * **文字に `--danger` を使わない。**薄い赤（`--danger-weak`）の上に載せると
+ * **コントラストが 4.3:1 まで落ちて、本文の下限（4.5:1）を切る。**
+ * **取得に失敗したときに読む唯一の文字**なので、ここだけは暗い赤を別に持つ。
+ * **`--danger` は動かせない**——地図の円の色（`stats/config.ts`）と同じ値である。
+ */
 .error {
-  color: #a1001a;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--danger-weak);
+  color: #8f0f22;
 }
 
-/* 場所の詳細（1つのセルの内訳）。時間帯ごとの数字を読む表なので、順位表と同じ見た目にそろえる。 */
-.back a,
-.ranking a {
-  color: #0b62c4;
+.loading {
+  margin: 0 0 var(--space-4);
+  color: var(--text-muted);
 }
 
+/* ── 場所の詳細 ───────────────────────────────────────────── */
+
+/* **`.stats header p` より詳細度を上げる。**`.back` は詳細画面の `<header>` の中にある
+   `<p>` なので、**そのままだと `margin: 0` に負けて、見出しに貼り付く。** */
+.stats header p.back {
+  margin: 0 0 var(--space-4);
+  font-size: 0.875rem;
+}
+
+.back a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.back a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/* 代表座標が見出しになる画面なので、**桁を揃えて識別子らしく見せる。** */
+.stats--cell h1 {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.75rem;
+}
+
+/* **合計も内容の幅に合わせる**（下の `.hours` と同じ理由で、器だけ広いと数字が散る）。
+   **`flex` にしない**——中身は地続きの文字列なので、**丸ごと1つの要素**として扱われ、
+   `gap` も `flex-wrap` も効かない。 */
 .totals {
-  font-weight: bold;
+  /* **`inline-block` にしない。**下の `.table-card` と横に並んでしまう。
+     **`fit-content` なら、ブロックのまま中身の幅に縮む。** */
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-weight: 700;
 }
 
+/*
+ * **幅を広げない。**このセルに出た種別だけを列にするので、**列は 3〜4 本しかない**
+ * （`stats/CellPage.tsx`）。画面いっぱいに引き伸ばすと、**時間帯と数字が遠く離れて
+ * 行を目で追えなくなる。**表の幅は中身に決めさせ、器（`.table-card`）の方を合わせる。
+ */
 .hours {
   border-collapse: collapse;
+  font-size: 0.875rem;
 }
 
 .hours th,
 .hours td {
-  padding: 0.3rem 0.75rem;
-  border-bottom: 1px solid #eee;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border);
   text-align: right;
   white-space: nowrap;
 }
 
 .hours thead th {
-  border-bottom: 2px solid #ddd;
+  border-bottom: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .hours tbody th {
+  color: var(--text-muted);
   text-align: left;
+}
+
+.hours tbody tr:hover {
+  background: var(--bg);
+}
+
+/* 表は面に載せる。**角丸の中に収める**ので、最後の行の罫線を消す。
+   **器は表の幅に合わせる**（`inline-block`）——上の `.hours` の注記のとおり。
+   種別が増えて画面に入らなくなったら、**器の中だけを横スクロールさせる。** */
+.table-card {
+  /* 上の `.totals` と同じ理由で `inline-block` にしない。 */
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: var(--space-4);
+  overflow-x: auto;
+}
+
+.table-card tbody tr:last-child th,
+.table-card tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 @media (max-width: 60rem) {
   .panels {
     grid-template-columns: 1fr;
+  }
+
+  .ranking-panel {
+    /* 縦に積んだときは、順位表の中でスクロールさせない
+       （地図の横に並んでいないので、高さを合わせる相手がいない）。 */
+    max-height: none;
+  }
+
+  .stats h1 {
+    font-size: 1.75rem;
   }
 }
