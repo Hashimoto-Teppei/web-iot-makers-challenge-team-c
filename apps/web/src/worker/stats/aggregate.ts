@@ -27,6 +27,13 @@ export type DetectionRow = {
   deviceId: string;
   /** 検知した時刻（UTC ミリ秒） */
   t: number;
+  /** 何を検知したか。**地図とランキングは見ないが、場所の詳細画面（#87）が種別ごとに数える** */
+  kind: string;
+  /**
+   * `t` が実測ではなく推定か。**地図とランキングは読む側で外している**（`query.ts`）が、
+   * **詳細画面は出す**ので、ここまで運ぶ。
+   */
+  tEst: boolean;
 };
 
 /**
@@ -41,23 +48,42 @@ export type LocatedEvent = {
   logId: string;
   lat: number;
   lon: number;
+  /**
+   * **出来事そのものの時刻**（UTC ミリ秒）。突き合わせた測位点の時刻ではない。
+   *
+   * **使うのは場所の詳細画面（#87）だけ**である——地図とランキングは
+   * **時刻の次元を持たない**（`docs/interfaces/web-service.md`「集計を配る経路」）。
+   */
+  t: number;
 };
 
-/** 走行を1つに指す鍵。`rides` の主キー `(device_id, log_id)` をそのまま文字列にしたもの。 */
-function rideKey(ref: { deviceId: string; logId: string }): string {
+/**
+ * 走行を1つに指す鍵。`rides` の主キー `(device_id, log_id)` をそのまま文字列にしたもの。
+ *
+ * **通過を数えるのはこの単位**（`docs/interfaces/web-service.md`「率で見る」）。
+ * **`detail.ts` も同じものを使う**——別に書くと、**一覧と詳細で通過の数え方が割れる。**
+ */
+export function rideKey(ref: { deviceId: string; logId: string }): string {
   return `${ref.deviceId}/${ref.logId}`;
 }
 
+/** 場所が決まった検知。**種別を落とさずに運ぶ**（詳細画面が種別ごとに数えるため）。 */
+export type LocatedDetection = LocatedEvent & Pick<DetectionRow, "kind" | "tEst">;
+
 export type MatchResult = {
-  located: LocatedEvent[];
+  located: LocatedDetection[];
   /**
-   * 場所に結びつかなかった検知の数。
+   * 場所に結びつかなかった検知。**数ではなく行そのものを返す。**
    *
    * **黙って捨てない**（`docs/interfaces/web-service.md`「検知を場所に結びつける」）。
    * 測位が出ていない（`nofix`）間の検知がこれに当たり、**捨てると
    * 「集計に出ていない」が「起きていない」に見える。**
+   *
+   * **行のまま返すのは、詳細画面が種別ごとの内訳を出すから**である
+   * （`docs/interfaces/web-ui.md`）。**数だけにすると、何が落ちたのかを
+   * もう一度読み直さないと出せない。**数が欲しい側は `.length` を見る。
    */
-  unlocated: number;
+  unlocated: DetectionRow[];
 };
 
 /**
@@ -87,13 +113,13 @@ export function matchDetections(
   }
   for (const list of byDevice.values()) list.sort((a, b) => a.t - b.t);
 
-  const located: LocatedEvent[] = [];
-  let unlocated = 0;
+  const located: LocatedDetection[] = [];
+  const unlocated: DetectionRow[] = [];
   for (const detection of detections) {
     const list = byDevice.get(detection.deviceId);
     const nearest = list ? nearestByTime(list, detection.t) : undefined;
     if (!nearest || Math.abs(nearest.t - detection.t) > maxGapMs) {
-      unlocated += 1;
+      unlocated.push(detection);
       continue;
     }
     located.push({
@@ -101,6 +127,11 @@ export function matchDetections(
       logId: nearest.logId,
       lat: nearest.lat,
       lon: nearest.lon,
+      // **時刻は検知のもの**を残す（突き合わせた点のものではない）。ずれは最大でも
+      // `maxGapMs` だが、**時間帯の境目でどちらに入るかが変わる。**
+      t: detection.t,
+      kind: detection.kind,
+      tEst: detection.tEst,
     });
   }
   return { located, unlocated };

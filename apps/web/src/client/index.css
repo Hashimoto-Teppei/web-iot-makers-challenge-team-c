@@ -118,6 +118,36 @@ body {
   color: #a1001a;
 }
 
+/* 場所の詳細（1つのセルの内訳）。時間帯ごとの数字を読む表なので、順位表と同じ見た目にそろえる。 */
+.back a,
+.ranking a {
+  color: #0b62c4;
+}
+
+.totals {
+  font-weight: bold;
+}
+
+.hours {
+  border-collapse: collapse;
+}
+
+.hours th,
+.hours td {
+  padding: 0.3rem 0.75rem;
+  border-bottom: 1px solid #eee;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.hours thead th {
+  border-bottom: 2px solid #ddd;
+}
+
+.hours tbody th {
+  text-align: left;
+}
+
 @media (max-width: 60rem) {
   .panels {
     grid-template-columns: 1fr;

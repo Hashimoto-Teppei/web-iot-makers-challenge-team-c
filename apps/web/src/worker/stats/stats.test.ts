@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { StatsResponse } from "../../shared/api";
+import type { StatsCellDetailResponse, StatsResponse } from "../../shared/api";
 import app from "../index";
 
 /**
@@ -44,13 +44,13 @@ async function seedRide(
 async function seedDetection(
   logId: string,
   seq: number,
-  { t = T0, tEst = false, sample = false, source = "phone" } = {},
+  { t = T0, tEst = false, sample = false, source = "phone", kind = "approach" } = {},
 ): Promise<void> {
   await env.DB.prepare(
     "INSERT INTO detections (device_id, source, log_id, seq, kind, lv, t, t_est, sample) " +
-      "VALUES (?, ?, ?, ?, 'approach', 2, ?, ?, ?)",
+      "VALUES (?, ?, ?, ?, ?, 2, ?, ?, ?)",
   )
-    .bind(DEVICE_ID, source, logId, seq, t, tEst ? 1 : 0, sample ? 1 : 0)
+    .bind(DEVICE_ID, source, logId, seq, kind, t, tEst ? 1 : 0, sample ? 1 : 0)
     .run();
 }
 
@@ -175,6 +175,120 @@ describe("GET /api/stats/cells", () => {
 
   it("知らない layer は 400（500 にしない）", async () => {
     const res = await app.request("/api/stats/cells?layer=unknown", {}, env);
+
+    expect(res.status).toBe(400);
+  });
+});
+
+async function getDetail(
+  query = `?lat=${CELL_LAT}&lon=${CELL_LON}`,
+): Promise<{ status: number; text: string; body: StatsCellDetailResponse }> {
+  const res = await app.request(`/api/stats/cell${query}`, {}, env);
+  const text = await res.text();
+  return { status: res.status, text, body: JSON.parse(text) as StatsCellDetailResponse };
+}
+
+describe("GET /api/stats/cell", () => {
+  it("ランキングの代表座標をそのまま渡すと、そのセルの内訳が返る", async () => {
+    // **代表座標はセルの南西の角**なので、渡した値をもう一度丸めて同じセルに戻る必要がある。
+    // 戻らないと、順位表の行から飛んだ先が空になる。
+    await seedRide("aaa00001");
+    await seedDetection("aaa00001", 1);
+    await seedDetection("aaa00001", 2, { kind: "rear_object", source: "device" });
+
+    const { status, body } = await getDetail();
+
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ lat: CELL_LAT, lon: CELL_LON, sample: "include" });
+    expect(body.hours).toEqual([
+      {
+        hour: new Date(T0 + 9 * 60 * 60 * 1000).getUTCHours(),
+        rides: 1,
+        detections: [
+          { kind: "approach", count: 1 },
+          { kind: "rear_object", count: 1 },
+        ],
+        violations: 0,
+      },
+    ]);
+  });
+
+  it("セルの中のどの点を渡しても同じ内訳が返る（丸めるのはサーバー側）", async () => {
+    await seedRide("aaa00001");
+
+    const { body } = await getDetail(`?lat=${LAT}&lon=${LON}`);
+
+    expect(body).toMatchObject({ lat: CELL_LAT, lon: CELL_LON });
+    expect(body.totals.rides).toBe(1);
+  });
+
+  it("秒単位の時刻も device_id も応答に出さない", async () => {
+    // **この画面だけが時刻という次元を持つ。**110m のセルと秒単位の時刻を並べると、
+    // 1人の走行経路が復元できる（`docs/adr/0007-keep-raw-ride-logs.md` の前提が崩れる）。
+    await seedRide("aaa00001");
+    await seedDetection("aaa00001", 1);
+
+    const { text } = await getDetail();
+
+    expect(text).not.toContain(DEVICE_ID);
+    expect(text).not.toContain(String(T0));
+    expect(text).not.toContain("aaa00001");
+  });
+
+  it("`t_est` の検知も出す（地図とランキングからは消えているもの）", async () => {
+    await seedRide("aaa00001");
+    await seedDetection("aaa00001", 1, { tEst: true, source: "device", kind: "rear_object" });
+
+    const { body } = await getDetail();
+
+    expect(body.totals.detections).toEqual([{ kind: "rear_object", count: 1 }]);
+    expect(body.tEstimated).toBe(1);
+    // 同じデータで一覧を見ると、この検知は入っていない。
+    expect((await get("?minRides=1")).body.cells[0]).toMatchObject({ hits: 0 });
+  });
+
+  it("不停止を検知と分けて出す", async () => {
+    await seedRide("aaa00001");
+    await seedViolation("aaa00001", "sign-1");
+
+    const { body } = await getDetail();
+
+    expect(body.hours[0]).toMatchObject({ detections: [], violations: 1 });
+    expect(body.totals.violations).toBe(1);
+  });
+
+  it("場所不明を種別ごとに出す（一覧は数だけを返している側）", async () => {
+    await seedRide("aaa00001");
+    // 測位点から離れた時刻の検知＝測位が出ていない間に発火したもの。
+    await seedDetection("aaa00001", 1, { t: T0 + 60_000, kind: "rear_object", source: "device" });
+
+    const { body } = await getDetail();
+
+    expect(body.unlocated).toEqual({
+      detections: [{ kind: "rear_object", count: 1 }],
+      violations: 0,
+    });
+  });
+
+  it("sample=exclude でサンプルデータを除く", async () => {
+    await seedRide("sss00001", { sample: true });
+    await seedDetection("sss00001", 1, { sample: true });
+
+    expect((await getDetail(`?lat=${CELL_LAT}&lon=${CELL_LON}`)).body.totals.rides).toBe(1);
+    expect(
+      (await getDetail(`?lat=${CELL_LAT}&lon=${CELL_LON}&sample=exclude`)).body.totals,
+    ).toEqual({ rides: 0, detections: [], violations: 0 });
+  });
+
+  it("走行が1つも無いセルでも空で返す（404 にしない）", async () => {
+    const { status, body } = await getDetail();
+
+    expect(status).toBe(200);
+    expect(body.hours).toEqual([]);
+  });
+
+  it("緯度経度が範囲外なら 400", async () => {
+    const res = await app.request("/api/stats/cell?lat=91&lon=133.918", {}, env);
 
     expect(res.status).toBe(400);
   });
