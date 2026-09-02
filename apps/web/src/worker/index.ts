@@ -1,7 +1,7 @@
 import { zValidator } from "@hono/zod-validator";
 import { drizzle } from "drizzle-orm/d1";
 import { Hono } from "hono";
-import type { HealthResponse, Ping, StopSignsResponse } from "../shared/api";
+import type { HealthResponse, Ping, StatsResponse, StopSignsResponse } from "../shared/api";
 import { pings } from "./db/schema";
 import { insertLogs } from "./logs/insert";
 import { type LogsResponse, logsErrorOf, logsRequest } from "./logs/request";
@@ -11,7 +11,9 @@ import { judgeRide } from "./recompute/judge";
 import {
   boundingBoxOf,
   listRides,
-  readRidePoints,
+  // 集計にも同じ名前の関数がある（`stats/query.ts`）。**読む列も絞り方も違う**ので、
+  // 呼び分けを間違えないよう、こちらに別名を付ける。
+  readRidePoints as readRidePointsForRecompute,
   readSignsInBox,
   rideKey,
   signsInBox,
@@ -23,6 +25,10 @@ import {
   recomputeRequest,
 } from "./recompute/request";
 import { type RideResult, replaceViolations } from "./recompute/write";
+import { aggregateCells, matchDetections } from "./stats/aggregate";
+import { MAX_MATCH_GAP_MS, statsDefaults } from "./stats/config";
+import { readDetections, readRidePoints, readViolations } from "./stats/query";
+import { type StatsError, statsQuery } from "./stats/request";
 import { etagOf, matchesIfNoneMatch } from "./stop-signs/etag";
 import { readStopSigns, readStopSignVersion } from "./stop-signs/query";
 import { stopSignsQuery } from "./stop-signs/request";
@@ -260,7 +266,7 @@ const routes = app
         ...new Map(listed.slice(0, maxRides).map((ride) => [rideKey(ride), ride])).values(),
       ];
 
-      const pointsByRide = await readRidePoints(db, targets);
+      const pointsByRide = await readRidePointsForRecompute(db, targets);
       const allPoints = [...pointsByRide.values()].flat();
 
       // **標識は1回だけ読む**（走行ごとに引くと、県ぶんの走査をそのぶん繰り返す）。
@@ -288,6 +294,72 @@ const routes = app
           more,
         },
         thresholds,
+      };
+      return c.json(body);
+    },
+  )
+  /**
+   * セルごとの集計。**マップとランキングが見るのはこれ1本**
+   * （`docs/interfaces/web-ui.md`「マップとランキングを1ページに並べる理由」——
+   * **同じデータの2つの見せ方**なので、2本に分けると2つがずれる）。
+   *
+   * **返すのはセルに丸めたものだけ。生の測位点を返さない**
+   * （`docs/adr/0007-keep-raw-ride-logs.md`。**これを守ることが生ログを保存する条件そのもの**）。
+   * **`device_id` も返さない**——出すと、**同じ端末の行を拾い集めれば経路が並ぶ。**
+   *
+   * **時刻の次元を持たない。**時間帯の内訳は場所の詳細画面（#87）が別に持つ。
+   *
+   * **認証を置かない**（`docs/interfaces/web-service.md`「割り切っていること」）。
+   * 読むだけで、丸めた値しか出さない。
+   */
+  .get(
+    "/api/stats/cells",
+    zValidator("query", statsQuery, (result, c) => {
+      // 範囲外の値や綴り違いは送り手の誤り。例外のまま落とすと 500 になる。
+      if (!result.success) {
+        const body: StatsError = { error: "クエリの形式が正しくありません" };
+        return c.json(body, 400);
+      }
+    }),
+    async (c) => {
+      const { layer, sample, minRides } = c.req.valid("query");
+      const db = drizzle(c.env.DB);
+
+      // **測位点はレイヤーによらず読む。**通過（率の分母）はこれだけで決まる
+      // （`docs/interfaces/web-service.md`「率で見る」）。
+      const points = await readRidePoints(db, sample);
+      if (!points) {
+        // **打ち切って返さない。**途中まで読んだ点で数えると**分母だけが小さい率**
+        // ——実際より危険に見える順位——が出る（`stats/config.ts`）。
+        const body: StatsError = {
+          error:
+            "走行ログが多すぎて、読むたびの集計では追いつきません。" +
+            "集計結果のテーブルを足してください（docs/interfaces/web-service.md）",
+        };
+        return c.json(body, 503);
+      }
+
+      // **検知は場所を持たないので、測位点に突き合わせて決める。**
+      // **不停止は標識の位置から決まる**ので、突き合わせは要らない（経路が違う）。
+      // **どちらも「場所が分からなかった数」を返す**——不停止の側は、標識を取り込み直して
+      // `sign_id` が変わったときにここへ落ちる。
+      const found =
+        layer === "detection"
+          ? matchDetections(points, await readDetections(db, sample), MAX_MATCH_GAP_MS)
+          : await readViolations(db, sample);
+
+      const { cells, truncated } = aggregateCells(points, found.located, {
+        minRides,
+        maxCells: statsDefaults.maxCells,
+      });
+
+      const body: StatsResponse = {
+        layer,
+        sample,
+        minRides,
+        cells,
+        unlocated: found.unlocated,
+        truncated,
       };
       return c.json(body);
     },

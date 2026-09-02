@@ -30,7 +30,11 @@ export default defineConfig({
         test: {
           name: "worker",
           setupFiles: ["./src/worker/test-setup.ts"],
-          include: ["src/worker/**/*.test.ts"],
+          // **`src/shared/` のテストもここで回す。**中身は純粋な TypeScript なので
+          // workerd の上でも素の Node でも同じように動くが、**project を増やすと
+          // 「どちらに書くか」を毎回考えることになる。**画面のテストを書くときだけ、
+          // jsdom を使う3つ目の project を足す。
+          include: ["src/worker/**/*.test.ts", "src/shared/**/*.test.ts"],
         },
       },
       {

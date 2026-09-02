@@ -7,3 +7,119 @@ body {
   margin: 0;
   padding: 2rem;
 }
+
+/* マップ + ランキング（docs/interfaces/web-ui.md「画面」）。1ページに2つ並べる。 */
+
+.stats header p {
+  max-width: 60rem;
+  color: #333;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.5rem;
+  margin: 1rem 0;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.tabs button {
+  padding: 0.4rem 1.2rem;
+  border: 1px solid #ccc;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+
+.tabs button[aria-selected="true"] {
+  background: #d7263d;
+  border-color: #d7263d;
+  color: #fff;
+}
+
+.controls input[type="number"] {
+  width: 4rem;
+  margin: 0 0.4rem;
+  font: inherit;
+}
+
+.panels {
+  display: grid;
+  /* 地図と順位表を横に並べる。狭い画面では縦に積む（下の media query）。 */
+  grid-template-columns: 3fr 2fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.map {
+  height: 32rem;
+  border: 1px solid #ddd;
+}
+
+.map--empty {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 2rem;
+  background: #fafafa;
+  color: #555;
+}
+
+.ranking-panel {
+  /* 順位表が長くなっても、地図の高さの中で収める（並べて見るための画面なので）。 */
+  max-height: 32rem;
+  overflow-y: auto;
+}
+
+.ranking {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ranking th,
+.ranking td {
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid #eee;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ranking th:nth-child(2),
+.ranking td:nth-child(2) {
+  text-align: left;
+}
+
+.ranking tr.is-selected {
+  background: #fdeaec;
+}
+
+.ranking button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #0b62c4;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}
+
+.note {
+  color: #7a5b00;
+  background: #fff8e1;
+  padding: 0.5rem 0.75rem;
+}
+
+.error {
+  color: #a1001a;
+}
+
+@media (max-width: 60rem) {
+  .panels {
+    grid-template-columns: 1fr;
+  }
+}

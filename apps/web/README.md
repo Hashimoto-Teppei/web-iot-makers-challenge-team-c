@@ -34,6 +34,7 @@ CORS の設定や API の URL を環境変数で配線する必要はない。
 | `pnpm db:migrate:local` | ローカルの D1 にマイグレーションを適用 |
 | `pnpm db:migrate:remote` | Cloudflare 上の D1 に適用（**デプロイ担当のみ**） |
 | `pnpm stop-signs:extract` | JARTIC の CSV から一時停止の標識を抜き出し、D1 に流す SQL を作る（下） |
+| `pnpm sample:generate` | デモ用のサンプルデータ（合成した走行）の SQL を作る（下） |
 | `pnpm deploy:cf` | Cloudflare へデプロイ（**デプロイ担当のみ**） |
 
 `wrangler.jsonc` にバインディングを足したら `pnpm cf-typegen` を実行して `Env` を更新する。
@@ -213,6 +214,60 @@ echo "$TOKEN"   # .dev.vars に控える。Cloudflare 側から読み出す手�
 
 **気づけたのは、空の秘密値を「認証なし」ではなく「未設定」として扱っているから**である
 （`src/worker/recompute/auth.ts`）。**空を通す作りだと、誰でも叩ける再計算の口が黙って開く。**
+
+## どこが危ないか（`GET /api/stats/cells` とマップ + ランキング）
+
+**走行ログをセルに丸めて、率の高い順に並べる。**画面（`src/client/stats/`）と API
+（`src/worker/stats/`）はこの1本でつながっている——**地図と順位表は同じ応答の2つの見せ方**で、
+2本に分けると2つがずれる。
+
+**仕様の正本は `docs/interfaces/web-service.md`「集計」（数え方）と
+`docs/interfaces/web-ui.md`（見せ方）。**
+
+| クエリ | 既定 | 意味 |
+| --- | --- | --- |
+| `layer` | `detection` | `detection`（検知）か `violation`（不停止）。**同時に重ねない** |
+| `sample` | `include` | サンプルデータを混ぜるか（`exclude` で除く） |
+| `minRides` | `5` | **順位に出す通過の下限。**満たないセルは返さない |
+
+```sh
+curl 'http://localhost:5173/api/stats/cells?layer=detection&minRides=5'
+```
+
+- **返すのはセルに丸めたものだけ。**生の測位点も `device_id` も返さない
+  （`docs/adr/0007-keep-raw-ride-logs.md`。**これを守ることが生ログを保存する条件そのもの**）
+- **率は走行の数で数える**（件数ではない）。**分子も分母も走行の数**
+- **集計そのもの（`src/worker/stats/aggregate.ts`）は D1 にも Hono にも触らない純粋な関数**にしてある
+  ので、モックデータだけでテストを回せる
+
+### 地図の鍵
+
+**`apps/web/.env.example` を `apps/web/.env` に写して `VITE_GOOGLE_MAPS_API_KEY` を入れる。**
+**鍵が無くても画面は出る**（地図の代わりに案内が出て、ランキングはそのまま動く）。
+
+**`VITE_` はバンドルに埋め込まれ、利用者が読める。隠そうとせず、割り当て上限・API 制限・
+リファラ制限で守る**（手順は `docs/interfaces/web-ui.md`「地図の鍵」）。**実値をコミットしない。**
+
+### サンプルデータを入れる
+
+**デモとスライドのために、合成した走行を入れる。**`rides` と `detections` の `sample` の列で
+見分ける（別のテーブルにしない。`docs/interfaces/web-service.md`）。
+**`POST /api/logs` はこの列を受け取らない——立てられるのはこのスクリプトだけ。**
+
+```sh
+# 1. 標識を先に取り込んでおく（上の「一時停止の標識」）。サンプルの走行は実在する標識の
+#    進入方向から作るので、標識が無いと作れない（架空の標識を stop_signs に足さない）
+# 2. 開発サーバーを上げる（標識は GET /api/stop-signs から取る。wrangler を起動しないので
+#    Windows でもそのまま動く）
+pnpm dev
+# 3. 別の端末で SQL を作る（デプロイ先から取るなら --api https://<デプロイ先>）
+pnpm sample:generate
+# 4. 手元の D1 に入れる（何度でも入れ直せる。sample = 1 の行を先に消してから入る）
+pnpm exec wrangler d1 execute team-c-db --local --file=scripts/seed/out/sample.sql
+# 5. 不停止のタブを見るには、投入のあとで再計算を叩く（あの表はそこでしか作られない。上の節）
+```
+
+**生成した SQL はコミットしない**（`.gitignore`）。**作り直せるものなので、生成器の方が正本。**
 
 ## 注意
 
