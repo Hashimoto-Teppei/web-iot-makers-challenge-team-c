@@ -247,9 +247,14 @@ a {
   align-items: start;
 }
 
+/*
+ * **地図の枠線だけ `--border-strong` を使う。****地図は自分の地の色を持つ唯一の面**で、
+ * `--border` では縁が立たず、ページの背景に溶ける。
+ * **理由と数字は `stats/config.ts` の `MAP_STYLES`**（地の側もそこで一段暗くしてある）。
+ */
 .map {
   height: 32rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   overflow: hidden;
   box-shadow: var(--shadow);
