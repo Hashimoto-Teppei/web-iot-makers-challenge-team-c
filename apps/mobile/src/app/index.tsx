@@ -1,5 +1,5 @@
 import { Link } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PreRideChecklist } from "@/components/pre-ride-checklist";
@@ -7,7 +7,7 @@ import { apiBaseUrl } from "@/lib/api";
 import { blocksMockDevice } from "@/lib/mock-guard";
 import { getRideLogStore } from "@/log/expo";
 import { useRideLogSync } from "@/log/use-ride-log-sync";
-import { MOCK_DEVICE_ID } from "@/ride/device";
+import { stopStaleRideLocationUpdates } from "@/ride/location";
 import { canStartRide, preRideChecks } from "@/ride/pre-ride";
 import { useDeviceLink } from "@/ride/use-device-link";
 import { useLocationReady } from "@/ride/use-location-ready";
@@ -32,8 +32,9 @@ export default function HomeScreen() {
   // **走行ログの置き場所は `signs.db` と別のファイル**（`docs/adr/0009-on-device-storage.md`）。
   const { store: logs, error: logsError } = getRideLogStore();
   // **デバイスは走行ループの外で持つ。**接続は走行より寿命が長く、走り出す前に
-  // つながっていることを確かめられなければ点検が成り立たない（#38 で実物になる）。
-  const { device } = useDeviceLink();
+  // つながっていることを確かめられなければ点検が成り立たない（`@/ble/link`）。
+  const deviceLink = useDeviceLink();
+  const device = deviceLink.device;
   const ride = useRideLoop(signs, logs, device);
   const sync = useRideLogSync(logs);
   const status = ride.status;
@@ -50,17 +51,26 @@ export default function HomeScreen() {
   // **走行開始を押したことを覚えておく。**押した直後に1回だけ出す案内のため。
   const [mounted, setMounted] = useState(false);
 
+  // **前回の走行が残した常駐を止める。**走行中にアプリを終了させると登録が OS 側に
+  // 残り、**「走行中」の通知が出たまま電池を食い続ける**（`@/ride/location`）。
+  useEffect(() => {
+    void stopStaleRideLocationUpdates();
+  }, []);
+
   // **中継が塞がれていることを、疎通の結果に混ぜない。**モックのデバイスのまま
   // 共有のデプロイ先に向いていると、`/api/health` には届くのに中継は1通も飛ばない
   // （`@/lib/mock-guard`）——**そのまま走り出すと、3秒後に車車間の3検知が全滅する。**
   const relayBlockedReason =
     device !== null && blocksMockDevice(device.deviceId, apiBaseUrl)
-      ? "モックのデバイスのままなので、中継を止めています（実機の接続は #38。手元の apps/web に向ければ試せます）。"
+      ? "モックのデバイスのままなので、中継を止めています（手元の apps/web に向ければ試せます）。"
       : null;
 
   const checks = preRideChecks({
     deviceId: device?.deviceId ?? null,
-    deviceIsMock: device?.deviceId === MOCK_DEVICE_ID,
+    deviceIsMock: deviceLink.isMock,
+    deviceReason: deviceLink.reason,
+    deviceChecking: deviceLink.searching,
+    deviceLink: deviceLink.link,
     locationReason: location.reason,
     locationChecking: location.checking,
     signsMeta,

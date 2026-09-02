@@ -72,12 +72,16 @@ describe("RideLoop の心拍", () => {
     const { loop, device, at } = setup();
     await loop.onFix(fix(START, 5));
     device.clear();
+    // **時計を進めてから書く。**`onFix()` も心拍を出すので、同じ時刻のまま呼ぶと
+    // 続けて書かない規則（`minBeatIntervalMs`）で間引かれる。
+    at(START + 1_000);
     loop.beat();
     expect(device.written[0]).toMatchObject({ st: "ok", mv: true });
 
-    at(START + 500);
-    await loop.onFix(fix(START + 500, 0.2));
+    at(START + 1_500);
+    await loop.onFix(fix(START + 1_500, 0.2));
     device.clear();
+    at(START + 2_500);
     loop.beat();
     expect(device.written[0]).toMatchObject({ st: "ok", mv: false });
   });
@@ -99,9 +103,10 @@ describe("RideLoop の心拍", () => {
     const { loop, device, at } = setup({ exchange: failing });
 
     for (let i = 0; i < 3; i += 1) {
-      at(START + i * 1_000);
-      await loop.onFix(fix(START + i * 1_000));
+      at(START + i * 2_000);
+      await loop.onFix(fix(START + i * 2_000));
       device.clear();
+      at(START + i * 2_000 + 1_000);
       loop.beat();
       // サーバーに届かなくても自車の測位は生きている。止めると
       // 「スマホは動いているのに落ちたことになる」。
@@ -113,19 +118,49 @@ describe("RideLoop の心拍", () => {
   it("`startHeartbeat()` は起動直後と間隔ごとに書き、止められる", () => {
     vi.useFakeTimers();
     try {
-      const { loop, device } = setup();
+      const { loop, device, at } = setup();
       const stop = loop.startHeartbeat(1_000);
       expect(device.written).toHaveLength(1);
 
-      vi.advanceTimersByTime(2_000);
+      // **時計もタイマーと一緒に進める。**心拍は時刻で間引くので、
+      // 時計を止めたままタイマーだけ進めると1通も書かれない。
+      for (let i = 1; i <= 2; i += 1) {
+        at(START + i * 1_000);
+        vi.advanceTimersByTime(1_000);
+      }
       expect(device.written).toHaveLength(3);
 
       stop();
+      at(START + 10_000);
       vi.advanceTimersByTime(5_000);
       expect(device.written).toHaveLength(3);
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // **画面を消すと React Native はタイマーのフレームコールバックを外す**ので、
+  // `setInterval` が事実上止まる（`JavaTimerManager.onHostPause()`。実機で確認済み）。
+  // **測位はネイティブ側から届く**ので、そちらからも心拍を出す。
+  it("測位が届くたびに心拍を出す（画面を消すとタイマーが止まるため）", async () => {
+    const { loop, device, at } = setup();
+    at(START + 1_000);
+    await loop.onFix(fix(START + 1_000));
+    expect(device.written.filter((m) => m.k === "beat")).toHaveLength(1);
+  });
+
+  // **2つの供給源が重なっても毎秒2通にしない。**
+  it("続けて呼んでも、間隔が空くまでは書かない", () => {
+    const { loop, device, at } = setup();
+    loop.beat();
+    loop.beat();
+    at(START + 800);
+    loop.beat();
+    expect(device.written).toHaveLength(1);
+
+    at(START + 900);
+    loop.beat();
+    expect(device.written).toHaveLength(2);
   });
 });
 

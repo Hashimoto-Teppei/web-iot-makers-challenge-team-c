@@ -15,6 +15,9 @@ const meta: SignsMeta = { pref: 33, version: "v1", count: 28_651, builtAt: "2026
 const ready: PreRideInput = {
   deviceId: "a1000001",
   deviceIsMock: false,
+  deviceReason: null,
+  deviceChecking: false,
+  deviceLink: "up",
   locationReason: null,
   locationChecking: false,
   signsMeta: meta,
@@ -62,6 +65,47 @@ describe("preRideChecks", () => {
     const device = check({ ...ready, deviceId: null }, "device");
     expect(device.state).toBe("ng");
     expect(device.detail).not.toBe("");
+  });
+
+  // **探している最中を赤にしない。**スキャンには数秒かかるので、赤で始めると
+  // **最初に見る赤が偽物**になり、本物の赤も読み飛ばされるようになる。
+  it("デバイスを探している最中は、赤でも緑でもない", () => {
+    const device = check({ ...ready, deviceId: null, deviceChecking: true }, "device");
+    expect(device.state).toBe("checking");
+  });
+
+  // **直し方が違うものを同じ文にしない**（`CLAUDE.md`「開発が初めてのメンバーが多い」）。
+  it("つながらない理由が分かっていれば、その理由を出す", () => {
+    const device = check(
+      { ...ready, deviceId: null, deviceReason: "MTU が 64 しかありません" },
+      "device",
+    );
+    expect(device).toMatchObject({ state: "ng", detail: "MTU が 64 しかありません" });
+  });
+
+  // **こちらは接続できているのに、デバイスには届いていない状態。**
+  // 緑にすると、**警告が1つも出ないまま走り出せる**（`docs/interfaces/v2v.md`）。
+  it("走行中にデバイスが心拍を受け取れていなければ赤になる", () => {
+    expect(check({ ...ready, status: riding, deviceLink: "down" }, "device").state).toBe("ng");
+  });
+
+  // **走り出す前の `down` は正常。**心拍は走行を始めてから出る（`./loop.ts`）ので、
+  // ここで赤くすると**つながっているのに永久に走り始められない。**
+  it("走り出す前の down では赤にしない", () => {
+    expect(check({ ...ready, deviceLink: "down" }, "device").state).toBe("ok");
+  });
+
+  // **測位が無いのは「届いていない」ではない。**`nofix` は心拍が届いている証拠であり、
+  // 測位そのものは「測位」の行が見ている。ここで二重に赤くしない。
+  it("デバイスが nofix と言っていても、デバイスの行は緑のまま", () => {
+    expect(check({ ...ready, deviceLink: "nofix" }, "device").state).toBe("ok");
+  });
+
+  // **BLE を通っていないことを画面が「接続しています」と言い切らない。**
+  it("モック接続であることを隠さない", () => {
+    const device = check({ ...ready, deviceIsMock: true }, "device");
+    expect(device.state).toBe("ok");
+    expect(device.detail).toContain("モック");
   });
 
   // **「持っていない」と「0 件」で直し方が違う**ので、同じ文にしない。

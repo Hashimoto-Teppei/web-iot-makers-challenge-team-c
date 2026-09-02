@@ -116,12 +116,13 @@ API の URL やレスポンスの形が変わると、モバイル側は**型エ
 書き換えたあとに Metro を `--clear` 付きで再起動することと、同梱物も `--base` で作り直すことも
 そちらに書いてあります。
 
-**走行ループは、既定のままだと中継を断ります**（`src/ride/api.ts` の `blocksMockExchange`）。
-#38 が入るまで走行ループは `createMockDeviceLink()` を使い、**全員が同じ `a1000001` を名乗る**ため、
-そのまま共有の Durable Object へ投げると**実際の位置が半径 300m の他人に見え**、
-**開発者どうしが同じ枠を上書きし合う**（位置情報は個人情報である。`CLAUDE.md`）。
-**手元に向けているときだけ実際に中継します。** 検知そのものは
-シミュレータで確かめられます（`src/sim/`。ネットワークを使いません）。
+**BLE のネイティブモジュールが無い環境では、走行ループは中継を断ります**
+（`src/lib/mock-guard.ts` の `blocksMockDevice`）。そこでは `createMockDeviceLink()` に落ちて
+**全員が同じ `a1000001` を名乗る**ため、そのまま共有の Durable Object へ投げると
+**実際の位置が半径 300m の他人に見え**、**開発者どうしが同じ枠を上書きし合う**
+（位置情報は個人情報である。`CLAUDE.md`）。**手元に向けているときだけ実際に中継します。**
+**実機のデバイスにつながれば、デバイスから読んだ `device_id` を名乗るので歯止めは外れます。**
+検知そのものはシミュレータで確かめられます（`src/sim/`。ネットワークを使いません）。
 
 **`EXPO_PUBLIC_` で始まる環境変数はアプリのバンドルに埋め込まれ、利用者から読めます。**
 秘密の値をここに置かないでください（**URL は秘密ではない**ので、上の既定値はコミットしてあります）。
@@ -176,11 +177,33 @@ src/ride/
   detectors.ts     検知の登録口。**検知を足す人が触るのはここだけ**
   loop.ts          走行ループ（測位 → 中継 → 検知 → 出力）。BLE も測位も HTTP も知らない
   warn-gate.ts     同じ警告を毎周期書き直さないための抑制
-  device.ts        BLE の出口（口だけ）とモック実装。実装は #38 で差し替える
-  location.ts      測位の購読（expo-location を知っている唯一の場所）
+  device.ts        BLE の出口（口だけ）とモック実装。実装は `src/ble/`
+  location.ts      測位の購読と常駐（expo-location を知っている唯一の場所）
   api.ts           POST /api/v2v/exchange の実装
   use-ride-loop.ts 画面のライフサイクルに載せるフック
+  use-device-link.ts 接続中のデバイスを1つ持つフック（`src/ble/` を画面に載せる）
 ```
+
+## デバイスとの接続（`src/ble/`）
+
+**GATT の約束の正本は
+[`docs/interfaces/ble-gatt.md`](../../docs/interfaces/ble-gatt.md)** で、ここには書き写しません。
+
+```
+src/ble/
+  protocol.ts    UUID・MTU の下限・`device-info` / `status` の解釈（React Native を知らない）
+  base64.ts      UTF-8 ⇄ Base64（react-native-ble-plx が Base64 でやりとりするため）
+  permissions.ts Android の実行時権限
+  link.ts        スキャン・接続・MTU・サービス探索・再接続（react-native-ble-plx を知る唯一の場所）
+```
+
+**`protocol.ts` と `base64.ts` は開発機の Vitest で回せます**（実機も Development Build も要りません）。
+`link.ts` にはテストを置きません——実機の BLE が要るものは実機で確かめます
+（`docs/adr/0002-development-lifecycle.md`）。
+
+**BLE のネイティブモジュールが無い環境（Web など）ではモックに落ちます**
+（`src/ride/use-device-link.ts`）。**モックであることは走行前の点検に必ず出る**ので、
+黙って実機のふりをすることはありません。
 
 **動いたことは実機なしで確かめられます。**シミュレータのシナリオを走行ループごと回して、
 デバイスの出口に `warn` が届くかを見ます（`src/sim/ride.ts`）。

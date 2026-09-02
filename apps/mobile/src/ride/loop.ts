@@ -47,6 +47,13 @@ export type RideConfig = {
    * （`docs/interfaces/v2v.md`「デバイスへ渡すもの」）。
    */
   movingSpdMps: number;
+  /**
+   * 心拍を続けて書かない間隔（ミリ秒）。
+   *
+   * **タイマーと測位の両方から心拍を出すため**に要る（{@link RideLoop.beat}）。
+   * 1秒より少し短くして、**タイマーの揺れで1通落ちない**ようにしてある。
+   */
+  minBeatIntervalMs: number;
 };
 
 /** 既定値は仮の値（`docs/unverified.md`）。 */
@@ -55,6 +62,7 @@ export const rideDefaults: RideConfig = {
   warnGate: warnGateDefaults,
   // 歩くより速ければ走行中とみなす。
   movingSpdMps: 1.5,
+  minBeatIntervalMs: 900,
 };
 
 /**
@@ -162,6 +170,8 @@ export class RideLoop {
    * 生きているので、標識を見る検知は動く）。**溜めて後で送らない**——次の測位が1秒後に来る。
    */
   private exchanging = false;
+  /** 直近に心拍を書いた時刻。**続けて書かないため**（{@link beat}） */
+  private lastBeatAt: number | null = null;
 
   constructor(private readonly deps: RideDeps) {
     this.config = { ...rideDefaults, ...deps.config };
@@ -173,14 +183,28 @@ export class RideLoop {
   }
 
   /**
-   * 心拍を1通書く。**1秒のタイマーから呼ぶ**（{@link startHeartbeat}）。
+   * 心拍を1通書く。**1秒のタイマー**（{@link startHeartbeat}）と**測位の更新**
+   * （{@link onFix}）の**両方から呼ぶ。**
    *
    * **測位が無い間も呼ぶこと。**測位が更新されないと更新イベントは起きないので、
    * 測位に合わせた実装だけだと `beat` が1通も飛ばず、デバイスは `down`
    * （＝アプリが落ちた）と表示する。
+   *
+   * **逆に、測位からも呼ぶ理由は Android にある。**画面を消すと React Native は
+   * タイマーのフレームコールバックを外すので、**`setInterval` が事実上止まる**
+   * （`JavaTimerManager.onHostPause()`。実機で確認済み——画面を消した瞬間に
+   * 心拍が毎秒から十数秒に1通へ落ちた）。**測位はネイティブ側から届く**ので、
+   * そちらからも叩けば走行中の心拍が保たれる。
+   * **どちらか片方では足りない**——止まっているときはタイマーが、
+   * 画面を消しているときは測位が、それぞれ唯一の供給源になる。
+   *
+   * **続けて呼んでも {@link RideConfig.minBeatIntervalMs} 未満なら書かない。**
+   * 2つの供給源が重なったときに毎秒2通書くのを避けるためで、**間引きはここだけで行う。**
    */
   beat(): void {
     const now = this.now();
+    if (this.lastBeatAt !== null && now - this.lastBeatAt < this.config.minBeatIntervalMs) return;
+    this.lastBeatAt = now;
     const hasFix = this.store.hasSelfFix(now);
     const beat: BeatMessage = {
       k: "beat",
@@ -224,6 +248,11 @@ export class RideLoop {
       this.lastFix = fix;
       this.lastFixAt = this.now();
     }
+    // **測位からも心拍を出す。**画面を消すと `setInterval` が事実上止まるため
+    // （{@link beat}）、走行中の心拍を保つのはこちらである。
+    // **取り込めなかった測位でも書く**——`st` は `beat` 自身が判定するので、
+    // 捨てた測位でも「アプリは生きている」ことは伝わる。
+    this.beat();
 
     // **取り込めなかった測位を送らない。**壊れているか、`t` が前回より進んでいない
     // （＝測位が固まっている）ものであり、送っても他人の近傍に古い位置を配るだけ。

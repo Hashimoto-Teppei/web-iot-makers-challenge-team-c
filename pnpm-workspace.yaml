@@ -9,3 +9,6 @@ allowBuilds:
   better-sqlite3: true
   esbuild: true
   workerd: true
+
+minimumReleaseAgeExclude:
+  - expo-task-manager@57.0.15
