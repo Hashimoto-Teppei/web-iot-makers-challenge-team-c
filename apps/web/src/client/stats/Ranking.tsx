@@ -1,4 +1,5 @@
-import type { StatsCell } from "../../shared/api";
+import type { StatsCell, StatsSample } from "../../shared/api";
+import { cellPath, Link } from "../route";
 import { cellId } from "./StatsMap";
 
 /**
@@ -9,19 +10,24 @@ import { cellId } from "./StatsMap";
  * **読める名前を付けない。逆ジオコーディングもしない**——**地名は地図がすでに描いている。**
  *
  * **行をクリックすると地図がその場所へ飛ぶ。**2つを別ページにすると往復ができない。
+ *
+ * **場所の詳細（#87）へは別の列から飛ぶ。****座標のボタンを取り合わない**——
+ * **地図への往復こそが、この2つを1ページに並べた理由そのもの**である。
  */
 
 export type RankingProps = {
   cells: StatsCell[];
   selected: StatsCell | null;
   onSelect: (cell: StatsCell) => void;
+  /** 詳細へ飛ぶときに引き継ぐ。**飛んだ先で件数が変わって見えないため** */
+  sample: StatsSample;
 };
 
 const percent = (rate: number): string => `${(rate * 100).toFixed(0)}%`;
 /** 代表座標。**小数第3位まで**（それ以上出すと、丸めた意味が無くなる） */
 const coords = (cell: StatsCell): string => `${cell.lat.toFixed(3)}, ${cell.lon.toFixed(3)}`;
 
-export function Ranking({ cells, selected, onSelect }: RankingProps) {
+export function Ranking({ cells, selected, onSelect, sample }: RankingProps) {
   if (cells.length === 0) {
     return (
       <p className="ranking__empty">
@@ -39,6 +45,7 @@ export function Ranking({ cells, selected, onSelect }: RankingProps) {
           <th scope="col">率</th>
           <th scope="col">出た走行</th>
           <th scope="col">通過</th>
+          <th scope="col">内訳</th>
         </tr>
       </thead>
       <tbody>
@@ -57,6 +64,11 @@ export function Ranking({ cells, selected, onSelect }: RankingProps) {
             <td>{percent(cell.rate)}</td>
             <td>{cell.hits}</td>
             <td>{cell.rides}</td>
+            <td>
+              {/* **`<a href>` のまま置く。**場所の詳細は人に見せて話す画面なので、
+                  新しいタブで開けることと URL を渡せることに意味がある（`../route.tsx`）。 */}
+              <Link to={cellPath(cell, sample)}>時間帯</Link>
+            </td>
           </tr>
         ))}
       </tbody>

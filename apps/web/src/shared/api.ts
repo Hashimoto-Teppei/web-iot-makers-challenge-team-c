@@ -125,3 +125,69 @@ export type StatsResponse = {
   /** セルの数が上限を超えて打ち切られたか。**黙って切らないために返す** */
   truncated: boolean;
 };
+
+/**
+ * 種別（`kind`）ごとの件数。**走行の数ではなく件数**である。
+ *
+ * **場所の詳細画面だけがこの数え方をする。**地図とランキングは走行の数で数える
+ * （`docs/interfaces/web-service.md`「率で見る」）——**あちらは順位を付けるので、
+ * 連続して発火する検知が 100% を超える率を作ってしまう。**
+ * こちらは順位を付けないので、**何が何件出たか**をそのまま出す。
+ *
+ * **`kind` の値は端末が入れたものをそのまま出す**（正本は `docs/interfaces/detectors.md`）。
+ * **サーバー側で読み替えない**——知らない `kind` が来ても消えないようにするため。
+ */
+export type StatsKindCount = { kind: string; count: number };
+
+/**
+ * 1つの時間帯（1時間）ぶんの内訳。
+ *
+ * **日付を持たない。時刻は「日本時間の何時台か」だけ**にする
+ * （`docs/interfaces/web-ui.md`「詳細画面で時刻を丸める」）。
+ * **110m のセルと秒単位の時刻を時系列に並べると、1人の走行経路が復元できる**ためで、
+ * **走る人が数人しかいないハッカソンの規模では、これは実際に起こる。**
+ */
+export type StatsHour = {
+  /** 日本時間の時（0〜23）。**「8時台」の 8。日付は持たない** */
+  hour: number;
+  /** 通過。**その時間帯にこのセルへ入った走行の数**（件数ではない） */
+  rides: number;
+  /** 検知の**件数**。種別ごと。**多い順** */
+  detections: StatsKindCount[];
+  /** 不停止の**件数**。**検知と混ぜない**（出どころも、作り直せるかどうかも違う） */
+  violations: number;
+};
+
+/**
+ * `GET /api/stats/cell` の応答。**1つのセルの内訳**（`docs/interfaces/web-ui.md`「画面」）。
+ *
+ * **`device_id` を返さない。生の測位点も返さない。**
+ * **この画面だけが時刻という次元を持つ**ので、ここを間違えると
+ * **生ログを保存するという判断（`docs/adr/0007-keep-raw-ride-logs.md`）の前提が崩れる。**
+ */
+export type StatsCellDetailResponse = {
+  /** セルの**南西の角**（切り捨てた緯度経度、小数第3位）。**中心ではない** */
+  lat: number;
+  lon: number;
+  sample: StatsSample;
+  /** **何かあった時間帯だけ**を、0時台から順に並べたもの */
+  hours: StatsHour[];
+  /** セル全体の合計。**`rides` は時間帯の足し算ではない**（またぐ走行を二重に数えないため） */
+  totals: { rides: number; detections: StatsKindCount[]; violations: number };
+  /**
+   * このセルの検知のうち、**時刻が推定（`t_est`）のものの件数。**
+   *
+   * **地図とランキングはこれを除いている**（`docs/interfaces/web-service.md`
+   * 「検知を場所に結びつける」）が、**詳細には出す。**
+   * **数を返さないと、2つの画面の件数が理由の分からないまま食い違う。**
+   */
+  tEstimated: number;
+  /**
+   * **場所が分からなかった数。このセルの話ではなく、全体の内訳**である。
+   *
+   * 地図にも順位にも入っていない数を、**この画面だけが種別まで見せる**
+   * （`GET /api/stats/cells` は数だけを返す）。**捨てると、集計に出ていないことが
+   * 「起きていない」に見える。**
+   */
+  unlocated: { detections: StatsKindCount[]; violations: number };
+};

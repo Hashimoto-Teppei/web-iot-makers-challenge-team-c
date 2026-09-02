@@ -1,7 +1,15 @@
 import { zValidator } from "@hono/zod-validator";
-import { drizzle } from "drizzle-orm/d1";
+import { type DrizzleD1Database, drizzle } from "drizzle-orm/d1";
 import { Hono } from "hono";
-import type { HealthResponse, Ping, StatsResponse, StopSignsResponse } from "../shared/api";
+import type {
+  HealthResponse,
+  Ping,
+  StatsCellDetailResponse,
+  StatsResponse,
+  StatsSample,
+  StopSignsResponse,
+} from "../shared/api";
+import { cellOf } from "../shared/cell";
 import { pings } from "./db/schema";
 import { insertLogs } from "./logs/insert";
 import { type LogsResponse, logsErrorOf, logsRequest } from "./logs/request";
@@ -25,10 +33,11 @@ import {
   recomputeRequest,
 } from "./recompute/request";
 import { type RideResult, replaceViolations } from "./recompute/write";
-import { aggregateCells, matchDetections } from "./stats/aggregate";
+import { aggregateCells, matchDetections, type RidePoint } from "./stats/aggregate";
 import { MAX_MATCH_GAP_MS, statsDefaults } from "./stats/config";
+import { aggregateCellDetail } from "./stats/detail";
 import { readDetections, readRidePoints, readViolations } from "./stats/query";
-import { type StatsError, statsQuery } from "./stats/request";
+import { cellDetailQuery, type StatsError, statsQuery } from "./stats/request";
 import { etagOf, matchesIfNoneMatch } from "./stop-signs/etag";
 import { readStopSigns, readStopSignVersion } from "./stop-signs/query";
 import { stopSignsQuery } from "./stop-signs/request";
@@ -343,9 +352,10 @@ const routes = app
       // **不停止は標識の位置から決まる**ので、突き合わせは要らない（経路が違う）。
       // **どちらも「場所が分からなかった数」を返す**——不停止の側は、標識を取り込み直して
       // `sign_id` が変わったときにここへ落ちる。
+      // **検知の側は行のまま返る**（詳細画面が種別ごとに数えるため）ので、ここでは数にする。
       const found =
         layer === "detection"
-          ? matchDetections(points, await readDetections(db, sample), MAX_MATCH_GAP_MS)
+          ? await matchedDetections(db, sample, points)
           : await readViolations(db, sample);
 
       const { cells, truncated } = aggregateCells(points, found.located, {
@@ -358,12 +368,96 @@ const routes = app
         sample,
         minRides,
         cells,
-        unlocated: found.unlocated,
+        // **検知の側は行のまま返る**（詳細画面が種別ごとに数えるため。`stats/aggregate.ts`）。
+        // **この応答が返すのは数だけ**である（`docs/interfaces/web-service.md`）。
+        unlocated: Array.isArray(found.unlocated) ? found.unlocated.length : found.unlocated,
         truncated,
       };
       return c.json(body);
     },
+  )
+  /**
+   * 1つのセルの内訳。**時間帯ごとに、何の種類が何件、通過が何走行ぶんか**
+   * （`docs/interfaces/web-ui.md`「画面」。ランキングの行から飛んでくる）。
+   *
+   * **この経路だけが時刻という次元を持つ**（`GET /api/stats/cells` は持たない）。
+   * **だから、ここが一番プライバシーに近い。**
+   *
+   * - **秒単位の時刻を出さない。日本時間の時間帯（0〜23）に丸める**
+   *   ——**110m のセルと秒単位の時刻を時系列に並べると、1人の走行経路が復元できる**
+   *   （`docs/adr/0007-keep-raw-ride-logs.md` が「セル単位に丸めれば公開してよい」とした
+   *   条件が、時刻を出した瞬間に崩れる）
+   * - **`device_id` を返さない。**丸めた時間帯でも、**同じ端末の行を拾い集めれば経路が並ぶ**
+   * - **生の測位点を返さない**
+   *
+   * **`t_est` の検知もここには出す**（地図とランキングからは除く。
+   * `docs/interfaces/web-service.md`「検知を場所に結びつける」）。
+   */
+  .get(
+    "/api/stats/cell",
+    zValidator("query", cellDetailQuery, (result, c) => {
+      if (!result.success) {
+        const body: StatsError = { error: "lat と lon は緯度経度の範囲で指定してください" };
+        return c.json(body, 400);
+      }
+    }),
+    async (c) => {
+      const { lat, lon, sample } = c.req.valid("query");
+      const db = drizzle(c.env.DB);
+
+      // **セルはサーバー側でもう一度丸める**（`src/shared/cell.ts`）。渡された値を
+      // そのまま信じて比較すると、**切り方が2箇所に割れる。**
+      const cell = cellOf(lat, lon);
+
+      const points = await readRidePoints(db, sample);
+      if (!points) {
+        // 一覧と同じ理由で落とす（`stats/config.ts`）。**途中まで読んだ点で数えない。**
+        const body: StatsError = {
+          error:
+            "走行ログが多すぎて、読むたびの集計では追いつきません。" +
+            "集計結果のテーブルを足してください（docs/interfaces/web-service.md）",
+        };
+        return c.json(body, 503);
+      }
+
+      // **`t_est` の検知も読む**（第3引数）。**この画面だけが出す側である。**
+      const detected = await matchedDetections(db, sample, points, true);
+      const violated = await readViolations(db, sample);
+
+      const body: StatsCellDetailResponse = {
+        sample,
+        ...aggregateCellDetail({
+          cell,
+          points,
+          detections: detected.located,
+          violations: violated.located,
+          unlocatedDetections: detected.unlocated,
+          unlocatedViolations: violated.unlocated,
+        }),
+      };
+      return c.json(body);
+    },
   );
+
+/**
+ * 検知を読んで、測位点に突き合わせるところ。**2つの経路が同じ手順を通るようにまとめてある。**
+ *
+ * **一覧（`/api/stats/cells`）と詳細（`/api/stats/cell`）で違うのは `t_est` を含めるかだけ**で、
+ * **突き合わせの許容（{@link MAX_MATCH_GAP_MS}）は同じ**である——別々に書くと、
+ * **片方だけ許容が変わったときに、一覧と詳細で「場所不明」の数が理由なく食い違う。**
+ */
+async function matchedDetections(
+  db: DrizzleD1Database,
+  sample: StatsSample,
+  points: RidePoint[],
+  includeEstimated = false,
+) {
+  return matchDetections(
+    points,
+    await readDetections(db, sample, includeEstimated),
+    MAX_MATCH_GAP_MS,
+  );
+}
 
 /** apps/mobile が hc<AppType>() で使う。実体ではなく型だけを参照させる。 */
 export type AppType = typeof routes;

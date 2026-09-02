@@ -240,6 +240,27 @@ curl 'http://localhost:5173/api/stats/cells?layer=detection&minRides=5'
 - **集計そのもの（`src/worker/stats/aggregate.ts`）は D1 にも Hono にも触らない純粋な関数**にしてある
   ので、モックデータだけでテストを回せる
 
+### 場所の詳細（`GET /api/stats/cell`）
+
+**ランキングの行の「時間帯」から飛ぶ。****1つのセルの内訳を、日本時間の時間帯ごとに出す**
+（`src/client/stats/CellPage.tsx`）。
+
+| クエリ | 既定 | 意味 |
+| --- | --- | --- |
+| `lat` / `lon` | （必須） | セルの代表座標。**セルの中のどの点でもよい**（サーバー側でもう一度丸める） |
+| `sample` | `include` | 一覧と同じ |
+
+```sh
+curl 'http://localhost:5173/api/stats/cell?lat=34.647&lon=133.927'
+```
+
+- **`layer` を取らない。**この画面は**検知と不停止の両方**を出す（地図と違って重ならない）
+- **`t_est` の検知もここには出す**（一覧からは除いている）。**件数を `tEstimated` で別に返す**
+  ——返さないと、2つの画面の数字が理由の分からないまま食い違う
+- **この経路だけが時刻という次元を持つ。**出すのは**日本時間の時間帯（0〜23）だけ**で、
+  **秒単位の時刻も日付も `device_id` も返さない**——**110m のセルと秒単位の時刻を並べると、
+  1人の走行経路が復元できる**（`docs/adr/0007-keep-raw-ride-logs.md` の前提そのもの）
+
 ### 地図の鍵
 
 **`apps/web/.env.example` を `apps/web/.env` に写して `VITE_GOOGLE_MAPS_API_KEY` を入れる。**

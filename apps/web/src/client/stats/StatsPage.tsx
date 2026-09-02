@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import type { StatsCell, StatsLayer, StatsSample } from "../../shared/api";
+import { navigate, statsPath } from "../route";
 import { Ranking } from "./Ranking";
 import { cellId, StatsMap } from "./StatsMap";
 import { useStats } from "./use-stats";
@@ -19,9 +20,22 @@ const LAYERS: { value: StatsLayer; label: string; note: string }[] = [
   { value: "violation", label: "不停止", note: "走行ログと標識から、あとから計算した判定" },
 ];
 
-export function StatsPage() {
+export type StatsPageProps = {
+  /**
+   * サンプルデータを混ぜるか。**URL が持っている**（`../route.tsx`）。
+   *
+   * **状態にしないのは、詳細画面へ飛んで戻ってきたときに元へ戻ってしまうから**である
+   * ——除いて見ていた人が、戻った先で混ざった数を見ることになる。
+   *
+   * **`layer` と `minRides` は状態のままにしてある。**この2つも戻ると既定へ戻るが、
+   * **画面に出ている値が変わるだけで、数字の意味は変わらない**（サンプルは
+   * **同じ場所の件数そのものが変わる**）。**気になったら同じやり方で URL に載せる。**
+   */
+  sample: StatsSample;
+};
+
+export function StatsPage({ sample }: StatsPageProps) {
   const [layer, setLayer] = useState<StatsLayer>("detection");
-  const [sample, setSample] = useState<StatsSample>("include");
   const [minRides, setMinRides] = useState(5);
   const [selected, setSelected] = useState<StatsCell | null>(null);
 
@@ -67,7 +81,11 @@ export function StatsPage() {
           <input
             type="checkbox"
             checked={sample === "include"}
-            onChange={(e) => setSample(e.target.checked ? "include" : "exclude")}
+            // **履歴に積まない**（同じ画面のままの切り替え）。積むと、詳細から戻るのに
+            // 戻るを何度も押すことになる。
+            onChange={(e) =>
+              navigate(statsPath(e.target.checked ? "include" : "exclude"), { replace: true })
+            }
           />
           サンプルデータを混ぜる
         </label>
@@ -106,7 +124,12 @@ export function StatsPage() {
       <div className="panels">
         <StatsMap cells={cells} selected={stillThere ? selected : null} onSelect={onSelect} />
         <div className="ranking-panel">
-          <Ranking cells={cells} selected={stillThere ? selected : null} onSelect={onSelect} />
+          <Ranking
+            cells={cells}
+            selected={stillThere ? selected : null}
+            onSelect={onSelect}
+            sample={sample}
+          />
         </div>
       </div>
     </main>

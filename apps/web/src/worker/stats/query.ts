@@ -66,22 +66,36 @@ export async function readRidePoints(
 /**
  * 場所に結びつける前の検知を読む。
  *
- * **`t_est` が立った検知を外す**（`docs/interfaces/web-service.md`「検知を場所に結びつける」）。
- * BLE が切れている間デバイスが打つ推定の時刻で、**切断が長いほどずれ、
- * ずれた時刻に一番近い点＝別のセル**に積まれる。**詳細画面（#87）には出すが、
- * 地図とランキングからは除く。**
+ * **既定では `t_est` が立った検知を外す**（`docs/interfaces/web-service.md`
+ * 「検知を場所に結びつける」）。BLE が切れている間デバイスが打つ推定の時刻で、
+ * **切断が長いほどずれ、ずれた時刻に一番近い点＝別のセル**に積まれる。
+ * **地図とランキングからは除き、場所の詳細画面（#87）には出す。**
  *
- * **`kind` を読まない。**このレイヤーは種別で分けずに数えるだけで、
- * **種別ごとの内訳は場所の詳細画面（#87）が出す。**
+ * **読む列は2つの画面で同じにしてある。**`kind` は地図とランキングでは使わないが、
+ * **1列増えるだけ**であり、**分けると突き合わせの入口が2つになる**——
+ * `matchDetections` に渡る行の形が画面ごとに違うと、**片方だけ直した変更が静かに通る。**
+ *
+ * @param includeEstimated `t_est` の検知も返すか。**詳細画面だけが `true` を渡す**
  */
 export async function readDetections(
   db: DrizzleD1Database,
   sample: StatsSample,
+  includeEstimated = false,
 ): Promise<DetectionRow[]> {
   return await db
-    .select({ deviceId: detections.deviceId, t: detections.t })
+    .select({
+      deviceId: detections.deviceId,
+      t: detections.t,
+      kind: detections.kind,
+      tEst: detections.tEst,
+    })
     .from(detections)
-    .where(and(eq(detections.tEst, false), excludeSample(sample, detections.sample)))
+    .where(
+      and(
+        includeEstimated ? undefined : eq(detections.tEst, false),
+        excludeSample(sample, detections.sample),
+      ),
+    )
     .all();
 }
 
@@ -108,6 +122,9 @@ export async function readViolations(
     .select({
       deviceId: stopViolations.deviceId,
       logId: stopViolations.logId,
+      // **標識を通過したと判定した時刻。**使うのは場所の詳細画面（#87）だけで、
+      // 地図とランキングは時刻の次元を持たない。
+      t: stopViolations.t,
       lat: stopSigns.lat,
       lon: stopSigns.lon,
     })
@@ -130,7 +147,13 @@ export async function readViolations(
       unlocated += 1;
       continue;
     }
-    located.push({ deviceId: row.deviceId, logId: row.logId, lat: row.lat, lon: row.lon });
+    located.push({
+      deviceId: row.deviceId,
+      logId: row.logId,
+      lat: row.lat,
+      lon: row.lon,
+      t: row.t,
+    });
   }
   return { located, unlocated };
 }
