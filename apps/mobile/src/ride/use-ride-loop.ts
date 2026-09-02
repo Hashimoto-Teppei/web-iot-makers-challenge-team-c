@@ -17,7 +17,7 @@ import { createDiscardingRideLogStore, type RideLogStore, type RideRecording } f
 import { createNearbySigns } from "../signs/nearby";
 import type { SignStore } from "../signs/store";
 import { exchangeViaApi, refuseMockExchange } from "./api";
-import { createMockDeviceLink } from "./device";
+import type { DeviceLink } from "./device";
 import { watchFixes } from "./location";
 import { RideLoop, type RideStatus } from "./loop";
 
@@ -37,16 +37,23 @@ export type RideControl = {
 /**
  * 走行ループを1つ持ち、開始・停止できるようにする。
  *
- * **デバイスの口はいまモック**（`createMockDeviceLink`）。#38 が入ったら、接続中の
- * デバイスを返すものに差し替える。**そのとき差し替わるのはこの1行だけ**で、
- * `RideLoop` も検知も変わらない。
+ * **デバイスは外から受け取る**（`./use-device-link.ts`）。接続は走行より寿命が長く、
+ * **走り出す前につながっていることを確かめられなければ、走行前の点検が
+ * 「デバイス」を判定できない**（`./pre-ride.ts`）。
+ *
+ * @param device 接続中のデバイス。**つながっていなければ `null`** ——そのときは
+ *   走行ループを始めない（検知が動いても警告の出し先が無い。`./device.ts`）
  *
  * @param signs 手元の標識（`../signs/`）。**絞るのは呼び出し側の責務**なので、
  *   ここでセルごとに引き直して `RideLoop` へ渡す（`docs/adr/0009-on-device-storage.md`）。
  * @param logs 走行ログの保存層（`../log/`）。**測位と警告をここに溜め、走行後に送る**
  *   （#73。送るのは画面から `syncRideLogs()` を呼ぶ——**走行中に送らない**）。
  */
-export function useRideLoop(signs: SignStore, logs: RideLogStore): RideControl {
+export function useRideLoop(
+  signs: SignStore,
+  logs: RideLogStore,
+  device: DeviceLink | null,
+): RideControl {
   const [status, setStatus] = useState<RideStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
@@ -83,10 +90,16 @@ export function useRideLoop(signs: SignStore, logs: RideLogStore): RideControl {
 
   const start = useCallback(() => {
     if (sessionRef.current !== null) return;
+    // **つながっていなければ始めない。**検知が動いても警告の出し先が無く、
+    // 名乗る `device_id` も無い（`./device.ts`）。**押せないようにするのは画面側**
+    // （`./pre-ride.ts`）だが、ここでも受けておく——判定を通らない経路で呼ばれても
+    // 半端に走り出さないため。
+    if (device === null) {
+      setError("デバイスにつながっていないため、走行を始められません。");
+      return;
+    }
     setError(null);
 
-    // TODO(#38): 接続中のデバイスに差し替える。それまでは名乗る ID もモックのもの。
-    const device = createMockDeviceLink();
     // **モックのまま共有のデプロイ先へ位置を送らない**（理由は `../lib/mock-guard.ts`）。
     // 手元の apps/web に向けているときだけ実際に中継する。
     const exchange = blocksMockDevice(device.deviceId, apiBaseUrl)
@@ -153,7 +166,7 @@ export function useRideLoop(signs: SignStore, logs: RideLogStore): RideControl {
         else session.stops.push(unwatch);
       })
       .catch((reason: unknown) => setError(String(reason)));
-  }, [signs, logs, record]);
+  }, [signs, logs, record, device]);
 
   // 画面から離れたら止める。**心拍を出したまま忘れない**（デバイスは動いていると
   // 判断し続ける）。
