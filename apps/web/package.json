@@ -12,6 +12,7 @@
     "db:migrate:local": "wrangler d1 migrations apply team-c-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply team-c-db --remote",
     "stop-signs:extract": "node scripts/stop-signs/extract.ts",
+    "sample:generate": "node scripts/seed/sample.ts",
     "cf-typegen": "wrangler types",
     "deploy:cf": "vite build && wrangler deploy"
   },

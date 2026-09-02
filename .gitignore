@@ -55,6 +55,11 @@ apps/web/scripts/stop-signs/out/
 apps/web/scripts/stop-signs/**/*.csv
 apps/web/scripts/stop-signs/**/*.sql
 
+# サンプルデータの SQL（scripts/seed/sample.ts が作る）。
+# 中身は合成したものだが、標識の位置から作るので原本と同じ扱いにする。
+# 作り直せるものをコミットしない（生成物の版と生成器の版がずれる）。
+apps/web/scripts/seed/out/
+
 # Claude Code の個人設定（チーム共通の設定は .claude/settings.json）
 .claude/settings.local.json
 
