@@ -1,7 +1,12 @@
 import { Stack } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useSignStore, useSignsMeta } from "@/signs/expo";
+import {
+  type SignsUpdateState,
+  useSignStore,
+  useSignsMeta,
+  useSignsUpdateState,
+} from "@/signs/expo";
 
 /**
  * 設定と、手元の標識の素性を見る画面。
@@ -34,9 +39,35 @@ function prefLabel(pref: number | null): string {
   return PREF_NAMES[pref] ?? `都道府県コード ${pref}`;
 }
 
+/**
+ * 起動時の更新がどうなったかを1行にする。
+ *
+ * **「変わっていなかった」と「取りに行けなかった」を同じ文にしない。**
+ * 前者は正常な終わり方で、後者は**古い標識のまま走ることになる**
+ * （`docs/interfaces/mobile-api.md`「『持っていない』と『0件』を混ぜない」と同じ理由）。
+ */
+function updateLabel(update: SignsUpdateState): string {
+  if (update.running) return "サーバーの版を確かめています…";
+  if (update.outcome === null) return "まだ確かめていません。";
+
+  switch (update.outcome.status) {
+    case "replaced":
+      return "起動時に新しい標識へ入れ替えました。";
+    case "not-modified":
+      return "起動時に確かめました。サーバーの版と同じです。";
+    // **理由をそのまま出す。**「失敗しました」だけだと、何をすればよいか分からない。
+    case "failed":
+    case "skipped":
+      return update.outcome.error ?? "起動時には取りに行きませんでした。";
+  }
+}
+
 export default function SettingsScreen() {
   const signs = useSignStore();
   const meta = useSignsMeta(signs);
+  // **見るだけ。**取りに行くのはホーム画面（起動時に1回）である——
+  // ここで取りに行くと、**走行中に設定を開いただけで数 MB の取得が始まりうる。**
+  const update = useSignsUpdateState();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -66,6 +97,9 @@ export default function SettingsScreen() {
         {meta !== null && meta.count === 0 && (
           <Text style={styles.alert}>標識が 0 件です。この状態では走行を始められません。</Text>
         )}
+
+        <Text style={styles.rowLabel}>更新</Text>
+        <Text style={styles.note}>{updateLabel(update)}</Text>
 
         <Text style={styles.note}>
           標識は月に1回ほどしか変わりません。走行中には取りに行きません。

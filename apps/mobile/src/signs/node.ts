@@ -14,21 +14,23 @@ import { rmSync } from "node:fs";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import type { StopSign } from "../detect/types";
-import { cellOf } from "./cell.ts";
-import { meta as metaTable, SIGNS_DDL, signs as signsTable } from "./schema.ts";
-import { createDrizzleSignStore, type SignStore, type SignsMeta } from "./store.ts";
-
-/**
- * 1回の `INSERT` にまとめる件数。
- *
- * SQLite には1文あたりのパラメータ数の上限があるので、全件を1文に入れない
- * （**数万件で必ず超える**）。8列 × 500 行 = 4000 個で、既定の上限に十分収まる。
- */
-const INSERT_CHUNK = 500;
+import { SIGNS_DDL } from "./schema.ts";
+import {
+  createDrizzleSignStore,
+  createDrizzleSignWriter,
+  type SignStore,
+  type SignsMeta,
+  type SignWriter,
+} from "./store.ts";
 
 /** 開いた `signs.db`。**使い終わったら {@link SignsDatabase.close} を呼ぶ。** */
 export type SignsDatabase = {
   store: SignStore;
+  /**
+   * 入れ替え口。**{@link openSignsDatabase} で開いたものは読み取り専用なので、呼ぶと落ちる。**
+   * **それでよい**——読むつもりで開いたものに書けてしまう方が危ない。
+   */
+  writer: SignWriter;
   close(): void;
 };
 
@@ -51,39 +53,26 @@ export function buildSignsDatabase(
   const db = drizzle(raw);
   raw.exec(SIGNS_DDL);
 
-  const rows = signs.map((sign) => {
-    const cell = cellOf(sign.lat, sign.lon);
-    return {
-      id: sign.id,
-      pref: meta.pref,
-      lat: sign.lat,
-      lon: sign.lon,
-      // **セルは規制地点で切る。**進入方向の点では切らない——引きたいのは
-      // 「近づいている標識」であって、その手前の点ではない。
-      latCell: cell.lat,
-      lonCell: cell.lon,
-      approachLat: sign.approach?.lat ?? null,
-      approachLon: sign.approach?.lon ?? null,
-    };
-  });
+  // **書き込みは実機と同じ実装を通す**（`./store.ts`）。ここに別の `INSERT` を書くと、
+  // **生成では通るが起動時の入れ替えで壊れる**（またはその逆）という差が生まれる。
+  const writer = createDrizzleSignWriter(db);
+  writer.replace(meta, signs);
 
-  // **1件ずつ書かない。**数万件を1件ずつ commit すると、生成に何分もかかる。
-  raw.transaction(() => {
-    for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
-      db.insert(signsTable)
-        .values(rows.slice(i, i + INSERT_CHUNK))
-        .run();
-    }
-    db.insert(metaTable)
-      .values({ id: 1, ...meta })
-      .run();
-  })();
-
-  return { store: createDrizzleSignStore(db), close: () => raw.close() };
+  return { store: createDrizzleSignStore(db), writer, close: () => raw.close() };
 }
 
-/** できあがった `signs.db` を読む（生成の確認と、テストで作り直さずに引くため）。 */
+/**
+ * できあがった `signs.db` を**読み取り専用で**開く（生成の確認のため）。
+ *
+ * **書ける口は用意しない。**入れ替えの SQL を Node で確かめるときは
+ * {@link buildSignsDatabase} で作った方の `writer` を使う（`./store.test.ts`）。
+ */
 export function openSignsDatabase(file: string): SignsDatabase {
   const raw = new Database(file, { readonly: true });
-  return { store: createDrizzleSignStore(drizzle(raw)), close: () => raw.close() };
+  const db = drizzle(raw);
+  return {
+    store: createDrizzleSignStore(db),
+    writer: createDrizzleSignWriter(db),
+    close: () => raw.close(),
+  };
 }
