@@ -19,6 +19,7 @@
  */
 
 import { approachDefaults, detectApproach } from "../detect/approach";
+import { detectHardBrake, hardBrakeDefaults } from "../detect/hard-brake";
 import { detectStopSign, stopSignDefaults } from "../detect/stop-sign";
 import type { Detector, DetectorInput, Warning } from "../detect/types";
 
@@ -67,7 +68,7 @@ export function register<C>(name: string, detector: Detector<C>, config: C): Reg
 export const registeredDetectors: readonly RegisteredDetector[] = [
   register("approach", detectApproach, approachDefaults),
   register("stop", detectStopSign, stopSignDefaults),
+  register("brake", detectHardBrake, hardBrakeDefaults),
   // 検知が入ったら、ここに1行ずつ足す。**この上の行を編集しないこと**（担当が違う）。
-  // register("brake", detectHardBrake, hardBrakeDefaults),      // #10
   // register("corner", detectBlindCorner, blindCornerDefaults), // #11
 ];
