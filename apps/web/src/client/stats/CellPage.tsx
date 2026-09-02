@@ -32,7 +32,7 @@ export function CellPage({ lat, lon, sample }: CellPageProps) {
   const kinds = data?.totals.detections.map((count) => count.kind) ?? [];
 
   return (
-    <main className="stats">
+    <main className="stats stats--cell">
       <header>
         <p className="back">
           <Link to={statsPath(sample)}>← どこが危ないか（一覧）</Link>
@@ -66,34 +66,36 @@ export function CellPage({ lat, lon, sample }: CellPageProps) {
               このセルには、まだ何も入っていません。通過も検知も不停止も 0 件です。
             </p>
           ) : (
-            <table className="hours">
-              <thead>
-                <tr>
-                  <th scope="col">時間帯</th>
-                  <th scope="col">通過</th>
-                  {kinds.map((kind) => (
-                    <th key={kind} scope="col">
-                      {kindLabel(kind)}
-                    </th>
-                  ))}
-                  <th scope="col">不停止</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.hours.map((hour) => (
-                  <tr key={hour.hour}>
-                    <th scope="row">{hour.hour}時台</th>
-                    <td>{hour.rides}</td>
+            <div className="card table-card">
+              <table className="hours">
+                <thead>
+                  <tr>
+                    <th scope="col">時間帯</th>
+                    <th scope="col">通過</th>
                     {kinds.map((kind) => (
-                      <td key={kind}>
-                        {hour.detections.find((count) => count.kind === kind)?.count ?? 0}
-                      </td>
+                      <th key={kind} scope="col">
+                        {kindLabel(kind)}
+                      </th>
                     ))}
-                    <td>{hour.violations}</td>
+                    <th scope="col">不停止</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {data.hours.map((hour) => (
+                    <tr key={hour.hour}>
+                      <th scope="row">{hour.hour}時台</th>
+                      <td>{hour.rides}</td>
+                      {kinds.map((kind) => (
+                        <td key={kind}>
+                          {hour.detections.find((count) => count.kind === kind)?.count ?? 0}
+                        </td>
+                      ))}
+                      <td>{hour.violations}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
 
           {data.tEstimated > 0 && (
