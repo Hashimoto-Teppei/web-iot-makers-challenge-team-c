@@ -45,7 +45,7 @@ describe("parseDeviceInfo", () => {
   });
 
   it("device_id がハイフン付きの UUID なら落とす", () => {
-    // **16進8文字でないと、取り込みの一意キーが揃わない**（`docs/interfaces/mobile-api.md`）。
+    // **16進8文字でないと、取り込みの一意キーが揃わない**（`docs/interfaces/ble-gatt.md`）。
     expect(() =>
       parseDeviceInfo(JSON.stringify({ proto: 2, device_id: "c3f1a20b-0000", log_id: "9a1c0b31" })),
     ).toThrow(BleProtocolError);
