@@ -63,12 +63,31 @@ export type PreRideInput = {
    */
   deviceId: string | null;
   /**
-   * 接続中のデバイスがモック（#38 が入るまでの仮のもの）か。**画面に必ず出す。**
+   * 接続中のデバイスがモック（実機の BLE を使わない仮のもの）か。**画面に必ず出す。**
    *
-   * 隠すと、**BLE の実装がまだ無いことを画面が「接続しています」と言い切る**
+   * 隠すと、**BLE を通っていないことを画面が「接続しています」と言い切る**
    * ——この画面が防ごうとしている「動いているつもり」そのものになる。
    */
   deviceIsMock: boolean;
+  /**
+   * つながっていない理由。**つながっているか、まだ探しているだけなら `null`**
+   * （`../ble/link.ts`）。
+   *
+   * **「見つからない」と「MTU が足りない」と「バージョンが違う」で直し方が違う。**
+   * 「デバイス: ✗」だけだと初めての人は手が止まる（`CLAUDE.md`）。
+   */
+  deviceReason: string | null;
+  /** まだ探している最中か。**「探している」と「駄目だった」を混ぜない** */
+  deviceChecking: boolean;
+  /**
+   * デバイスが `status` で言ってくる `link`。**購読が始まるまでは `null`**
+   * （`../ble/protocol.ts`）。
+   *
+   * **デバイス側から見た心拍の状態**であって、こちらの接続の有無ではない。
+   * **`down` のまま走り出すと、書いたつもりの `alert` が届いていない**
+   * （`docs/interfaces/v2v.md`「心拍を必ず見せる」）。
+   */
+  deviceLink: "up" | "nofix" | "down" | null;
   /** 測位の見込み。**権限などで測れないなら理由、測れそうなら `null`**（`./location.ts`） */
   locationReason: string | null;
   /** 測位の権限をまだ確かめている最中か */
@@ -79,7 +98,7 @@ export type PreRideInput = {
    * 走行前のサーバー疎通（`./server-reach.ts`）。**届かない理由、届けば `null`。**
    *
    * **標識の更新の成否で代用しない。**あちらは失敗しても走行を止めないと決めてある
-   * （`docs/interfaces/mobile-api.md`）。
+   * （`docs/interfaces/stop-signs-delivery.md`）。
    */
   serverReason: string | null;
   /** サーバーへ届くかを確かめている最中か */
@@ -117,26 +136,66 @@ export function canStartRide(checks: readonly PreRideCheck[]): boolean {
   return checks.every((check) => check.state === "ok");
 }
 
-function device({ deviceId, deviceIsMock }: PreRideInput): PreRideCheck {
+function device({
+  deviceId,
+  deviceIsMock,
+  deviceReason,
+  deviceChecking,
+  deviceLink,
+  status,
+}: PreRideInput): PreRideCheck {
+  const label = "デバイス";
   if (deviceId === null) {
+    // **探している最中を赤にしない。**スキャンには数秒かかるので、
+    // **起動直後の数秒がいつも故障に見える**（本物の赤が読み飛ばされるようになる）。
+    if (deviceReason === null && deviceChecking) {
+      return { key: "device", label, state: "checking", detail: "デバイスを探しています…" };
+    }
     return {
       key: "device",
-      label: "デバイス",
+      label,
       state: "ng",
+      // **理由が分かっていればそれを出す。**分からないときだけ既定の文にする。
       detail:
+        deviceReason ??
         "デバイスにつながっていません。デバイスの電源を入れて、近くに置いてください" +
-        "（つながっていないと、危険を検知しても知らせる先がありません）。",
+          "（つながっていないと、危険を検知しても知らせる先がありません）。",
     };
   }
-  // **モックであることを隠さない。**隠すと、**BLE の実装がまだ無いことを画面が
+  // **モックであることを隠さない。**隠すと、**BLE を通っていないことを画面が
   // 「接続しています」と言い切る**——この画面が防ごうとしている「動いているつもり」
-  // そのものになる（#38 で実物になる）。
-  const note = deviceIsMock ? "（モック接続。実機の接続は #38）" : "";
+  // そのものになる。
+  if (deviceIsMock) {
+    return {
+      key: "device",
+      label,
+      state: "ok",
+      detail: `${deviceId} に接続しています（モック接続。実機の BLE は通っていません）。`,
+    };
+  }
+  // **走行中だけ見る。**心拍を書き始めるのは走行を始めてから（`./loop.ts` の
+  // `startHeartbeat()`）なので、**走り出す前の `down` は正常な状態**である。
+  // ここで赤くすると、**つながっているのに永久に走り始められない**
+  // （赤 → 走れない → 心拍が出ない → 赤のまま）。
+  //
+  // **デバイス側が「心拍が来ていない」と言っていたら赤にする。**こちらは接続できて
+  // いるので緑に見えるが、**`alert` が届いていないなら警告は1つも出ない**
+  // （`docs/interfaces/v2v.md`「心拍を必ず見せる」）。
+  if (status !== null && deviceLink === "down") {
+    return {
+      key: "device",
+      label,
+      state: "ng",
+      detail:
+        `${deviceId} につながっていますが、デバイスは心拍を受け取れていません。` +
+        "つなぎ直してください（このままだと警告が出ません）。",
+    };
+  }
   return {
     key: "device",
-    label: "デバイス",
+    label,
     state: "ok",
-    detail: `${deviceId} に接続しています。${note}`,
+    detail: `${deviceId} に接続しています。`,
   };
 }
 
@@ -177,7 +236,7 @@ function fix({ status, locationReason, locationChecking }: PreRideInput): PreRid
 
 function signs({ signsMeta }: PreRideInput): PreRideCheck {
   const label = "標識";
-  // **「持っていない」と「0 件」を混ぜない**（`docs/interfaces/mobile-api.md`）。直し方が違う。
+  // **「持っていない」と「0 件」を混ぜない**（`docs/interfaces/stop-signs-delivery.md`）。直し方が違う。
   if (signsMeta === null) {
     return {
       key: "signs",

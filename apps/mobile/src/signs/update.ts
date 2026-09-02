@@ -5,7 +5,7 @@
  * 実機なしで Vitest から回せる（`docs/adr/0002-development-lifecycle.md`）。
  *
  * **API は「更新」だけを担う。初回の取得を担わない**
- * （`docs/interfaces/mobile-api.md`「同梱を初期値にして、API では更新だけをする」）。
+ * （`docs/interfaces/stop-signs-delivery.md`「同梱を初期値にして、API では更新だけをする」）。
  * 標識は同梱物として最初から入っているので、**ここが失敗しても走行は止まらない。**
  *
  * ```
@@ -35,10 +35,10 @@ export type StopSignsFetchResult =
  * 取りに行く関数。**実装は `./api.ts`。**テストはここに偽物を渡す。
  *
  * @param version 手元の `meta.version`。**そのまま `If-None-Match` に載せる**
- *   （端末が版を作らない。`docs/interfaces/mobile-api.md`「版はサーバーが決める」）。
+ *   （端末が版を作らない。`docs/interfaces/stop-signs-delivery.md`「版はサーバーが決める」）。
  *   **`null` なら載せない**——**頼む県が手元と違うとき**（県を選び直した、
  *   まだ何も持っていない）は、**別の県の版を送り返すことになる**
- *   （`docs/interfaces/mobile-api.md`「県を選び直したときも、丸ごと取り直す」）
+ *   （`docs/interfaces/stop-signs-delivery.md`「県を選び直したときも、丸ごと取り直す」）
  */
 export type FetchStopSignsFn = (args: {
   pref: number;
@@ -64,7 +64,7 @@ export type SignsUpdateOutcome = {
    *
    * **画面に出す。**更新は起動時に1回しか走らず、**失敗しても走行は普通に始められる**
    * ので、黙ると**古い標識のまま走り続けていることに誰も気づけない**
-   * （`docs/interfaces/mobile-api.md`「『持っていない』と『0件』を混ぜない」と同じ理由）。
+   * （`docs/interfaces/stop-signs-delivery.md`「『持っていない』と『0件』を混ぜない」と同じ理由）。
    */
   error: string | null;
 };
@@ -77,11 +77,11 @@ export type SignsUpdateOutcome = {
  *
  * @param options.canReplace 入れ替えてよいか。**走行中は `false` を返すこと**——
  *   数万行の入れ替えは 1Hz の走行ループと同じ接続を握る
- *   （`docs/interfaces/mobile-api.md`「走行中は取りに行かない」）
+ *   （`docs/interfaces/stop-signs-delivery.md`「走行中は取りに行かない」）
  * @param options.pref 頼む県。**省くと手元の県**（起動時の更新はこちら）。
  *   **人が選び直したときだけ渡す**（#71）——渡すと、**まだ何も持っていない端末でも
  *   取りに行く**。選べる県を決めるのはサーバーで、端末は一覧から選ばせる
- *   （`docs/interfaces/mobile-api.md`「どの県を選べるかはサーバーが決める」）
+ *   （`docs/interfaces/stop-signs-delivery.md`「どの県を選べるかはサーバーが決める」）
  */
 export async function updateStopSigns(
   store: SignStore,
@@ -107,7 +107,7 @@ export async function updateStopSigns(
 
   if (requested === null) {
     // **ここで取りに行かない。**API は更新だけを担い、初回の取得を担わない
-    // （`docs/interfaces/mobile-api.md`）。**そもそも頼む県コードが無い**——
+    // （`docs/interfaces/stop-signs-delivery.md`）。**そもそも頼む県コードが無い**——
     // 県は手元の `meta` が持っている。**人が選べば `options.pref` で入ってくる**ので、
     // そのときはここを通らずに取りに行く（#71）。
     return {
@@ -125,7 +125,7 @@ export async function updateStopSigns(
   }
 
   // **頼む県が手元と違うなら、版を載せない。**載せると**別の県の版を送り返す**ことになる
-  // （`docs/interfaces/mobile-api.md`「県を選び直したときも、丸ごと取り直す」）。
+  // （`docs/interfaces/stop-signs-delivery.md`「県を選び直したときも、丸ごと取り直す」）。
   // いまのサーバーの ETag は県を含むので 304 にはならないが、
   // **こちら側の正しさをサーバーの実装に預けない。**
   const version = current !== null && current.pref === requested ? current.version : null;
@@ -192,7 +192,7 @@ export async function updateStopSigns(
  *
  * 添えないと、初めての人は**走ってはいけない状態だと受け取る**——
  * 実際には1か月古い標識でも道路の一時停止はほとんど変わらない
- * （`docs/interfaces/mobile-api.md`「取得に失敗しても走行を止めない」）。
+ * （`docs/interfaces/stop-signs-delivery.md`「取得に失敗しても走行を止めない」）。
  */
 function keeping(reason: string, current: SignsMeta | null): string {
   // **手元に何も無いときに「手元のものを使います」と言わない。**嘘になるうえ、

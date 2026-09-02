@@ -12,7 +12,7 @@ import type { SignsUpdateOutcome } from "@/signs/update";
 /**
  * 対象の都道府県を選ぶ画面（#71）。**走行前後に見る画面である**（`CLAUDE.md`）。
  *
- * **選択肢はサーバーが決める**（`docs/interfaces/mobile-api.md`
+ * **選択肢はサーバーが決める**（`docs/interfaces/stop-signs-delivery.md`
  * 「どの県を選べるかはサーバーが決める」）。47 県をここに並べると、
  * **取り込んでいない県が並び、選んだ瞬間に 404 になる。**
  *

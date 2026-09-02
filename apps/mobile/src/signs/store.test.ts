@@ -120,7 +120,7 @@ describe("createMemorySignStore", () => {
  * 入れ替え（`SignWriter`）。**読む側と同じく2つの実装に同じテストを回す。**
  *
  * **ここを間違えると「何も持っていない端末」ができる**——`near()` が間違っているより
- * 被害が大きい（`docs/interfaces/mobile-api.md`「差分を作らない」）。
+ * 被害が大きい（`docs/interfaces/stop-signs-delivery.md`「差分を作らない」）。
  */
 const NEW_META: SignsMeta = {
   pref: 33,

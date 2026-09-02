@@ -5,9 +5,8 @@
  * デバイスの口（`./device.ts`）を組み合わせて `RideLoop` を1つ作り、止め方を返すだけである。
  * **配線をここに集めてあるので、画面（`../app/`）は状態を表示するだけで済む。**
  *
- * **画面が前面にある間だけ動く作りは、これで終わりではない。**走行中は画面を消して
- * ハンドルに固定するので、**常駐（`connectedDevice` 型のフォアグラウンドサービス）が要る**
- * ——それは BLE の接続と一緒に #38 で入れる。
+ * **走行中は画面を消してハンドルに固定する**ので、常駐（フォアグラウンドサービス）が要る。
+ * **それを立てるのは測位の側**（`./location.ts`）で、BLE の接続もその1本に相乗りする。
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -133,7 +132,7 @@ export function useRideLoop(
       onWarn: (warning, t) => record(() => recording.addWarning(warning, t)),
     });
     // **走行を始めた時点の口を使い続ける。**走行中に標識を取りに行かない
-    // （`docs/interfaces/mobile-api.md`「走行中は取りに行かない」）。
+    // （`docs/interfaces/stop-signs-delivery.md`「走行中は取りに行かない」）。
     const nearby = createNearbySigns(signs);
 
     // **心拍を先に始める。**測位の権限を待っている間も、スマホが生きていることは

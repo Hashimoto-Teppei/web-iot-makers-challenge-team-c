@@ -18,7 +18,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "jp.teamc.bikealert"
+      "package": "jp.teamc.bikealert",
+      "permissions": ["android.permission.RECEIVE_BOOT_COMPLETED"]
     },
     "web": {
       "output": "static",
@@ -29,7 +30,8 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "走行中の位置から、周りの自転車との危険を判断するために使います。"
+          "locationWhenInUsePermission": "走行中の位置から、周りの自転車との危険を判断するために使います。",
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       [
@@ -40,7 +42,8 @@
           "imageWidth": 76
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "react-native-ble-plx"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -100,7 +100,7 @@ const routes = app
       // アプリの起動のたびに D1 から引くことになる。
       const found = await readStopSignVersion(db, pref);
       // **空の配列を返さない。**「まだ取り込んでいない県」を 200 + 0 件で返すと、
-      // 端末からは「標識が無い県」と区別が付かない（`docs/interfaces/mobile-api.md`
+      // 端末からは「標識が無い県」と区別が付かない（`docs/interfaces/stop-signs-delivery.md`
       // 「『持っていない』と『0件』を混ぜない」）。
       if (!found) return c.json({ error: `都道府県コード ${pref} の標識がまだありません` }, 404);
 
@@ -138,7 +138,7 @@ const routes = app
   )
   /**
    * **取り込んである県の一覧。**端末の県の選択肢はこれだけで作る
-   * （`docs/interfaces/mobile-api.md`「どの県を選べるかはサーバーが決める」）。
+   * （`docs/interfaces/stop-signs-delivery.md`「どの県を選べるかはサーバーが決める」）。
    *
    * **47 県を端末に焼き込ませないための口である。**焼き込むと、
    * **取り込んでいない県が一覧に並び、選んだ瞬間に 404 が返る。**

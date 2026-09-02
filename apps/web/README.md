@@ -127,20 +127,20 @@ pnpm db:migrate:local
 それでも壊すと困るのは、**各自のアプリに同梱する `signs.db` がこの経路から作られる**ためで、
 **止まるのは走行ではなくビルド**になる（`docs/adr/0009-on-device-storage.md`）。
 
-**仕様の正本は `docs/interfaces/mobile-api.md`「一時停止の標識をスマホに配る」と
+**仕様の正本は `docs/interfaces/stop-signs-delivery.md`「一時停止の標識をスマホに配る」と
 `docs/interfaces/stop-signs-source.md`。** 理由はそちらにあるので繰り返さない。
 
 - **配るのは規制地点と進入方向**（`StopSign`）。**D1 に入るのもこれだけ**——
   交差点名称は元データが空だったので取り込んでいない（`docs/interfaces/stop-signs-source.md`）
 - **1つの交差点に複数の進入方向があれば、標識も方向のぶんだけ別の行になる**
-  （元データは交差点単位で1レコード）。理由は `docs/interfaces/mobile-api.md`
+  （元データは交差点単位で1レコード）。理由は `docs/interfaces/stop-signs-delivery.md`
 - **引数は都道府県コードだけ**（`?pref=33`）。**位置を取らない**
 - **`ETag` を返し、`If-None-Match` に `304` で応える。**版はサーバーが決め、端末はそれをそのまま持ち帰る
 - **まだ取り込んでいない県は 404。**空の配列を返さない（「持っていない」と「0 件」を混ぜない）
 - **認証は無い。**公開されている交通規制情報である
 
 **取り込んである県の一覧は `GET /api/stop-signs/prefs`。** 端末はこれだけを見て
-**都道府県の選択肢を作る**（`docs/interfaces/mobile-api.md`「どの県を選べるかはサーバーが決める」）。
+**都道府県の選択肢を作る**（`docs/interfaces/stop-signs-delivery.md`「どの県を選べるかはサーバーが決める」）。
 **返すのはコードと版と件数だけで、県の名前は返さない**——名前は端末が持っている。
 **`ETag` は付けない**（返るのは数十行で、節約する相手がいない）。
 

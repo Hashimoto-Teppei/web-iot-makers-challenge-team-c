@@ -9,7 +9,7 @@
  *
  * **ここで落とすことに意味がある。**通り抜けたものはそのまま数万件の `signs.db` になり、
  * **アプリは中身が欠けていることに気づけない**——「近くに標識が無い」と
- * 見分けが付かないためである（`docs/interfaces/mobile-api.md`
+ * 見分けが付かないためである（`docs/interfaces/stop-signs-delivery.md`
  * 「『持っていない』と『0件』を混ぜない」）。**静かに欠けるより、生成の時点で落とす。**
  */
 
@@ -50,7 +50,7 @@ function stripWeakValidator(etag: string): string {
  *
  * @param body `GET /api/stop-signs` の JSON
  * @param etag 応答の `ETag` ヘッダ。**`W/` を剥がして `meta.version` になる**
- *   （`docs/interfaces/mobile-api.md`「版はサーバーが決める」）。端末側で作らない
+ *   （`docs/interfaces/stop-signs-delivery.md`「版はサーバーが決める」）。端末側で作らない
  * @param builtAt 生成した時刻
  */
 export function parseStopSignsResponse(

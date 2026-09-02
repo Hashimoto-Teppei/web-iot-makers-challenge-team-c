@@ -236,7 +236,7 @@ describe("updateStopSigns（手元が読めない）", () => {
 describe("updateStopSigns（都道府県を選び直す）", () => {
   it("選んだ県を頼む。手元と違う県なら版を載せない", async () => {
     // **載せると別の県の版を送り返すことになる**
-    // （`docs/interfaces/mobile-api.md`「県を選び直したときも、丸ごと取り直す」）。
+    // （`docs/interfaces/stop-signs-delivery.md`「県を選び直したときも、丸ごと取り直す」）。
     const fetchStopSigns = vi.fn<FetchStopSignsFn>().mockResolvedValue({
       kind: "failed",
       message: "とれない",

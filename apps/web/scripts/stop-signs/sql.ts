@@ -60,7 +60,7 @@ export type ImportSqlOptions = {
 /**
  * その都道府県の標識を**丸ごと入れ替える** SQL を作る。
  *
- * **差分を作らない**（`docs/interfaces/mobile-api.md`）。失敗したときに
+ * **差分を作らない**（`docs/interfaces/stop-signs-delivery.md`）。失敗したときに
  * 「何割か古い標識」が残ると、どこが古いのか誰にも分からなくなる。
  *
  * **トランザクションで囲まない。**D1 は `BEGIN` / `COMMIT` を受け付けず、

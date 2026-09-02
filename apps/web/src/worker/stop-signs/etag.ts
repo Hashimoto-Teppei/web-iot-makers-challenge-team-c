@@ -1,7 +1,7 @@
 /**
  * 標識の版と ETag。
  *
- * **版を作るのはサーバー**（`docs/interfaces/mobile-api.md`「版はサーバーが決める」）。
+ * **版を作るのはサーバー**（`docs/interfaces/stop-signs-delivery.md`「版はサーバーが決める」）。
  * 端末は受け取った ETag をそのまま `signs.db` の `meta.version` に入れ、次回
  * `If-None-Match` で送り返す。**ここの形式を変えると、端末が持っている値と
  * 一致しなくなり、全端末が一度だけ数 MB を落とし直す**（壊れはしないが、変える理由が

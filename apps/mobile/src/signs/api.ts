@@ -18,7 +18,7 @@ import type { FetchStopSignsFn } from "./update";
  * 実際に Worker へ取りに行く {@link FetchStopSignsFn} を作る。
  *
  * **中断の合図を外から受ける。**走行が始まったら**落としている途中でもやめる**必要がある
- * ——`docs/interfaces/mobile-api.md`「走行を始めたら標識の取得をしない」は、
+ * ——`docs/interfaces/stop-signs-delivery.md`「走行を始めたら標識の取得をしない」は、
  * **始めないことだけでなく、続けないこと**も含む。数 MB の転送が 1Hz の中継と
  * 同じ回線に残れば、**中継が詰まって車車間の3検知が全部止まる。**
  *
@@ -32,7 +32,7 @@ export function fetchStopSignsViaApi(signal?: AbortSignal): FetchStopSignsFn {
         { query: { pref: String(pref) } },
         {
           // **手元の版をそのまま送り返す。**端末で作らない
-          // （`docs/interfaces/mobile-api.md`「版はサーバーが決める」）。
+          // （`docs/interfaces/stop-signs-delivery.md`「版はサーバーが決める」）。
           // **同梱直後の最初の起動はここで 304 になり、無駄な数 MB を落とさない。**
           //
           // **`null` のときは載せない。**頼む県が手元と違うとき（県を選び直した、
@@ -43,7 +43,7 @@ export function fetchStopSignsViaApi(signal?: AbortSignal): FetchStopSignsFn {
       );
     } catch (reason: unknown) {
       // **回線が無いのは異常ではない。**走行を止めず、次の起動で取り直す
-      // （`docs/interfaces/mobile-api.md`「取得に失敗しても走行を止めない」）。
+      // （`docs/interfaces/stop-signs-delivery.md`「取得に失敗しても走行を止めない」）。
       return { kind: "failed", message: `標識の更新を取りに行けませんでした: ${String(reason)}` };
     }
 
@@ -70,7 +70,7 @@ export function fetchStopSignsViaApi(signal?: AbortSignal): FetchStopSignsFn {
 /**
  * 選べる県を取りに行った結果。**「無い」と「取れなかった」を混ぜない**——
  * 前者は選ばせない理由が取り込みで、後者は電波である
- * （`docs/interfaces/mobile-api.md`「どの県を選べるかはサーバーが決める」）。
+ * （`docs/interfaces/stop-signs-delivery.md`「どの県を選べるかはサーバーが決める」）。
  */
 export type StopSignPrefsResult =
   /** 取れた。**空の配列もありうる**（1件も取り込んでいない） */
@@ -82,7 +82,7 @@ export type StopSignPrefsResult =
  * 取り込んである県の一覧（`GET /api/stop-signs/prefs`）。
  *
  * **端末に 47 県を焼き込まないための口。**焼き込むと、**取り込んでいない県が
- * 一覧に並び、選んだ瞬間に 404 になる**（`docs/interfaces/mobile-api.md`）。
+ * 一覧に並び、選んだ瞬間に 404 になる**（`docs/interfaces/stop-signs-delivery.md`）。
  *
  * **名前はサーバーから来ない。**都道府県の名前は変わらないので端末が持つ（`./pref.ts`）。
  */

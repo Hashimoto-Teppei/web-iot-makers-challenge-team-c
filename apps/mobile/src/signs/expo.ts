@@ -84,7 +84,7 @@ export function useSignStore(): SignStore {
  *
  * **引き直しを忘れないこと。**忘れると、入れ替えたのに**画面には古い版と件数が
  * 出続ける**——「更新できたのかどうか人に見せる」という、この仕組みの目的そのものが
- * 果たせなくなる（`docs/interfaces/mobile-api.md`「『持っていない』と『0件』を混ぜない」）。
+ * 果たせなくなる（`docs/interfaces/stop-signs-delivery.md`「『持っていない』と『0件』を混ぜない」）。
  */
 export function useSignsMeta(store: SignStore): SignsMeta | null {
   const { outcome } = useSignsUpdateSnapshot();
@@ -154,7 +154,7 @@ export function useSignsUpdateState(): SignsUpdateState {
  * 通知で別の画面へ直接入る道を足すときは、ここの置き場所を `_layout.tsx` へ移すこと**
  * ——設定画面が「まだ確かめていません」のまま固まる。
  * **走行中は取りに行かない**——数 MB の取得が 1Hz の中継と同じ回線を奪い、
- * **中継が詰まれば車車間の3検知が全部止まる**（`docs/interfaces/mobile-api.md`
+ * **中継が詰まれば車車間の3検知が全部止まる**（`docs/interfaces/stop-signs-delivery.md`
  * 「取るのはアプリの起動時。走行中は取りに行かない」）。
  *
  * @param store 画面が読んでいるものと同じ口を渡す。**ここで開き直さない**
@@ -252,7 +252,7 @@ export function useSignsUpdate(
 
   // **走り出したら、落としている途中でもやめる。**始めないことだけでは足りない
   // ——数 MB の転送が残れば、1Hz の中継と回線を取り合う
-  // （`docs/interfaces/mobile-api.md`「走行を始めたら標識の取得をしない」）。
+  // （`docs/interfaces/stop-signs-delivery.md`「走行を始めたら標識の取得をしない」）。
   useEffect(() => {
     if (!riding) return;
     abortRef.current?.();
@@ -270,7 +270,7 @@ const UPDATE_TIMEOUT_MS = 30_000;
 
 /**
  * 人が選んだ県に入れ替える（#71）。**起動時の更新と同じ処理を通す**
- * （`./update.ts`）——2つ作らない（`docs/interfaces/mobile-api.md`
+ * （`./update.ts`）——2つ作らない（`docs/interfaces/stop-signs-delivery.md`
  * 「県を選び直したときも、丸ごと取り直す」）。
  *
  * **結果は起動時の更新と同じ場所に出す。**設定画面の「更新」の行がそのまま入れ替わる

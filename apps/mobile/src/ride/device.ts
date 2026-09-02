@@ -3,12 +3,13 @@
  *
  * **ここに BLE の実装を書かない。**走行ループ（`./loop.ts`）が知ってよいのは
  * 「名乗る `device_id`」と「`alert` に1通書く」の2つだけで、スキャン・MTU・
- * サービス探索・再接続は #38 の範囲である。分けてあるおかげで、**実機も
+ * サービス探索・再接続は `../ble/link.ts` にある。分けてあるおかげで、**実機も
  * Development Build も無いまま走行ループを Vitest で回せる**
  * （`docs/adr/0002-development-lifecycle.md`）。
  *
- * #38 が入ったら {@link MockDeviceLink} を実装に差し替える。**その差し替えで
- * `./loop.ts` は変わらない**——変わるなら、この境界の切り方が間違っている。
+ * **実装に差し替えても `./loop.ts` は変わらない**——変わるなら、この境界の切り方が
+ * 間違っている。{@link MockDeviceLink} は開発機と、BLE のネイティブモジュールが
+ * 無い環境（Web）でだけ使う（`./use-device-link.ts`）。
  */
 
 import type { AlertMessage } from "../v2v/alert";
@@ -45,7 +46,7 @@ export type DeviceLink = {
  * 開発機で走行ループを回すためのモック。
  *
  * 書かれたものを配列に溜めるだけ。**溜めるのは確認のためであって、送り直すためではない。**
- * 実装（#38）は溜めずに捨てる。
+ * 実装（`../ble/link.ts`）は溜めずに捨てる。
  */
 export type MockDeviceLink = DeviceLink & {
   /** 書かれたもの（古い順） */
@@ -59,7 +60,8 @@ export type MockDeviceLink = DeviceLink & {
 /**
  * モックが名乗る端末ID。**全員が同じ値を名乗る**ので、これを名乗ったまま共有の
  * デプロイ先へ中継すると、**開発者どうしが Durable Object の同じ枠を上書きし合う**
- * （`../lib/api.ts` の歯止めが止める）。#38 で実機の ID に差し替わる。
+ * （`../lib/mock-guard.ts` の歯止めが止める）。**実機につながれば、名乗る ID が
+ * デバイスから読んだものに変わるので、歯止めは自然に外れる。**
  */
 export const MOCK_DEVICE_ID = "a1000001";
 
