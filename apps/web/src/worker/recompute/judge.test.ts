@@ -5,7 +5,7 @@ import { type JudgePoint, type JudgeSign, judgeRide, type Thresholds } from "./j
  * 合成データ。**実走行の GPS ログを使わない**（`CLAUDE.md`）。岡山駅の周辺に置いてある。
  *
  * **しきい値はテストの中で決める。**サーバーに既定値が無い（`config.ts`）ので、
- * ここの数字は `docs/interfaces/web-service.md`「しきい値の既定値」から写したものである。
+ * ここの数字は `docs/interfaces/web-stats.md`「しきい値の既定値」から写したものである。
  */
 const THR: Thresholds = {
   stopSpeedMps: 1.5,

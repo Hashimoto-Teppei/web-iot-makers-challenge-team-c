@@ -13,7 +13,7 @@ const LOG_ID = "9a1c0000";
  * 合成データ。**実走行の GPS ログを使わない**（`CLAUDE.md`）。岡山駅の周辺に置いてある。
  *
  * **しきい値はここで決める。**サーバーに既定値が無い（`recompute/config.ts`）ので、
- * `docs/interfaces/web-service.md`「しきい値の既定値」から写している。
+ * `docs/interfaces/web-stats.md`「しきい値の既定値」から写している。
  */
 const THRESHOLDS: RecomputeRequest["thresholds"] = {
   stopSpeedMps: 1.5,

@@ -35,7 +35,7 @@ export function distanceM(lat1: number, lon1: number, lat2: number, lon2: number
  *
  * **`ride_points.crs`（端末が打った方角）の代わりに使う。**方角の無い測位が `0`（真北）
  * として入っていることがあり（`docs/unverified.md` 57）、**それを信じると東西に走った走行が
- * 北向きの標識に付く**（`docs/interfaces/web-service.md`「不停止の判定」）。
+ * 北向きの標識に付く**（`docs/interfaces/web-stats.md`「不停止の判定」）。
  *
  * **2点が同じなら方位は定義できない**ので `null` を返す。呼ぶ側は「分からない」として扱うこと
  * ——0（真北）に潰すと、まさに上と同じ間違いをこちらで作ることになる。

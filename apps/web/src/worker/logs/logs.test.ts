@@ -146,7 +146,7 @@ describe("POST /api/logs", () => {
     const row = await env.DB.prepare("SELECT t_est FROM detections WHERE source = 'device'").first<{
       t_est: number;
     }>();
-    // 立っている検知は地図とランキングから除かれる（`docs/interfaces/web-service.md`）。
+    // 立っている検知は地図とランキングから除かれる（`docs/interfaces/web-stats.md`）。
     expect(row?.t_est).toBe(1);
   });
 

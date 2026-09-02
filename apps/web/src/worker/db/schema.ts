@@ -109,7 +109,7 @@ export const rides = sqliteTable(
      *
      * **文字列の ISO 8601 にしない**（`pings` とは違う）。この列は `ride_points.t` や
      * `detections.t` と引き算・比較をする——**デバイス発の検知を走行に結びつけるのは
-     * `(device_id, t)` だけ**なので（`docs/interfaces/web-service.md`）、
+     * `(device_id, t)` だけ**なので（`docs/interfaces/web-stats.md`）、
      * **突き合わせる相手と同じ単位で持つ。**
      */
     startedAt: integer("started_at").notNull(),
@@ -126,7 +126,7 @@ export const rides = sqliteTable(
   },
   (t) => [
     primaryKey({ columns: [t.deviceId, t.logId] }),
-    // 集計は期間で切って走行を数える（`docs/interfaces/web-service.md`「率で見る」）。
+    // 集計は期間で切って走行を数える（`docs/interfaces/web-stats.md`「率で見る」）。
     index("rides_started_at_idx").on(t.startedAt),
   ],
 );
@@ -159,7 +159,7 @@ export const ridePoints = sqliteTable(
     /**
      * 進行方角（度、真北 0）。**低速時は `null`。**
      *
-     * **不停止の判定でこの列を使わない**（`docs/interfaces/web-service.md`「不停止の判定」）。
+     * **不停止の判定でこの列を使わない**（`docs/interfaces/web-stats.md`「不停止の判定」）。
      * **方角の無い測位が `0`（真北）として入っていることがある**（`docs/unverified.md` 57）。
      * 走行の側の方角は**点の並びから出す。**
      */
@@ -214,7 +214,7 @@ export const detections = sqliteTable(
      * BLE が切れている間、デバイスは最後に受け取った `beat` の `t` に経過を足して打つ。
      * **切断が長いほどずれ、ずれた時刻に一番近い測位点＝別のセルに積まれる**ので、
      * **地図とランキングの集計から除く**（詳細画面には出す。
-     * `docs/interfaces/web-service.md`「検知を場所に結びつける」）。
+     * `docs/interfaces/web-stats.md`「検知を場所に結びつける」）。
      *
      * **スマホ発の行では必ず `false`。**取り込みが受け取るのはデバイス発だけである
      * （`src/worker/logs/request.ts`）。
@@ -232,7 +232,7 @@ export const detections = sqliteTable(
 
 /**
  * 不停止。**サーバーが走行ログと標識から計算したもので、何度でも作り直せる**
- * （`docs/interfaces/web-service.md`「不停止の判定」）。
+ * （`docs/interfaces/web-stats.md`「不停止の判定」）。
  *
  * **`POST /api/logs` からは絶対に書かない。**この表を作るのは
  * `POST /api/admin/recompute`（#85）だけで、**再計算のたびに走行ぶんを消して入れ直す。**
