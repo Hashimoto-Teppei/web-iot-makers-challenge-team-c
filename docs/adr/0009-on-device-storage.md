@@ -41,8 +41,13 @@
   **当初は `drizzle-kit`（`driver: 'expo'`）+ `useMigrations` と書いていたが、#73 で変えた**
   （2026-09-01）——`babel-plugin-inline-import` と生成物が要るわりに、やることは
   「版を見て DDL を流す」だけで、**この形なら同じ SQL を Node のテストでも実機でも流せる**
-- **小さな設定値（選んでいる都道府県、最後に更新した時刻）は `expo-sqlite/kv-store`。**
+- **小さな設定値（最後に更新した時刻など）は `expo-sqlite/kv-store`。**
   AsyncStorage の drop-in なので、**`@react-native-async-storage/async-storage` は入れない**
+- **ただし「選んでいる都道府県」はここに置かない**（2026-09-02 に #71 で変えた）。
+  当初は設定値の例として挙げていたが、**置くと「選んだ県」と「手元にある県」が
+  食い違いうる**——取り直しに失敗したときに、**選んだことになっているのに
+  持っていない端末**ができる。**`signs.db` の `meta.pref` が正本**であり、
+  入れ替えが成功したときだけ変わる（`../interfaces/mobile-api.md`）
 
 ### 2. ファイルを2つに分ける（`signs.db` / `app.db`）
 
