@@ -10,6 +10,12 @@ import {
   MAX_FILL_OPACITY,
   MIN_FILL_OPACITY,
   RADIUS_PER_SQRT_RIDE,
+  STROKE_OPACITY,
+  STROKE_OPACITY_SELECTED,
+  STROKE_WEIGHT,
+  STROKE_WEIGHT_SELECTED,
+  Z_INDEX_SELECTED,
+  zIndexForRate,
 } from "./config";
 import { loadGoogleMaps, MAPS_API_KEY } from "./maps";
 
@@ -44,11 +50,21 @@ const centerOf = (cell: StatsCell): google.maps.LatLngLiteral => {
   return { lat: center.lat, lng: center.lon };
 };
 
-/** 円の縁。**選ばれたセルだけ濃く太くする**（塗りは率のためのものなので触らない）。 */
-const strokeFor = (isSelected: boolean) => ({
+/**
+ * 円の縁と重なり順。**選ばれたセルだけ濃く太くし、全部より上に出す**
+ * （塗りは率のためのものなので触らない）。
+ *
+ * **値は `./config.ts` が持つ。**ここに書くと**見せ方の数字が2箇所に散る**
+ * （`CLAUDE.md`「しきい値をコードに直書きしない」）。**縁と重なり順が何のためにあるかも、そちらにある。**
+ *
+ * **`rate` を受けるのは、選択が外れたときに率どおりの重なり順へ戻すため。**
+ * ここで返さないと、**一度選んだ円が最前面に居座る。**
+ */
+const strokeFor = (isSelected: boolean, rate: number) => ({
   strokeColor: CIRCLE_COLOR,
-  strokeOpacity: isSelected ? 1 : 0.35,
-  strokeWeight: isSelected ? 3 : 1,
+  strokeOpacity: isSelected ? STROKE_OPACITY_SELECTED : STROKE_OPACITY,
+  strokeWeight: isSelected ? STROKE_WEIGHT_SELECTED : STROKE_WEIGHT,
+  zIndex: isSelected ? Z_INDEX_SELECTED : zIndexForRate(rate),
 });
 
 export function StatsMap({ cells, selected, onSelect }: StatsMapProps) {
@@ -105,7 +121,7 @@ export function StatsMap({ cells, selected, onSelect }: StatsMapProps) {
         radius: RADIUS_PER_SQRT_RIDE * Math.sqrt(cell.rides),
         fillColor: CIRCLE_COLOR,
         fillOpacity: MIN_FILL_OPACITY + (MAX_FILL_OPACITY - MIN_FILL_OPACITY) * cell.rate,
-        ...strokeFor(false),
+        ...strokeFor(false, cell.rate),
       });
       // 地図の円からも選べるようにする（順位表との往復は双方向でないと片道になる）。
       circle.addListener("click", () => onSelect(cell));
@@ -129,7 +145,8 @@ export function StatsMap({ cells, selected, onSelect }: StatsMapProps) {
     const selectedId = selected ? cellId(selected) : null;
     for (const [index, circle] of circles.current.entries()) {
       const cell = cells[index];
-      circle.setOptions(strokeFor(cell !== undefined && cellId(cell) === selectedId));
+      if (cell === undefined) continue;
+      circle.setOptions(strokeFor(cellId(cell) === selectedId, cell.rate));
     }
   }, [cells, selected]);
 
