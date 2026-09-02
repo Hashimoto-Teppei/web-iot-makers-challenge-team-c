@@ -49,15 +49,8 @@ export async function watchFixes(
   onFix: (fix: SelfMessage) => void,
   config: LocationConfig = locationDefaults,
 ): Promise<() => void> {
-  const permission = await Location.requestForegroundPermissionsAsync();
-  if (!permission.granted) throw new Error("位置情報の権限が許可されていません");
-  // **「おおよその位置」だけの許可でも `granted` は true になる**（Android 12 以降）。
-  // このとき `hacc` は数百メートルになり、受け取る側の上限（既定 50m）で**1通残らず
-  // 捨てられる。**画面には「測位: 取れていない」としか出ず、**原因が権限であることを
-  // 人は知りようがない**ので、ここで分けて伝える。
-  if (permission.android?.accuracy === "coarse") {
-    throw new Error("位置情報が「おおよその位置」になっています。「正確な位置」を許可してください");
-  }
+  const reason = await checkLocationPermission();
+  if (reason !== null) throw new Error(reason);
 
   const subscription = await Location.watchPositionAsync(
     {
@@ -75,6 +68,29 @@ export async function watchFixes(
   );
 
   return () => subscription.remove();
+}
+
+/**
+ * 測位できる見込みがあるかを確かめる。**測れない理由、無ければ `null` を返す。**
+ *
+ * **走行前の点検（`./pre-ride.ts`）が呼ぶ。**走り出すまで測位は動いていないので、
+ * **走行前に確かめられるのは権限までである**——実際に測位が出るかは走り始めてから
+ * `RideStatus.fix` に出る。
+ *
+ * **権限を要求する（見るだけにしない）。**この画面はまだ人がスマホを見ている場所で、
+ * **ここで訊かないと、走り出した瞬間にダイアログが出る**（そのとき人はもう漕いでいる）。
+ */
+export async function checkLocationPermission(): Promise<string | null> {
+  const permission = await Location.requestForegroundPermissionsAsync();
+  if (!permission.granted) return "位置情報の権限が許可されていません";
+  // **「おおよその位置」だけの許可でも `granted` は true になる**（Android 12 以降）。
+  // このとき `hacc` は数百メートルになり、受け取る側の上限（既定 50m）で**1通残らず
+  // 捨てられる。**画面には「測位: 取れていない」としか出ず、**原因が権限であることを
+  // 人は知りようがない**ので、ここで分けて伝える。
+  if (permission.android?.accuracy === "coarse") {
+    return "位置情報が「おおよその位置」になっています。「正確な位置」を許可してください";
+  }
+  return null;
 }
 
 /**
