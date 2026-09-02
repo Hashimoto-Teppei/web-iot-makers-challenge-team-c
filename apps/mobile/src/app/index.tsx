@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { getRideLogStore } from "@/log/expo";
 import { useRideLogSync } from "@/log/use-ride-log-sync";
 import { useRideLoop } from "@/ride/use-ride-loop";
-import { useSignStore, useSignsMeta } from "@/signs/expo";
+import { useSignStore, useSignsMeta, useSignsUpdate } from "@/signs/expo";
 
 /**
  * 走行前後に見る画面。**走行中に見る前提の表示を足さないこと**（`CLAUDE.md`）。
@@ -30,6 +30,9 @@ export default function HomeScreen() {
   const ride = useRideLoop(signs, logs);
   const sync = useRideLogSync(logs);
   const status = ride.status;
+  // **起動時に1回だけ標識の更新を取りに行く**（`docs/interfaces/mobile-api.md`）。
+  // **走行中かを渡すのはこの画面だけが知っているから**——設定画面は見るだけである。
+  const signsUpdate = useSignsUpdate(signs, { riding: ride.running });
   const signsMeta = useSignsMeta(signs);
   // **標識を持っていない端末で走らせない**（`docs/adr/0009-on-device-storage.md`）。
   // 走れてしまうと、一時停止の事前通知だけが黙ったまま走ることになり、
@@ -69,6 +72,18 @@ export default function HomeScreen() {
             一時停止の標識を持っていないため、走行を始められません（docs/setup.md の手順で
             同梱物を作ってください）。
           </Text>
+        )}
+
+        {/*
+          **更新できなかったことを走行の前に見せる。**失敗しても走行は普通に始められる
+          （手元の標識で動く）ので、**黙ると古い標識のまま走り続けていることに誰も気づけない**
+          ——`POST` の連続失敗を出しているのと同じ理由である。
+
+          **標識を持っていないときは出さない。**すぐ上の赤い行が同じことを言っており、
+          **2つ並ぶと、直し方が2通りあるように読める。**
+        */}
+        {hasSigns && signsUpdate.outcome?.error != null && (
+          <Text style={styles.note}>{signsUpdate.outcome.error}</Text>
         )}
 
         {/* **開けなかったことを走行の前に見せる。**走り終えてから「送るものが無い」と

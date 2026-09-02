@@ -14,6 +14,11 @@
  * **メモリ実装だけにしないこと。**「メモリ実装は通るが実機の SQL が間違っている」が
  * 素通りするので、`better-sqlite3` の実装を必ず併置して**同じテスト**を回す
  * （`./store.test.ts`）。
+ *
+ * **読む口（`SignStore`）と書く口（`SignWriter`）を分けてある。**走行ループと検知が
+ * 触れるのは読む方だけで、**書けるものを渡すと、1Hz の経路から標識を書き換えられる**
+ * ——更新は起動時にしか走らない（`docs/interfaces/mobile-api.md`
+ * 「取るのはアプリの起動時。走行中は取りに行かない」）。
  */
 
 import { and, between, sql } from "drizzle-orm";
@@ -57,6 +62,26 @@ export type SignStore = {
 };
 
 /**
+ * 標識の入れ替え口。**丸ごと差し替えるだけで、差分を当てる道は持たない**
+ * （`docs/interfaces/mobile-api.md`「差分を作らない」）。
+ *
+ * **1件でも失敗したら1件も変わらないこと。**途中まで書けた状態を残すと、
+ * **どこが古いのか誰にも分からない `signs.db`** が端末に残る。
+ * SQL 実装はトランザクションで囲んでこれを満たす（{@link createDrizzleSignWriter}）。
+ */
+export type SignWriter = {
+  /**
+   * 手元の標識を、渡されたもので丸ごと置き換える。
+   *
+   * @param meta 新しい素性。**`version` はサーバーが返した ETag そのまま**
+   *   （端末で作らない。`docs/interfaces/mobile-api.md`「版はサーバーが決める」）
+   * @param signs 新しい標識の全件。**空を渡さない**——0 件で入れ替えると
+   *   **何も持っていない端末**ができる。呼ぶ前に弾くのは `./update.ts` の仕事
+   */
+  replace(meta: SignsMeta, signs: readonly StopSign[]): void;
+};
+
+/**
  * メモリ実装。**Vitest の既定**であり、シミュレータもこれを使う。
  *
  * **`near()` の意味を SQL 実装と1文字も変えないこと。**ここでの絞り込みが
@@ -66,20 +91,47 @@ export function createMemorySignStore(
   signs: readonly StopSign[],
   meta: SignsMeta | null = null,
 ): SignStore {
+  return createMemorySigns(signs, meta).store;
+}
+
+/**
+ * メモリ実装の、**書ける方**。読む口と書く口が同じ中身を見る。
+ *
+ * **更新（`./update.ts`）のテストはこれで回す。**同じテストを `better-sqlite3` にも
+ * 回すこと（`./store.test.ts`）——**入れ替えの SQL こそ、間違えると
+ * 「何も持っていない端末」を作る**側である。
+ */
+export function createMemorySigns(
+  signs: readonly StopSign[] = [],
+  meta: SignsMeta | null = null,
+): { store: SignStore; writer: SignWriter } {
+  // **入れ替えで差し替わる**ので、引数をそのまま閉じ込めない。
+  let current: readonly StopSign[] = signs;
+  let currentMeta = meta;
+
   return {
-    near(lat, lon) {
-      const range = cellRange(cellOf(lat, lon));
-      return signs.filter((sign) => {
-        const cell = cellOf(sign.lat, sign.lon);
-        return (
-          cell.lat >= range.latMin &&
-          cell.lat <= range.latMax &&
-          cell.lon >= range.lonMin &&
-          cell.lon <= range.lonMax
-        );
-      });
+    store: {
+      near(lat, lon) {
+        const range = cellRange(cellOf(lat, lon));
+        return current.filter((sign) => {
+          const cell = cellOf(sign.lat, sign.lon);
+          return (
+            cell.lat >= range.latMin &&
+            cell.lat <= range.latMax &&
+            cell.lon >= range.lonMin &&
+            cell.lon <= range.lonMax
+          );
+        });
+      },
+      meta: () => currentMeta,
     },
-    meta: () => meta,
+    writer: {
+      replace(nextMeta, nextSigns) {
+        // **SQL 実装と同じ順で、同じものだけを差し替える。**片方だけ更新する道を作らない。
+        current = [...nextSigns];
+        currentMeta = nextMeta;
+      },
+    },
   };
 }
 
@@ -155,4 +207,65 @@ export function createDrizzleSignStore(db: SyncSqliteDatabase): SignStore {
       return row ?? null;
     },
   };
+}
+
+/**
+ * 1回の `INSERT` にまとめる件数。
+ *
+ * SQLite には1文あたりのパラメータ数の上限があるので、全件を1文に入れない
+ * （**数万件で必ず超える**）。8列 × 500 行 = 4000 個で、既定の上限に十分収まる。
+ */
+const INSERT_CHUNK = 500;
+
+/**
+ * SQL の入れ替え実装。**`better-sqlite3`（生成・テスト）と `expo-sqlite`（実機）で同じもの。**
+ *
+ * **トランザクションで囲む。**囲まないと、**消したあとで落ちた端末が「何も持っていない端末」**
+ * になる（`docs/interfaces/mobile-api.md`「差分を作らない」）。
+ * Drizzle の同期ドライバは `begin` / `commit` / `rollback` をそのまま流すので、
+ * **落ちれば消す前の状態に戻る**（`drizzle-orm/expo-sqlite` の `session.js` で確認済み）。
+ */
+export function createDrizzleSignWriter(db: SyncSqliteDatabase): SignWriter {
+  return {
+    replace(meta, signs) {
+      const rows = toSignRows(meta.pref, signs);
+
+      db.transaction((tx) => {
+        // **`meta` を先に消す。**途中で落ちれば丸ごと巻き戻るので順序は本来どちらでもよいが、
+        // **「素性が無い＝持っていない」を先に立てておく**方が、万一トランザクションが
+        // 効かないドライバに差し替わったときの壊れ方が軽い（0 件ではなく `null` になる）。
+        tx.delete(metaTable).run();
+        tx.delete(signsTable).run();
+
+        // **1件ずつ書かない。**数万件を1件ずつ commit すると、生成に何分もかかる。
+        for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
+          tx.insert(signsTable)
+            .values(rows.slice(i, i + INSERT_CHUNK))
+            .run();
+        }
+        tx.insert(metaTable)
+          .values({ id: 1, ...meta })
+          .run();
+      });
+    },
+  };
+}
+
+/** `StopSign` を `signs` の行にする。**セルはここで計算する**（配られてくるのは位置だけ）。 */
+function toSignRows(pref: number, signs: readonly StopSign[]) {
+  return signs.map((sign) => {
+    const cell = cellOf(sign.lat, sign.lon);
+    return {
+      id: sign.id,
+      pref,
+      lat: sign.lat,
+      lon: sign.lon,
+      // **セルは規制地点で切る。**進入方向の点では切らない——引きたいのは
+      // 「近づいている標識」であって、その手前の点ではない。
+      latCell: cell.lat,
+      lonCell: cell.lon,
+      approachLat: sign.approach?.lat ?? null,
+      approachLon: sign.approach?.lon ?? null,
+    };
+  });
 }
