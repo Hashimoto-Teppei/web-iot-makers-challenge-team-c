@@ -139,7 +139,10 @@ export class BleLink {
   /** フックが捨てられるときに呼ぶ。**`BleManager` は使い捨てにしない**（ネイティブ側が残る）。 */
   destroy(): void {
     this.stop();
-    this.manager.destroy();
+    // **`destroy()` も Promise を返す。**しかも `_destroyPromises()` は
+    // **自分自身の Promise も拒否する**ので、受け取り手を付けないと
+    // ここが最後の1件を出す（`stopScan()` と同じ話）。
+    this.manager.destroy().catch(() => undefined);
   }
 
   /**
@@ -319,6 +322,12 @@ export class BleLink {
   /** Bluetooth が使える状態になるまで待つ。 */
   private waitPoweredOn(generation: number): Promise<void> {
     return new Promise((resolve) => {
+      // **第2引数（今の状態も届ける）を使わない。**`react-native-ble-plx` の中で
+      // `this._callPromise(this.state()).then(...)` と、**拒否側のハンドラを付けずに**
+      // 呼んでいる（`BleManager.js` の `onStateChange`）。`destroy()` は進行中の操作を
+      // すべて拒否するので、**画面を離れるたびに `Uncaught (in promise) BleError` が
+      // ライブラリの中から出る**——こちらのコードでは捕まえられない。
+      // **今の状態は自分で訊く**（下）。そうすれば拒否を受け取れる。
       const subscription = this.manager.onStateChange((state) => {
         if (this.isStale(generation)) {
           subscription.remove();
@@ -329,7 +338,19 @@ export class BleLink {
           subscription.remove();
           resolve();
         }
-      }, true);
+      }, false);
+
+      // **今の状態を1回だけ訊く。**入っていれば待たずに進む。
+      // **失敗は握りつぶしてよい**——入っていなければ、上の購読が変化を拾う。
+      this.manager
+        .state()
+        .then((state) => {
+          if (this.isStale(generation) || state === "PoweredOn") {
+            subscription.remove();
+            resolve();
+          }
+        })
+        .catch(() => undefined);
     });
   }
 
