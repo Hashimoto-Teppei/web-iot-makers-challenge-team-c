@@ -1,0 +1,1 @@
+CREATE INDEX `stop_signs_lat_idx` ON `stop_signs` (`lat`);

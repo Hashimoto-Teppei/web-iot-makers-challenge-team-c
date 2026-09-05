@@ -59,7 +59,11 @@ export const stopSigns = sqliteTable(
     // （`docs/interfaces/stop-signs-source.md`）。
   },
   // 配るときは常に都道府県ぶんを丸ごと引く（`docs/interfaces/stop-signs-delivery.md`）。
-  (t) => [index("stop_signs_pref_idx").on(t.pref)],
+  // 再計算は走行を囲む矩形で引く（`src/worker/recompute/query.ts` の `readSignsInBox`）。
+  // **緯度だけに張る。**SQLite は範囲条件に索引を使えるのが1列までなので、
+  // `(lat, lon)` の複合にしても2列目は効かない。**`pref` との複合にもしない**
+  // ——`readSignsInBox` は県境をまたいだ走行のために意図的に県で絞っていない。
+  (t) => [index("stop_signs_pref_idx").on(t.pref), index("stop_signs_lat_idx").on(t.lat)],
 );
 
 /**
