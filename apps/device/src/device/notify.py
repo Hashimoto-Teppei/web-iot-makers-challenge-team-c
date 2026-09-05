@@ -16,7 +16,7 @@
 
 from dataclasses import dataclass, field
 
-from device.alert import Level, Link
+from device.alert import Level, Link, Warn
 
 # LCD の桁数。**16×2 のキャラクタ LCD を前提にすることは決定済み**
 # （`../../../../docs/notifications/arbitration.md`「画面の割り付け」）。
@@ -116,6 +116,45 @@ def hold_until(lv: Level, now_ms: int, config: NotifyConfig) -> int:
     表を引くところをここに置く（切れたかどうかを見るのは `arbitrate()` の中）。
     """
     return now_ms + config.hold_ms[lv]
+
+
+def merge_warning(
+    warnings: list[ActiveWarning], warn: Warn, now_ms: int, config: NotifyConfig
+) -> list[ActiveWarning]:
+    """届いた `warn` を、発火中の一覧に取り込んだ新しい一覧を返す。
+
+    **同じ `kind` を2件に増やさない。**保持時間を延ばし、`lv` を新しい方に置き換える
+    （上がるのも下がるのも。`../../../../docs/notifications/arbitration.md`「発火中とみなす期間」）。
+
+    **`peak_lv` / `peak_at_ms` を動かすのは、`lv` が今までの最大を超えたときだけ。**
+    ここが鳴らし直しの鍵になっているので（`warning_key()`）、毎回動かすと
+    **再送のたびに鳴り続ける。**
+
+    **保持時間の切れたものはここで落とす。**落とさずに残すと、切れたあとに届いた同じ `kind` が
+    **古い `peak_at_ms` を引き継いで鍵が変わらず、鳴らない**——`arbitrate()` の側で
+    切れたものを無視するだけでは足りない。
+    """
+    kept = [w for w in warnings if w.expires_at_ms > now_ms and w.kind != warn.kind]
+    current = next((w for w in warnings if w.expires_at_ms > now_ms and w.kind == warn.kind), None)
+
+    peak_lv = warn.lv if current is None or warn.lv > current.peak_lv else current.peak_lv
+    peak_at_ms = now_ms if current is None or warn.lv > current.peak_lv else current.peak_at_ms
+    # **短くしない。** `lv` が下がった `warn` で切り上げると、危険が続いているのに
+    # 上位のぶんの保持が残り時間ごと消える（上の docstring の「延ばし」）。
+    expires_at_ms = hold_until(warn.lv, now_ms, config)
+    if current is not None:
+        expires_at_ms = max(expires_at_ms, current.expires_at_ms)
+
+    return [
+        *kept,
+        ActiveWarning(
+            kind=warn.kind,
+            lv=warn.lv,
+            expires_at_ms=expires_at_ms,
+            peak_lv=peak_lv,
+            peak_at_ms=peak_at_ms,
+        ),
+    ]
 
 
 def warning_key(warning: ActiveWarning) -> str:

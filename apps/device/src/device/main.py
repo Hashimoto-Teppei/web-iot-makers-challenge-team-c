@@ -5,16 +5,21 @@
 （`../../../../docs/deploy-device.md`）。
 
 いまつなぐのは BLE ペリフェラルと心拍のウォッチドッグ（#36）、
-心拍の来ない接続を切る判定（#126）。
-センサー・表示と、警告の調停（`notify.py`）は、それぞれの Issue でここに1行ずつ足していく。
+心拍の来ない接続を切る判定（#126）、警告の調停（#35。`notify.py`）。
+センサーと表示は、それぞれの Issue でここに1行ずつ足していく。
+
+**調停の結果を出す先はまだ無い。**`arbitrate()` は値を返すだけで、
+それを鳴らす・光らせる `hw/` 側は部品が決まってから（#13）。
+いまは journalctl に出しており、**繋がっていることはそこでしか確かめられない。**
 """
 
 import logging
 import time
 
-from device import config, identity
-from device.alert import Beat, LinkWatch, Warn
+from device import config, identity, notify
+from device.alert import Beat, LinkStatus, LinkWatch, Warn
 from device.idle import IdleDisconnect
+from device.notify import ActiveWarning, LightPattern
 from device.state import DeviceState
 
 logger = logging.getLogger(__name__)
@@ -67,18 +72,63 @@ def main() -> None:
     # 戻す方法がない（`../../../../docs/interfaces/ble-gatt.md`「前提」）。
     idle = IdleDisconnect(idle_ms=config.IDLE_DISCONNECT_S * 1000)
 
+    # 発火中の警告と、鳴らし終えた鍵の集合（`../../../../docs/notifications/arbitration.md`）。
+    # **どちらも `notify.py` が育てる値**で、ここは持ち回るだけ。**判定をここに書かない。**
+    warnings: list[ActiveWarning] = []
+    chimed: frozenset[str] = frozenset()
+    # 直前に出した表示。**変わったときだけログに出す**ため（毎周期出すと journalctl が埋まる）。
+    shown: tuple[str, str, LightPattern] | None = None
+
+    def emit(now_ms: int, status: LinkStatus) -> None:
+        """いま出すものを決めて、出す。**決めるのは `notify.py`** で、ここは渡すだけ。"""
+        nonlocal chimed, shown
+        output = notify.arbitrate(
+            warnings,
+            link=status.link,
+            link_since_ms=status.since_ms,
+            moving=status.moving,
+            # 停止中に出す情報はまだ無い（走行の要約は #40 以降）。
+            info=None,
+            now_ms=now_ms,
+            chimed=chimed,
+            config=config.NOTIFY_CONFIG,
+        )
+        # **返ってきた集合をそのまま次に渡す。** 中身を足したり引いたりしない。
+        chimed = output.chimed
+
+        # **出力先が無いので journalctl に出す**（#13 で `hw/` が入るまでの唯一の確認手段）。
+        # `tone` は1周期に1つしか返らないイベントなので、出るたびに1行でよい。
+        if output.tone is not None:
+            logger.info("鳴らす: %s", output.tone)
+        if (output.line1, output.line2, output.light) != shown:
+            shown = (output.line1, output.line2, output.light)
+            logger.info("表示: %r / %r / %s", output.line1, output.line2, output.light)
+
     def on_alert(message: Warn | Beat) -> None:
-        # **`warn` は渡さない。** 警告の到着を生存の根拠にすると、
+        # **`warn` を `watch` に渡さない。** 警告の到着を生存の根拠にすると、
         # 静かなときと落ちたときが区別できなくなる（`v2v.md`）。
-        # `warn` の行き先は `notify.py`（未実装）。
+        nonlocal warnings
+        now_ms = _now_ms()
         if isinstance(message, Beat):
-            watch.record_beat(message, _now_ms())
+            watch.record_beat(message, now_ms)
+        else:
+            warnings = notify.merge_warning(warnings, message, now_ms, config.NOTIFY_CONFIG)
+            # **周期を待たずにここで出す。** 待つと、届いてから鳴るまで最大1周期ぶん遅れる
+            # ——`lv 3` は「いま避ける」ための警告なので、その1秒が意味を持つ。
+            # `arbitrate()` が毎回1件を選び直すので、**先に出したせいで順位が狂うことはない。**
+            emit(now_ms, watch.evaluate(now_ms))
 
     def on_tick() -> None:
         # **`beat` が来たときではなく、周期で見る。** 来なくなったことに気づくのが目的なので、
         # 到着を起点にすると**永久に気づけない。**
         now_ms = _now_ms()
         status = watch.evaluate(now_ms)
+
+        # **`push_status()` より先に出す。** 保持時間が切れたことも通信断のチャイムも
+        # `warn` の到着では起きないので、ここを通らない周期を作らない
+        # ——後ろに置くと、`push_status()` が D-Bus で失敗した周期の警告ごと落ちる。
+        emit(now_ms, status)
+
         if status.link != state.link:
             # **変わったときだけログに出す。** 毎秒出すと journalctl が心拍で埋まる
             # （`../config.py`）。

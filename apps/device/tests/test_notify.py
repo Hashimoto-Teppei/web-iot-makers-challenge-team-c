@@ -7,6 +7,7 @@
 **ここで仕様を決め直さない。**
 """
 
+from device.alert import Warn
 from device.notify import (
     LIGHT_OFF,
     ActiveWarning,
@@ -15,6 +16,7 @@ from device.notify import (
     Output,
     Tone,
     arbitrate,
+    merge_warning,
 )
 
 SECOND = 1000
@@ -343,3 +345,118 @@ def test_警告が入ったら情報は消える() -> None:
 
     assert out.line1 == "!!  APPR        "
     assert out.line2 == "OK    -         "
+
+
+# --- 届いた warn の取り込み（`merge_warning`） ---
+
+
+def incoming(kind: str, lv: int) -> Warn:
+    """スマホから届いた `warn` を1通作る。"""
+    return Warn(kind=kind, lv=lv)  # pyright: ignore[reportArgumentType]
+
+
+def merge(warnings: list[ActiveWarning], kind: str, lv: int, now_ms: int) -> list[ActiveWarning]:
+    return merge_warning(warnings, incoming(kind, lv), now_ms, CONFIG)
+
+
+def test_届いた_warn_は保持時間つきで発火中になる() -> None:
+    active = merge([], "approach", 2, now_ms=1 * SECOND)
+
+    assert len(active) == 1
+    assert active[0].kind == "approach"
+    assert active[0].lv == 2
+    # `lv 2` の保持時間は 4 秒。
+    assert active[0].expires_at_ms == 5 * SECOND
+
+
+def test_同じ_kind_は2件に増えない() -> None:
+    """**増やすと、同じ警告が上段の1枠を奪い合う**（`arbitration.md`「発火中とみなす期間」）。"""
+    active = merge(merge([], "approach", 1, now_ms=0), "approach", 3, now_ms=2 * SECOND)
+
+    assert len(active) == 1
+    assert active[0].lv == 3
+
+
+def test_lv_が下がったら表示も下がるが保持は短くならない() -> None:
+    """**短くすると、`lv 3` の残り時間ごと消える。**危険が続いている最中に画面が空になる。"""
+    active = merge(merge([], "approach", 3, now_ms=0), "approach", 1, now_ms=2 * SECOND)
+
+    assert active[0].lv == 1
+    # `lv 3` の 6 秒（= 6000）が残る。下げた側の 2000 + 3000 = 5000 を採らない。
+    assert active[0].expires_at_ms == 6 * SECOND
+
+
+def test_別の_kind_は並んで残る() -> None:
+    active = merge(merge([], "approach", 1, now_ms=0), "brake", 1, now_ms=0)
+
+    assert {w.kind for w in active} == {"approach", "brake"}
+
+
+def test_保持の切れた警告は取り込みのときに落ちる() -> None:
+    active = merge(merge([], "brake", 1, now_ms=0), "approach", 1, now_ms=10 * SECOND)
+
+    assert [w.kind for w in active] == ["approach"]
+
+
+# --- 取り込みと調停をつないだときの「鳴らし直し」 ---
+#
+# **`merge_warning()` と `arbitrate()` の間で鍵が食い違うと、鳴りすぎるか鳴らなくなる。**
+# どちらも `main.py` が持ち回るだけなので、ずれはここでしか見つからない。
+
+
+def test_同じ_lv_の再送では鳴らない() -> None:
+    """スマホは危険が続く間 2 秒ごとに送り直す（`arbitration.md`「鳴らし直す条件」）。"""
+    active = merge([], "approach", 2, now_ms=0)
+    chimed = run(active, now_ms=0).chimed
+    assert chimed  # 1通目では鳴っている
+
+    active = merge(active, "approach", 2, now_ms=2 * SECOND)
+    assert run(active, now_ms=2 * SECOND, chimed=chimed).tone is None
+
+
+def test_lv_が上がったら鳴らし直す() -> None:
+    active = merge([], "approach", 1, now_ms=0)
+    chimed = run(active, now_ms=0).chimed
+
+    active = merge(active, "approach", 3, now_ms=2 * SECOND)
+    out = run(active, now_ms=2 * SECOND, chimed=chimed)
+
+    assert out.tone == CONFIG.tones[3]
+
+
+def test_lv_が下がっても鳴らさない() -> None:
+    """**下がったことを急いで伝える理由が無い**（`arbitration.md`）。"""
+    active = merge([], "approach", 3, now_ms=0)
+    chimed = run(active, now_ms=0).chimed
+
+    active = merge(active, "approach", 1, now_ms=2 * SECOND)
+    assert run(active, now_ms=2 * SECOND, chimed=chimed).tone is None
+
+
+def test_一度消えてから来た同じ警告は鳴らし直す() -> None:
+    """**別の危険なので鳴らす。**取り込みで落としていないと、古い鍵のまま黙る。"""
+    active = merge([], "approach", 2, now_ms=0)
+    chimed = run(active, now_ms=0).chimed
+
+    later = 20 * SECOND
+    active = merge(active, "approach", 2, now_ms=later)
+    out = run(active, now_ms=later, chimed=chimed)
+
+    assert out.tone == CONFIG.tones[2]
+
+
+def test_一度達した_lv_に戻っても鳴らさない() -> None:
+    """`3 → 1 → 3`（`arbitration.md`「鳴らし直す条件」）。
+
+    **同じ危険の中の揺れ**なので鳴らさない。鳴らすと、揺れている間ずっと鳴り続ける。
+    危険が本当に去れば保持が切れて消え、次に来たものは別の警告として鳴る
+    （`test_一度消えてから来た同じ警告は鳴らし直す`）。
+    """
+    active = merge([], "approach", 3, now_ms=0)
+    chimed = run(active, now_ms=0).chimed
+
+    active = merge(active, "approach", 1, now_ms=2 * SECOND)
+    chimed = run(active, now_ms=2 * SECOND, chimed=chimed).chimed
+
+    active = merge(active, "approach", 3, now_ms=4 * SECOND)
+    assert run(active, now_ms=4 * SECOND, chimed=chimed).tone is None
