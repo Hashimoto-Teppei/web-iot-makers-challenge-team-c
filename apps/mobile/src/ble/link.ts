@@ -64,6 +64,8 @@ export type BleLinkConfig = {
 export const bleLinkDefaults: BleLinkConfig = {
   // **長めに取る。**デバイスは常時アドバタイズするが、接続中はアドバタイズを止めるので、
   // 他人がつなぎっぱなしのときは見つからない（`docs/interfaces/ble-security.md`「運用で気をつけること」）。
+  // **待てば戻る。**心拍の書かれない接続はデバイスが 30 秒ほどで自分から切るので
+  // （`docs/interfaces/ble-gatt.md`「前提」）、**探し続けていれば人が触らなくても繋がる。**
   scanTimeoutMs: 20_000,
   retryDelayMs: 2_000,
   permissionRetryDelayMs: 5_000,
@@ -166,9 +168,14 @@ export class BleLink {
       const found = await this.scan(generation);
       if (this.isStale(generation)) return;
       if (found === null) {
+        // **故障として出さない。**別のスマホがつながっている間はアドバタイズが出ないが、
+        // デバイスは心拍の来ない接続を 30 秒ほどで自分から切る
+        // （`docs/interfaces/ble-gatt.md`「前提」）。**探し続けていれば戻るので、
+        // 人にさせることは「待つ」だけ**——ここで電源の入れ直しを促さない。
         this.fail(
-          "デバイスが見つかりません。デバイスの電源を入れて、近くに置いてください" +
-            "（別のスマホがつながったままだと見つかりません）。",
+          "デバイスを探しています。見つからないときは、デバイスの電源が入っていて" +
+            "近くにあることを確かめてください（別のスマホがつながったままでも、" +
+            "しばらく待てば繋がります）。",
           { retry: true },
         );
         return;

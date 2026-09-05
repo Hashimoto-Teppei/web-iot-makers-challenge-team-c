@@ -4,7 +4,8 @@
 実機では `uv run python -m device.main`、電源投入時は systemd から起動される
 （`../../../../docs/deploy-device.md`）。
 
-いまつなぐのは BLE ペリフェラルと心拍のウォッチドッグ（#36）。
+いまつなぐのは BLE ペリフェラルと心拍のウォッチドッグ（#36）、
+心拍の来ない接続を切る判定（#126）。
 センサー・表示と、警告の調停（`notify.py`）は、それぞれの Issue でここに1行ずつ足していく。
 """
 
@@ -13,6 +14,7 @@ import time
 
 from device import config, identity
 from device.alert import Beat, LinkWatch, Warn
+from device.idle import IdleDisconnect
 from device.state import DeviceState
 
 logger = logging.getLogger(__name__)
@@ -60,6 +62,11 @@ def main() -> None:
         started_at_ms=_now_ms(),
     )
 
+    # 心拍の来ない接続をこちらから切る（#126）。**判定は `idle.py` の中。**
+    # 他人がつなぎっぱなしにすると持ち主のスマホが接続できず、いまは電源を切るしか
+    # 戻す方法がない（`../../../../docs/interfaces/ble-gatt.md`「前提」）。
+    idle = IdleDisconnect(idle_ms=config.IDLE_DISCONNECT_S * 1000)
+
     def on_alert(message: Warn | Beat) -> None:
         # **`warn` は渡さない。** 警告の到着を生存の根拠にすると、
         # 静かなときと落ちたときが区別できなくなる（`v2v.md`）。
@@ -70,17 +77,25 @@ def main() -> None:
     def on_tick() -> None:
         # **`beat` が来たときではなく、周期で見る。** 来なくなったことに気づくのが目的なので、
         # 到着を起点にすると**永久に気づけない。**
-        status = watch.evaluate(_now_ms())
-        if status.link == state.link:
-            return
-        # **変わったときだけログに出す。** 毎秒出すと journalctl が心拍で埋まる（`../config.py`）。
-        logger.warning("link が %s → %s に変わった", state.link, status.link)
-        state.link = status.link
-        # 次の定期送信を待たずに知らせる。**落ちたことは早い方がよい。**
-        ble.push_status()
-        # **人に見せるのはまだ journalctl と `status` だけ。**
-        # ディスプレイ・ブザー・LED への出力は `notify.py`（部品が未確定 — #13）。
-        # `status.moving` と `status.since_ms` はそこで使う。
+        now_ms = _now_ms()
+        status = watch.evaluate(now_ms)
+        if status.link != state.link:
+            # **変わったときだけログに出す。** 毎秒出すと journalctl が心拍で埋まる
+            # （`../config.py`）。
+            logger.warning("link が %s → %s に変わった", state.link, status.link)
+            state.link = status.link
+            # 次の定期送信を待たずに知らせる。**落ちたことは早い方がよい。**
+            ble.push_status()
+            # **人に見せるのはまだ journalctl と `status` だけ。**
+            # ディスプレイ・ブザー・LED への出力は `notify.py`（部品が未確定 — #13）。
+            # `status.moving` と `status.since_ms` はそこで使う。
+
+        # **`link` が変わらなくてもここまで来ること。** 切る判定は「変わらないまま
+        # 続いていること」を見るものなので、上の early return の中に置くと**永久に発火しない。**
+        if idle.should_disconnect(
+            link=state.link, transfer_state=state.transfer_state, now_ms=now_ms
+        ):
+            ble.disconnect_central()
 
     ble = ble_hw.BlePeripheral(
         state,
@@ -92,6 +107,8 @@ def main() -> None:
         on_tick=on_tick,
         tick_interval_s=config.LINK_TICK_INTERVAL_S,
         tick_error_log_every=config.TICK_ERROR_LOG_EVERY,
+        on_connect=lambda: idle.on_connect(_now_ms()),
+        on_disconnect=idle.on_disconnect,
     )
     ble.start()
 
