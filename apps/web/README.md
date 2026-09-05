@@ -48,6 +48,14 @@ CORS の設定や API の URL を環境変数で配線する必要はない。
 pnpm --filter web exec wrangler login   # ブラウザが開いて Cloudflare の認証をする
 ```
 
+**Cloudflare のプランは Workers Paid（$5/月）。** 2026-09-03 に Free から移行した。
+**プランはここが正本**で、上限の数字を根拠にするときは他の場所からここを参照する
+（[D1 の料金](https://developers.cloudflare.com/d1/platform/pricing/) /
+[D1 の制限](https://developers.cloudflare.com/d1/platform/limits/) /
+[Workers の制限](https://developers.cloudflare.com/workers/platform/limits/)）。
+主に効くのは **D1 の書き込み 5,000万行/月**・**1回の Worker の呼び出しで 1,000 クエリ**・
+**CPU 時間の既定 30秒**の3つで、いずれも Free の日次上限（10万行/日・50クエリ・10ms）とは桁が違う。
+
 `db:migrate:remote` と `deploy:cf` はここを済ませた担当者のみが実行する。
 秘密値は `wrangler secret put` で登録し、`wrangler.jsonc` には書かない（このリポジトリは public）。
 ローカル用の値は `.dev.vars`（gitignore 済み）に置く。
