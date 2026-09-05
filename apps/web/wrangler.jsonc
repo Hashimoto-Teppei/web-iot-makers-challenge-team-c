@@ -35,7 +35,7 @@
   },
   // Durable Object のクラスは migration で宣言しないとデプロイできない。
   // ストレージは使わないが、新しいクラスは new_sqlite_classes で入れる
-  // （new_classes は旧来の課金プラン向けで、無料プランでは作れない）。
+  // （new_classes は KV バックエンド。今から作るものは SQLite バックエンドで入れる）。
   "migrations": [
     {
       "tag": "v1",
