@@ -9,7 +9,7 @@
 """
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from device.alert import AlertResult, Link, Warn
@@ -55,6 +55,11 @@ class DeviceState:
     link: Link = "down"
     warns: int = 0
     dropped: int = 0
+    # いま効いている `config` の上書き。**既定どおりなら空**
+    # （`../../../../docs/interfaces/ble-gatt.md`「`config`」）。
+    # **決めるのは `tuning.py` の `Tuning`** で、ここはその結果を持つだけ
+    # （`main.py` が書き込みと切断のたびに入れ直す）。**判定をここにも書かない。**
+    cfg: dict[str, int] = field(default_factory=dict)
 
     def record_alert(self, result: AlertResult) -> None:
         """`alert` を1通受け取った結果を数える（`../../../../docs/interfaces/ble-gatt.md`）。
@@ -91,6 +96,7 @@ class DeviceState:
             "link": self.link,
             "warns": self.warns,
             "dropped": self.dropped,
+            "cfg": self.cfg,
         }
 
     def device_info_bytes(self) -> bytes:

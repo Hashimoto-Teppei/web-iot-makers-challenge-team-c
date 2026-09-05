@@ -260,3 +260,16 @@ def test_評価を呼ばずに時間が過ぎても落ちる() -> None:
     watch.record_beat(beat(t=1_000), now_ms=1 * SECOND)
 
     assert watch.evaluate(60 * SECOND).link == "down"
+
+
+def test_タイムアウトを差し替えても控えた心拍は消えない() -> None:
+    # `config` の `beat_to` を書いた瞬間に link が down へ落ちないこと（#124）。
+    # 落ちると、設定を1つ書いただけで「スマホが落ちた」と表示することになる。
+    watch = LinkWatch(timeout_ms=3_000, stall_window_ms=5_000, started_at_ms=0)
+    watch.record_beat(Beat(t=1_000, st="ok", mv=True), 1_000)
+    watch.set_timeouts(timeout_ms=6_000, stall_window_ms=8_000)
+
+    assert watch.evaluate(1_500).link == "up"
+    # 新しいタイムアウトで測る（古い 3 秒なら down になっている頃）。
+    assert watch.evaluate(5_000).link == "up"
+    assert watch.evaluate(7_500).link == "down"

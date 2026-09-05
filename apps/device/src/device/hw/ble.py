@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 SERVICE_UUID = "68666e00-58cc-4540-90ad-18bfae31615f"
 DEVICE_INFO_UUID = "68666e01-58cc-4540-90ad-18bfae31615f"
 STATUS_UUID = "68666e04-58cc-4540-90ad-18bfae31615f"
+CONFIG_UUID = "68666e05-58cc-4540-90ad-18bfae31615f"
 ALERT_UUID = "68666e06-58cc-4540-90ad-18bfae31615f"
 
 # bluezero が GATT のツリーを組むための通し番号。UUID とは無関係で、この中でだけ使う。
@@ -32,6 +33,7 @@ _SRV_ID = 1
 _CHR_DEVICE_INFO = 1
 _CHR_STATUS = 2
 _CHR_ALERT = 3
+_CHR_CONFIG = 4
 
 
 def _first_adapter_address() -> str:
@@ -77,6 +79,7 @@ class BlePeripheral:
         status_notify_interval_s: int = 1,
         alert_drop_log_every: int = 100,
         on_alert: Callable[[Warn | Beat], None] | None = None,
+        on_config: Callable[[bytes], None] | None = None,
         on_tick: Callable[[], None] | None = None,
         tick_interval_s: int = 1,
         tick_error_log_every: int = 60,
@@ -93,6 +96,8 @@ class BlePeripheral:
             on_alert: `alert` で受け取って**採用した**1通を渡す先。
                 心拍のウォッチドッグ（#36）と警告の調停（`notify.py`）がここにつながる。
                 None なら数えるだけで捨てる
+            on_config: `config` に書かれたバイト列を渡す先（#124）。
+                **中身の解釈はここでしない**（`../tuning.py`）。None なら捨てる
             on_tick: 一定間隔で呼ぶ先。**何も届かなくても呼ばれる**ので、
                 心拍が途切れたことに気づけるのはここだけ（`../alert.py` の `LinkWatch`）。
                 None なら呼ばない
@@ -107,6 +112,7 @@ class BlePeripheral:
         self._interval_s = status_notify_interval_s
         self._drop_log_every = alert_drop_log_every
         self._on_alert = on_alert
+        self._on_config = on_config
         self._on_tick = on_tick
         self._tick_interval_s = tick_interval_s
         self._tick_error_log_every = tick_error_log_every
@@ -175,6 +181,20 @@ class BlePeripheral:
             flags=["write"],
             read_callback=None,
             write_callback=self._on_alert_write,
+            notify_callback=None,
+        )
+        # **`config` も同じく `write` だけ。** 断られたことが分からないと、
+        # モバイルは**書けたつもりで既定のまま走る**
+        # （`../../../../../docs/interfaces/ble-gatt.md`「`config`（Write）」）。
+        self._peripheral.add_characteristic(
+            srv_id=_SRV_ID,
+            chr_id=_CHR_CONFIG,
+            uuid=CONFIG_UUID,
+            value=[],
+            notifying=False,
+            flags=["write"],
+            read_callback=None,
+            write_callback=self._on_config_write,
             notify_callback=None,
         )
         # **暗号化のフラグ（encrypt-*）を付けない。** ペアリングしない決定
@@ -311,6 +331,35 @@ class BlePeripheral:
                 self._on_alert(result.message)
         except Exception:
             logger.exception("alert の処理で例外が出た（この1通は捨てる）")
+
+    def _on_config_write(self, value: bytearray, options: dict[str, Any]) -> None:
+        """セントラルが `config` に1通書いたときに呼ばれる（#124）。
+
+        **中身の解釈はここでしない** —— `../tuning.py` に渡し、ここは管に徹する
+        （`_on_alert_write` と同じ）。
+
+        **ここから例外を出さない。** 送出すると bluezero の `WriteValue` を抜けて
+        dbus-python が ATT のエラー応答に変えるため、**以降の Write も失敗し続ける**
+        ——**同じ接続の `alert` まで巻き込む**ので、設定を1回間違えただけで警告が止まる。
+
+        **`dropped` に数えない。** あれは `alert` で壊れているものを数える箱で、
+        混ぜると**警告の異常に気づくための数として使えなくなる**
+        （`../../../../../docs/interfaces/ble-gatt.md`「`status`」）。
+        断った理由は `last_error` に載る（`../main.py`）。
+        """
+        try:
+            # **分割された Write を1通として読まない**（`_on_alert_write` と同じ理由）。
+            # 上書きは高々4キーで 60 バイト程度だが、**MTU を上げずに繋ぐツールでは
+            # 20 バイトずつに割れる**ので、黙って壊れた JSON として扱わない。
+            offset = options.get("offset", 0)
+            if offset:
+                logger.warning("config が分割されて届いた（offset=%d）。この1通は捨てる", offset)
+                return
+            logger.info("config を受け取った（%d バイト）", len(value))
+            if self._on_config is not None:
+                self._on_config(bytes(value))
+        except Exception:
+            logger.exception("config の処理で例外が出た（この1通は捨てる）")
 
     def _record_drop(self, result: AlertResult) -> None:
         """捨てたことをログに出す。**同じ理由が続く間は間引く。**
