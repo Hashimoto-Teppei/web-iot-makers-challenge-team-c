@@ -8,7 +8,7 @@
 
 | 境界 | 状態 | 決めるための Issue |
 | --- | --- | --- |
-| [デバイス ⇄ モバイル（BLE GATT）](./interfaces/ble-gatt.md) | 決定済み（#5 / #6）。**`uplink` を `alert` に置き換え、`proto` を 2 に上げた**（`adr/0006`）。**`config` も決定済み**（#33。接続の間だけ効く上書き。ペアリングは戻さない） | — |
+| [デバイス ⇄ モバイル（BLE GATT）](./interfaces/ble-gatt.md) | 決定済み（#5 / #6）。**`uplink` を `alert` に置き換え、`proto` を 2 に上げた**（`adr/0006`）。**`config` も決定済み**（#33。接続の間だけ効く上書き）。**ペアリングを戻すかだけ未確定** | [#122](https://github.com/Hashimoto-Teppei/web-iot-makers-challenge-team-c/issues/122) |
 | [車車間の位置共有](./interfaces/v2v.md) | 決定済み（#6 / #7）。**位置は BLE を通らなくなった**（`adr/0006`） | — |
 | [モバイル ⇄ API](./interfaces/mobile-api.md) | **決定済み。** 走行中の中継（#7）。**一時停止の標識を配る経路も決定済みで、[別ファイル](./interfaces/stop-signs-delivery.md)に分けた**（#63。端末側の置き方は `adr/0009`） | — |
 | [受け取り方と持ち方](./interfaces/web-service.md)・[数え方](./interfaces/web-stats.md)・[画面](./interfaces/web-ui.md) | **決定済み（#7）。** 集計・取り込み・テーブル・端末の識別・再計算の経路・画面が決まった（生ログを残す判断は `adr/0007`）。**しきい値の既定値は暫定**（`unverified.md` 64・65）で、**設定として外に出してある** | — |
@@ -25,7 +25,7 @@
 | ファイル | 中身 |
 | --- | --- |
 | [`interfaces/ble-gatt.md`](./interfaces/ble-gatt.md) | デバイス ⇄ モバイルの GATT 仕様。UUID・接続手順・Characteristic の役割（`config` を含む） |
-| [`interfaces/ble-security.md`](./interfaces/ble-security.md) | 誰が読み書きできるか。ペアリングを戻さない判断、割り切っていること、運用で気をつけること |
+| [`interfaces/ble-security.md`](./interfaces/ble-security.md) | 誰が読み書きできるか。ペアリングの現状（戻すかは #122 で未確定）、割り切っていること、運用で気をつけること |
 | [`interfaces/ble-log-transfer.md`](./interfaces/ble-log-transfer.md) | `log` で流すレコードの形と、転送を最後までやりきるための約束 |
 | [`interfaces/v2v.md`](./interfaces/v2v.md) | 車車間で流すメッセージ、送る間隔、受信側の約束、デバイスへ渡すもの、心拍の見せ方 |
 | [`interfaces/mobile-api.md`](./interfaces/mobile-api.md) | モバイル ⇄ API の運び方、Worker と Durable Object の約束、受け取ってから警告までの手順、失敗したときの約束、走行後の同期 |
