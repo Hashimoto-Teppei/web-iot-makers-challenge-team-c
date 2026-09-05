@@ -65,6 +65,7 @@ BLE と GPIO のライブラリは **Linux 専用**で、開発機（Windows / m
 | `src/device/detect/` | **判断する層。** センサーによる検知（後方の物体など）。1つの検知につき1ファイル |
 | `src/device/hw/` | **ハードウェアに触る層。** 1つの部品につき1ファイル（`ble.py` / `led.py` / `lcd.py` …） |
 | `src/device/alert.py` | **スマホから届く表示指示と心拍を読み解く**（`../../docs/interfaces/v2v.md`）。**BLE を知らないので開発機でもテストできる**。心拍が途切れたことに気づく仕組み（`LinkWatch`）も同じファイルにある |
+| `src/device/idle.py` | **心拍の来ない接続を切るかどうか**の判定（`../../docs/interfaces/ble-gatt.md`「前提」）。**BLE を知らない**ので開発機でもテストできる。実際に切るのは `hw/ble.py` |
 | `src/device/notify.py` | 検知の結果をどう出すかの調停（`../../docs/notifications/arbitration.md`）。ハードには触らない |
 | `src/device/main.py` | 起動と配線。どの部品の値をどの検知に渡し、結果をどこに出すかを決める |
 | `src/device/state.py` | 今の状態（`link` / 転送の進み具合 / 受け取った警告の数）と、それを `device-info` / `status` の JSON にする変換。**BLE を知らない** |
@@ -100,6 +101,13 @@ BlueZ を触る `hw/ble.py` は Linux 専用ですが、**受け取ったあと�
 
 見張っているのは `alert.py` の `LinkWatch` で、`main.py` が毎秒呼び、結果を `status` の `link`
 （`up` / `nofix` / `down`）として出します。秒数は `config.py` にあります。
+
+**心拍が来ない接続は、30 秒ほどでデバイスの側から切ります**（`idle.py` の `IdleDisconnect`）。
+BLE の接続枠は1つで、**つないでいる相手から枠を奪う手段はスマホ側にありません**。
+他人がつなぎっぱなしにすると持ち主のスマホが接続できず、
+**電源を切るしか戻す方法がなくなる**ためです（`../../docs/interfaces/ble-gatt.md`「前提」）。
+持ち主のアプリは接続したら必ず心拍を毎秒書くので、**心拍を書かない接続は持ち主のものではありません。**
+
 **いまの出力先は `status` と journalctl だけです。**何を出すかを決める `notify.py` は
 入りましたが（#60）、**それを実際に鳴らす・光らせる `hw/` 側がまだありません**
 （部品が未確定のため。#13）。`notify.py` は値を返すだけで、ハードウェアに触りません。

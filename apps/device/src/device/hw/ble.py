@@ -80,6 +80,8 @@ class BlePeripheral:
         on_tick: Callable[[], None] | None = None,
         tick_interval_s: int = 1,
         tick_error_log_every: int = 60,
+        on_connect: Callable[[], None] | None = None,
+        on_disconnect: Callable[[], None] | None = None,
     ) -> None:
         """
         Args:
@@ -96,6 +98,10 @@ class BlePeripheral:
                 None なら呼ばない
             tick_interval_s: `on_tick` を呼ぶ間隔（秒）
             tick_error_log_every: `on_tick` が例外で落ち続けるとき、何回に1本ログを出すか
+            on_connect: セントラルがつないできたときに呼ぶ先。
+                **相手が誰かは渡さない** —— 枠は1つなので、区別する相手がいない
+                （`../idle.py`）
+            on_disconnect: 切れたときに呼ぶ先
         """
         self._state = state
         self._interval_s = status_notify_interval_s
@@ -104,6 +110,12 @@ class BlePeripheral:
         self._on_tick = on_tick
         self._tick_interval_s = tick_interval_s
         self._tick_error_log_every = tick_error_log_every
+        self._on_connect_cb = on_connect
+        self._on_disconnect_cb = on_disconnect
+        # いまつながっている相手。**心拍の来ない接続を切るために持つ**（`../idle.py`）。
+        # bluezero は引数が1つのコールバックに `device.Device` を渡す
+        # （upstream の `adapter.py` `_properties_changed` で確認済み）。
+        self._remote: Any | None = None
         # 周期処理が例外で落ちた回数。**毎回ログに出さないため**（`_tick`）。
         self._tick_errors = 0
         # 直近で捨てた理由と、そのあと同じ理由で捨てた数。**毎通ログに出さないため**（下）。
@@ -322,8 +334,40 @@ class BlePeripheral:
 
     def _on_connect(self, remote: Any) -> None:
         logger.info("接続された: %s", remote)
+        # **持っておく。** 心拍の来ない接続をこちらから切るのに要る（`disconnect_central`）。
+        self._remote = remote
+        if self._on_connect_cb is not None:
+            self._on_connect_cb()
 
     def _on_disconnect(self, adapter_address: str, device_address: str) -> None:
         # 接続が切れると BlueZ がアドバタイズを再開する（こちらで出し直さなくてよい）。
+        # **こちらから切ったときも再開するかは実機で未確認**
+        # （`../../../../../docs/unverified.md` 91。bluezero は `publish()` で1回
+        # `register_advertisement` を呼ぶだけで、切断のたびに登録し直さない）。
+        # **外れていたらここで登録し直す。**
         # **`_status_chrc` は捨てない**（上の注記。捨てると再購読で戻ってこない）。
         logger.info("切断された: %s", device_address)
+        self._remote = None
+        if self._on_disconnect_cb is not None:
+            self._on_disconnect_cb()
+
+    def disconnect_central(self) -> None:
+        """いまつながっている相手をこちらから切る。
+
+        **切るかどうかはここで決めない**（`../idle.py` の `IdleDisconnect`）。
+        ここは言われたとおりに `org.bluez.Device1.Disconnect()` を呼ぶだけ。
+
+        **例外を外に出さない。** 呼ぶのは毎秒の周期処理の中なので、
+        ここで送出すると**心拍のウォッチドッグごとタイマーが外れる**（`_tick` の注記）。
+        """
+        remote = self._remote
+        if remote is None:
+            return
+        # **失敗しても手放さない。** 切れていなければ相手はつないだままなので、
+        # もう一度試せる相手を捨てない（切れれば `_on_disconnect` が None に戻す）。
+        # 何度も投げ続けないようにするのは `../idle.py` 側の仕事。
+        try:
+            logger.warning("心拍が来ないので、こちらから接続を切る")
+            remote.disconnect()
+        except Exception:
+            logger.exception("接続を切れなかった（アドバタイズはそのまま続ける）")
