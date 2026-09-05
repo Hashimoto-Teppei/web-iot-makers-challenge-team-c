@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 import { BleLink, type BleLinkState } from "../ble/link";
 import { createMockDeviceLink, type DeviceLink } from "./device";
+import { useIdleHeartbeat } from "./idle-heartbeat";
 
 export type DeviceConnection = {
   /** 接続中のデバイス。**つながっていなければ `null`** */
@@ -62,6 +63,13 @@ export function useDeviceLink(): DeviceConnection {
     link.start();
     return () => link.destroy();
   }, []);
+
+  // **心拍は接続に付いている**（走行ではなく）。ここで出しておかないと、
+  // **走り出すまでデバイスが持ち主を 30 秒ごとに切る**（#128。`./idle-heartbeat.ts`）。
+  // **フックなので早期 return より前に呼ぶ**——後ろに置くと、モックへ落ちた回と
+  // そうでない回で呼ぶ数が変わり、React が壊れる。
+  const device = !HAS_BLE || failed ? mock : state.device;
+  useIdleHeartbeat(device);
 
   if (!HAS_BLE || failed) {
     return { device: mock, link: null, reason: null, searching: false, isMock: true };

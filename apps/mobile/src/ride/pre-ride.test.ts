@@ -89,8 +89,9 @@ describe("preRideChecks", () => {
     expect(check({ ...ready, status: riding, deviceLink: "down" }, "device").state).toBe("ng");
   });
 
-  // **走り出す前の `down` は正常。**心拍は走行を始めてから出る（`./loop.ts`）ので、
-  // ここで赤くすると**つながっているのに永久に走り始められない。**
+  // **走り出す前でも心拍は出ている**（`./idle-heartbeat.ts`。#128）が、
+  // **`link` が上がるまでに数秒かかる。**ここで赤くすると、つないだ直後がいつも赤に見え、
+  // **本物の赤が読み飛ばされるようになる**（`../ble/link.ts` の偽の ✗ と同じ話）。
   it("走り出す前の down では赤にしない", () => {
     expect(check({ ...ready, deviceLink: "down" }, "device").state).toBe("ok");
   });
