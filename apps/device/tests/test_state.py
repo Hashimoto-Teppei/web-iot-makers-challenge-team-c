@@ -36,7 +36,7 @@ def test_1件も持っていないときseqは両方0() -> None:
     assert payload["latest_seq"] == 0
 
 
-def test_statusは仕様の7項目を出す() -> None:
+def test_statusは仕様の8項目を出す() -> None:
     payload = json.loads(_state().status_bytes())
 
     assert payload == {
@@ -47,6 +47,8 @@ def test_statusは仕様の7項目を出す() -> None:
         "link": "down",
         "warns": 0,
         "dropped": 0,
+        # 上書きは既定どおりなら空（docs/interfaces/ble-gatt.md「config」）。
+        "cfg": {},
     }
 
 

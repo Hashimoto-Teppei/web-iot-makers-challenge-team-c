@@ -58,6 +58,7 @@ from device import config, identity
 from device.alert import Beat, LinkWatch, Warn, parse_alert
 from device.idle import IdleDisconnect
 from device.state import DeviceState
+from device.tuning import Tuning
 
 logger = logging.getLogger("mock")
 
@@ -67,6 +68,7 @@ SERVICE_UUID = "68666e00-58cc-4540-90ad-18bfae31615f"
 DEVICE_INFO_UUID = "68666e01-58cc-4540-90ad-18bfae31615f"
 STATUS_UUID = "68666e04-58cc-4540-90ad-18bfae31615f"
 ALERT_UUID = "68666e06-58cc-4540-90ad-18bfae31615f"
+CONFIG_UUID = "68666e05-58cc-4540-90ad-18bfae31615f"
 
 # **本物の識別子と別のファイルに置く。** 同じにすると、開発機で模擬を動かしただけで
 # 実機の `device_id` を上書きしうる（取り込みの一意キーが総入れ替えになる）。
@@ -89,9 +91,15 @@ class MockDevice:
         ident = identity.load_or_create(MOCK_IDENTITY_PATH)
         self.state = DeviceState(device_id=ident.device_id, log_id=ident.log_id)
         self.local_name = identity.advertised_name(ident.device_id)
+        # 走行ごとのしきい値の上書き（#124）。**判定は `tuning.py`**（実機と同じ道）。
+        self.tuning = Tuning(
+            notify_config=config.NOTIFY_CONFIG,
+            beat_timeout_s=config.LINK_BEAT_TIMEOUT_S,
+            stall_window_s=config.LINK_STALL_WINDOW_S,
+        )
         self.watch = LinkWatch(
-            timeout_ms=config.LINK_BEAT_TIMEOUT_S * 1000,
-            stall_window_ms=config.LINK_STALL_WINDOW_S * 1000,
+            timeout_ms=self.tuning.beat_timeout_ms,
+            stall_window_ms=self.tuning.stall_window_ms,
             started_at_ms=_now_ms(),
         )
         self.idle = IdleDisconnect(idle_ms=config.IDLE_DISCONNECT_S * 1000)
@@ -106,8 +114,12 @@ class MockDevice:
         return bytearray(self.state.status_bytes())
 
     def on_write(self, characteristic: BlessGATTCharacteristic, value: Any, **_: Any) -> None:
-        """`alert` に1通書かれた。**中身の解釈は `alert.py`**（実機と同じ道）。"""
-        if characteristic.uuid.lower() != ALERT_UUID:
+        """`alert` / `config` に1通書かれた。**中身の解釈は本物のコード**（実機と同じ道）。"""
+        uuid = characteristic.uuid.lower()
+        if uuid == CONFIG_UUID:
+            self.apply_config(bytes(value))
+            return
+        if uuid != ALERT_UUID:
             return
         result = parse_alert(bytes(value))
         self.state.record_alert(result)
@@ -119,6 +131,22 @@ class MockDevice:
         if isinstance(result.message, Beat):
             # **`beat` はログに出さない**（毎秒来る。`../src/device/config.py`）。
             self.watch.record_beat(result.message, _now_ms())
+
+    def apply_config(self, raw: bytes) -> None:
+        """`config` を1通取り込む。**`main.py` の `on_config` と同じことをする。**"""
+        rejected = self.tuning.apply(raw)
+        self.state.last_error = rejected.short if rejected is not None else None
+        if rejected is not None:
+            logger.warning("config を一部断った: %s", rejected.detail)
+        self._push_tuning()
+        logger.info("いま効いている上書き: %s", self.state.cfg or "なし（既定）")
+
+    def _push_tuning(self) -> None:
+        """上書きを `status` と `LinkWatch` の両方へ配る（`../src/device/main.py`）。"""
+        self.state.cfg = self.tuning.cfg
+        self.watch.set_timeouts(
+            timeout_ms=self.tuning.beat_timeout_ms, stall_window_ms=self.tuning.stall_window_ms
+        )
 
     def tick(self) -> bool:
         """毎秒の見張り。**切るべきなら True を返す**（切るのは呼んだ側）。"""
@@ -148,6 +176,10 @@ class MockDevice:
         else:
             logger.info("切断された")
             self.idle.on_disconnect()
+            # **切れたら既定へ戻す**（`../../../docs/interfaces/ble-gatt.md`「`config`」）。
+            self.tuning.reset()
+            self.state.last_error = None
+            self._push_tuning()
 
 
 async def _build_server(device: MockDevice, loop: asyncio.AbstractEventLoop) -> BlessServer:
@@ -180,6 +212,15 @@ async def _build_server(device: MockDevice, loop: asyncio.AbstractEventLoop) -> 
     await server.add_new_characteristic(
         SERVICE_UUID,
         ALERT_UUID,
+        GATTCharacteristicProperties.write,
+        None,  # 上と同じ理由
+        GATTAttributePermissions.writeable,
+    )
+    # `config`（#124）。**同じく `write` だけ**——断られたことが分からないと、
+    # モバイルは書けたつもりで既定のまま走る。
+    await server.add_new_characteristic(
+        SERVICE_UUID,
+        CONFIG_UUID,
         GATTCharacteristicProperties.write,
         None,  # 上と同じ理由
         GATTAttributePermissions.writeable,

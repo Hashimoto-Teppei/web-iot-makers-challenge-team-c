@@ -230,6 +230,25 @@ class LinkWatch:
         self._link: Link = "down"
         self._since_ms = started_at_ms
 
+    def set_timeouts(self, *, timeout_ms: int, stall_window_ms: int) -> None:
+        """タイムアウトと窓を差し替える（`config` の `beat_to`。`../tuning.py`）。
+
+        **控えてきた `beat` は捨てない。** 捨てると、**設定を1つ書いただけで
+        `link` が `down` に落ちる**——受け取った履歴が消えるので、
+        「まだ一度も来ていない」状態と見分けが付かなくなる。
+
+        **窓は次に `beat` が来たとき（または `evaluate()`）に縮む。**
+        すぐに切り詰めないのは、**ここで判定を動かさない**ため
+        （このクラスの値が変わるのは、`beat` が来たときと時刻を渡されたときだけ）。
+
+        **広げたときは、しばらく `_stalled` が出ない。** 控えてある履歴は前の（短い）窓で
+        切ってあるので、新しい窓いっぱいの長さに育つまで「固まっている」と言えない。
+        **`up` に倒れる向きの遅れ**なので、`beat_to` を伸ばした直後の数秒は、
+        `t` が止まっているスマホを健全に見せる。**自分で直る**（履歴が育てば効く）。
+        """
+        self._timeout_ms = timeout_ms
+        self._stall_window_ms = stall_window_ms
+
     def record_beat(self, beat: Beat, now_ms: int) -> None:
         """`beat` を1通受け取ったことを控える。
 

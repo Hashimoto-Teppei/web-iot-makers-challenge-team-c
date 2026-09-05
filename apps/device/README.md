@@ -66,6 +66,7 @@ BLE と GPIO のライブラリは **Linux 専用**で、開発機（Windows / m
 | `src/device/hw/` | **ハードウェアに触る層。** 1つの部品につき1ファイル（`ble.py` / `led.py` / `lcd.py` …） |
 | `src/device/alert.py` | **スマホから届く表示指示と心拍を読み解く**（`../../docs/interfaces/v2v.md`）。**BLE を知らないので開発機でもテストできる**。心拍が途切れたことに気づく仕組み（`LinkWatch`）も同じファイルにある |
 | `src/device/idle.py` | **心拍の来ない接続を切るかどうか**の判定（`../../docs/interfaces/ble-gatt.md`「前提」）。**BLE を知らない**ので開発機でもテストできる。実際に切るのは `hw/ble.py` |
+| `src/device/tuning.py` | **`config` で受け取る走行ごとのしきい値の上書き**（`../../docs/interfaces/ble-gatt.md`「`config`」）。**保存せず、切断で既定へ戻す。BLE を知らない**ので開発機でもテストできる |
 | `src/device/notify.py` | 検知の結果をどう出すかの調停（`../../docs/notifications/arbitration.md`）。ハードには触らない |
 | `src/device/main.py` | 起動と配線。どの部品の値をどの検知に渡し、結果をどこに出すかを決める |
 | `src/device/state.py` | 今の状態（`link` / 転送の進み具合 / 受け取った警告の数）と、それを `device-info` / `status` の JSON にする変換。**BLE を知らない** |
@@ -130,8 +131,13 @@ Android のアプリから電波で本当につながります。**判断のコ�
 （差し替わるのは BLE の管だけです）。
 
 **確かめられるのは、接続・MTU・サービス探索・`device-info` の Read・`status` の購読・
-`alert` への書き込み・`link` の上がり下がり、そして心拍が止まったあとに
+`alert` と `config` への書き込み・`link` の上がり下がり、そして心拍が止まったあとに
 アプリが自力で戻れることまで**です。
+
+**しきい値の上書き（#124）もここで確かめられます。** アプリの設定画面で値を変えると
+`config` が書かれ、模擬側の journalctl 相当のログに「いま効いている上書き」が出て、
+`status` の `cfg` に載ります。**切ると既定へ戻る**ところまで同じコード
+（`tuning.py`）が動きます。
 
 **確かめられないのは BlueZ の挙動です。** 相手が CoreBluetooth（macOS）なので、
 [`docs/unverified.md`](../../docs/unverified.md) の 88 と 91、44 は**これでは消えません。**
