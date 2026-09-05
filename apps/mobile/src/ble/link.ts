@@ -63,7 +63,7 @@ export type BleLinkConfig = {
 
 export const bleLinkDefaults: BleLinkConfig = {
   // **長めに取る。**デバイスは常時アドバタイズするが、接続中はアドバタイズを止めるので、
-  // 他人がつなぎっぱなしのときは見つからない（`docs/interfaces/ble-gatt.md`「運用で気をつけること」）。
+  // 他人がつなぎっぱなしのときは見つからない（`docs/interfaces/ble-security.md`「運用で気をつけること」）。
   scanTimeoutMs: 20_000,
   retryDelayMs: 2_000,
   permissionRetryDelayMs: 5_000,

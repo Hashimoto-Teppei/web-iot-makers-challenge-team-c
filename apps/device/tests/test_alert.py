@@ -196,7 +196,7 @@ def test_kが無ければ捨てる() -> None:
 
 
 def test_知らないキーがあっても捨てない() -> None:
-    # **知らないキーは無視する**（docs/interfaces/ble-gatt.md「書き込みを受ける側の約束」）。
+    # **知らないキーは無視する**（docs/interfaces/ble-security.md「書き込みを受ける側の約束」）。
     # ここで捨てると、アプリ側が項目を1つ足しただけで警告が届かなくなる。
     result = parse_alert(_write({"k": "warn", "kind": "approach", "lv": 2, "seq": 7}))
 
