@@ -19,6 +19,7 @@ export const DEVICE_INFO_UUID = "68666e01-58cc-4540-90ad-18bfae31615f";
 export const CONTROL_UUID = "68666e02-58cc-4540-90ad-18bfae31615f";
 export const LOG_UUID = "68666e03-58cc-4540-90ad-18bfae31615f";
 export const STATUS_UUID = "68666e04-58cc-4540-90ad-18bfae31615f";
+export const CONFIG_UUID = "68666e05-58cc-4540-90ad-18bfae31615f";
 export const ALERT_UUID = "68666e06-58cc-4540-90ad-18bfae31615f";
 
 /** 要求する MTU。**上限いっぱいを頼む**（下りてくるのはネゴシエートされた値）。 */
@@ -58,6 +59,13 @@ export type DeviceStatus = {
   warns: number;
   /** 起動から `alert` で壊れているとして捨てた累計 */
   dropped: number;
+  /**
+   * **いま効いている `config` の上書き**（`./device-config.ts`）。既定どおりなら `{}`。
+   *
+   * **書けたかどうかの正本はここ。**`lastError` は `read` を書くと消えるので、
+   * 成否の判定に使わない（`docs/interfaces/ble-gatt.md`「`status`」）。
+   */
+  cfg: Readonly<Record<string, number>>;
 };
 
 /** 読み取ったものが約束の形をしていないときに投げる。**握りつぶさないこと。** */
@@ -117,6 +125,7 @@ export function parseStatus(text: string): DeviceStatus {
     link,
     warns: asCount(value.warns),
     dropped: asCount(value.dropped),
+    cfg: asNumberMap(value.cfg),
   };
 }
 
@@ -157,6 +166,21 @@ function parseObject(text: string, what: string): Record<string, unknown> {
     throw new BleProtocolError(`${what} が JSON オブジェクトではありません`);
   }
   return value as Record<string, unknown>;
+}
+
+/**
+ * 数値だけの辞書として読む。**読めなければ空**（上書きが1つも効いていないのと同じ扱い）。
+ *
+ * **落とさない。**`cfg` を出さない古いデバイスにつないだだけで `status` の購読ごと
+ * 壊れると、**`link` が二度と更新されない**（`./link.ts` の購読は1通壊れても捨てない）。
+ */
+function asNumberMap(value: unknown): Record<string, number> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
+  const map: Record<string, number> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item === "number" && Number.isFinite(item)) map[key] = item;
+  }
+  return map;
 }
 
 /** 0 以上の整数として読む。**読めなければ 0**（目安の値なので落とさない）。 */

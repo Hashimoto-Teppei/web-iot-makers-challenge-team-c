@@ -16,9 +16,23 @@ import { BleManager, type Device, type Subscription } from "react-native-ble-plx
 import type { DeviceLink } from "../ride/device";
 import type { AlertMessage } from "../v2v/alert";
 import { base64ToUtf8, utf8ToBase64 } from "./base64";
+import {
+  type DeviceConfig,
+  deviceConfigOverrides,
+  deviceConfigPayload,
+  deviceConfigWrite,
+  unappliedConfigKeys,
+  unappliedConfigReason,
+} from "./device-config";
+import {
+  getDeviceConfig,
+  setDeviceConfigOutcome,
+  subscribeDeviceConfig,
+} from "./device-config-store";
 import { requestBlePermissions } from "./permissions";
 import {
   ALERT_UUID,
+  CONFIG_UUID,
   DEVICE_INFO_UUID,
   type DeviceStatus,
   incompatibleReason,
@@ -59,6 +73,15 @@ export type BleLinkConfig = {
    * **人が触らなくても直る**ように、間を置いて訊き直す。
    */
   permissionRetryDelayMs: number;
+  /**
+   * 設定を変えてから `config` を書くまでの待ち（#124）。
+   *
+   * **押すたびに書かない。**GATT の操作は一度に1つしか出せず（このファイルの冒頭）、
+   * ± を10回押すと**書き込みと読み出しが10往復、毎秒の心拍と同じ接続に重なる**。
+   * 落ちるのが心拍だと、**`beat_to` の秒数で `link` が `down` になる。**
+   * **手が止まってから1回だけ書く。**
+   */
+  configWriteDelayMs: number;
 };
 
 export const bleLinkDefaults: BleLinkConfig = {
@@ -69,6 +92,8 @@ export const bleLinkDefaults: BleLinkConfig = {
   scanTimeoutMs: 20_000,
   retryDelayMs: 2_000,
   permissionRetryDelayMs: 5_000,
+  // **人が ± を押し終えるのを待つ長さ。**長くすると、変えたのに効いていない時間が延びる。
+  configWriteDelayMs: 500,
 };
 
 /**
@@ -94,6 +119,19 @@ export class BleLink {
   private statusSubscription: Subscription | null = null;
   private disconnectSubscription: Subscription | null = null;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  /** しきい値の上書きの購読を外すもの。**接続していない間も張っておく** */
+  private configSubscription: (() => void) | null = null;
+  /** 書き込みの世代。**古い書き込みの結果で新しい結果を上書きしない** */
+  private configSeq = 0;
+  /** 連打を1回にまとめるためのタイマー */
+  private configTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * **この接続ですでに書いた上書き。**切断で捨てる（デバイス側も既定へ戻るため）。
+   *
+   * **覚えていないと「既定に戻す」が効かない**——`config` は部分更新なので、
+   * 送らなかったキーは前に書いた値のまま残る（`./device-config.ts`）。
+   */
+  private configWritten: Partial<DeviceConfig> = {};
   /** 止めたあとに走っている非同期を捨てるための世代番号 */
   private generation = 0;
   private stopped = true;
@@ -106,6 +144,10 @@ export class BleLink {
   start(): void {
     if (!this.stopped) return;
     this.stopped = false;
+    // **設定を変えたら、つながっている接続に書き直す。**次の接続まで待つと、
+    // **画面に出ている値とデバイスの中身が食い違ったまま走り出せる**
+    // （`./device-config-store.ts`）。
+    this.configSubscription = subscribeDeviceConfig(() => this.scheduleConfig());
     void this.attempt();
   }
 
@@ -129,6 +171,10 @@ export class BleLink {
   stop(): void {
     this.stopped = true;
     this.generation += 1;
+    this.configSubscription?.();
+    this.configSubscription = null;
+    if (this.configTimer !== null) clearTimeout(this.configTimer);
+    this.configTimer = null;
     if (this.retryTimer !== null) clearTimeout(this.retryTimer);
     this.retryTimer = null;
     this.stopScan();
@@ -277,6 +323,11 @@ export class BleLink {
     });
 
     this.connected = device;
+    // 5. **`alert` を書き始めたあとに `config` を書く**（`docs/interfaces/ble-gatt.md`
+    //    「接続してから転送するまで」の 5）。**先に書かない**——設定は既定のままでも
+    //    警告は出るが、`alert` が遅れるとその間の警告が出口を失う。
+    //    **`publish()` のあとに置いてあるのがその「あと」である**（走行ループはここで
+    //    `writeAlert` を受け取り、心拍を毎秒書き始める。`../ride/use-device-link.ts`）。
     this.publish({
       device: {
         // **デバイスから読んだ `device_id` を名乗る。**スマホ側で作った ID にすると、
@@ -288,6 +339,86 @@ export class BleLink {
       reason: null,
       searching: false,
     });
+    void this.applyConfig(generation);
+  }
+
+  /**
+   * 設定が変わったことを受けて、**少し待ってから1回だけ書く**（#124）。
+   *
+   * **押すたびに書かない**（`configWriteDelayMs` の注記）。接続したときは待たずに
+   * 書く（あちらは1回しか起きない）。
+   */
+  private scheduleConfig(): void {
+    if (this.stopped) return;
+    if (this.configTimer !== null) clearTimeout(this.configTimer);
+    const generation = this.generation;
+    this.configTimer = setTimeout(() => {
+      this.configTimer = null;
+      void this.applyConfig(generation);
+    }, this.config.configWriteDelayMs);
+  }
+
+  /**
+   * しきい値の上書きを書いて、**効いたかを `status` の `cfg` で確かめる**（#124）。
+   *
+   * **待たない（`void` で呼ぶ）。**ここで待つと、書き込みが詰まっている間
+   * 心拍まで止まる。**失敗しても接続は落とさない**——既定のまま走ればよいだけで、
+   * 警告そのものは出る。**ただし黙って諦めない**（結果を画面に出す）。
+   */
+  private async applyConfig(generation: number): Promise<void> {
+    const device = this.connected;
+    if (device === null || this.isStale(generation)) return;
+
+    this.configSeq += 1;
+    const seq = this.configSeq;
+    const config = getDeviceConfig();
+    const overrides = deviceConfigOverrides(config);
+    // **戻したキーは既定を明示して書き直す**ので、`overrides` そのものではない
+    // （`./device-config.ts` の `deviceConfigWrite`）。
+    const payload = deviceConfigWrite(config, this.configWritten);
+    // **変えていなければ書かない**（`docs/interfaces/ble-gatt.md` の 5）。
+    if (Object.keys(payload).length === 0) {
+      setDeviceConfigOutcome({ state: "default", reason: null });
+      return;
+    }
+    setDeviceConfigOutcome({ state: "writing", reason: null });
+
+    try {
+      // **Write Request（応答あり）。**断られたことが分からないと、
+      // **書けたつもりで既定のまま走る**（`docs/interfaces/ble-gatt.md`「`config`」）。
+      await device.writeCharacteristicWithResponseForService(
+        SERVICE_UUID,
+        CONFIG_UUID,
+        utf8ToBase64(deviceConfigPayload(payload)),
+      );
+      // **書けたことを成功にしない。**範囲外のキーは**受け付けたうえで捨てられる**ので、
+      // Write が返ったことは何も保証しない。**`cfg` を読んで確かめる。**
+      const status = parseStatus(await this.readString(device, STATUS_UUID));
+      if (this.isStale(generation) || seq !== this.configSeq) return;
+
+      // **書けたものを覚える。**次に戻すときに、このキーを既定で上書きし直す。
+      // **世代を確かめたあとに入れる**——書き込みの最中に切れていると、`teardown()` が
+      // 捨てたはずの記録がここで生き返り、**次の接続で書く必要のないキーを書く。**
+      this.configWritten = overrides;
+
+      const unapplied = unappliedConfigKeys(payload, status.cfg);
+      if (unapplied.length > 0) {
+        setDeviceConfigOutcome({ state: "failed", reason: unappliedConfigReason(unapplied) });
+        return;
+      }
+      // **既定へ戻し切ったときは「効いている」と言わない。**上書きが1つも無い状態は、
+      // 書く前と同じ「既定」である。
+      setDeviceConfigOutcome({
+        state: Object.keys(overrides).length === 0 ? "default" : "applied",
+        reason: null,
+      });
+    } catch (error: unknown) {
+      if (this.isStale(generation) || seq !== this.configSeq) return;
+      setDeviceConfigOutcome({
+        state: "failed",
+        reason: `設定を書けませんでした（${String(error)}）。既定のまま走ります。`,
+      });
+    }
   }
 
   private async readString(device: Device, uuid: string): Promise<string> {
@@ -376,12 +507,20 @@ export class BleLink {
   }
 
   private teardown(): void {
+    // **先に手放す。**`connected` が残っているうちに結果を配ると、購読から
+    // **これから切る接続へ書きに行く**経路ができる。
+    const device = this.connected;
+    this.connected = null;
+    this.configSeq += 1;
+    this.configWritten = {};
+    // **切れたら「効いている」を消す。**デバイスは切断で既定へ戻すので
+    // （`docs/interfaces/ble-gatt.md`「`config`」）、緑のまま残すと
+    // **効いていない上書きを効いていると見せる。**
+    setDeviceConfigOutcome({ state: "default", reason: null });
     this.statusSubscription?.remove();
     this.statusSubscription = null;
     this.disconnectSubscription?.remove();
     this.disconnectSubscription = null;
-    const device = this.connected;
-    this.connected = null;
     device?.cancelConnection().catch(() => undefined);
   }
 
