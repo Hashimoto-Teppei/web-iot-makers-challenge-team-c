@@ -166,7 +166,7 @@ class BlePeripheral:
             notify_callback=None,
         )
         # **暗号化のフラグ（encrypt-*）を付けない。** ペアリングしない決定
-        # （`../../../../../docs/interfaces/ble-gatt.md`「ペアリング・認証」）。
+        # （`../../../../../docs/interfaces/ble-security.md`「ペアリング・認証」）。
 
         self._peripheral.on_connect = self._on_connect
         self._peripheral.on_disconnect = self._on_disconnect

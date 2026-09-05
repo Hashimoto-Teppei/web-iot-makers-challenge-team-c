@@ -37,7 +37,7 @@ Link = Literal["up", "nofix", "down"]
 #
 # **`rear_object` を入れない。** あれはデバイスの中で起きる検知で、BLE を通らない
 # （同ファイル「`kind` の一覧」）。ここに入れると、外から偽の後方物体警告を書き込めてしまう。
-# ペアリングしていないので誰でも書ける状態ではあるが（`ble-gatt.md`「ペアリング・認証」）、
+# ペアリングしていないので誰でも書ける状態ではあるが（`ble-security.md`「ペアリング・認証」）、
 # **通らないと分かっている経路を自分から開けない。**
 KNOWN_WARN_KINDS = frozenset({"approach", "brake", "corner", "stop"})
 
