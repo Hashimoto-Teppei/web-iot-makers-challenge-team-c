@@ -109,13 +109,29 @@ export class BleLink {
     void this.attempt();
   }
 
+  /**
+   * スキャンを止める。**必ずこれを通す**（`manager.stopDeviceScan()` を直に呼ばない）。
+   *
+   * **`stopDeviceScan()` は Promise を返す。**`react-native-ble-plx` の中で
+   * `_callPromise()` を通っており（`BleManager.js`）、**`manager.destroy()` は
+   * 進行中の操作をすべて拒否する**（`_destroyPromises()`）。**受け取り手を付けずに
+   * 呼ぶと、画面を離れるたびに `Uncaught (in promise) BleError: BleManager was destroyed`
+   * が出る**——実機で実際に出ていた。
+   *
+   * **握りつぶしてよい。** スキャンを止められなかったところで、直後に
+   * `destroy()` がネイティブ側ごと片付ける。
+   */
+  private stopScan(): void {
+    this.manager.stopDeviceScan().catch(() => undefined);
+  }
+
   /** 止める。**接続も切る**——止めたのに `alert` が書ける状態を残さない。 */
   stop(): void {
     this.stopped = true;
     this.generation += 1;
     if (this.retryTimer !== null) clearTimeout(this.retryTimer);
     this.retryTimer = null;
-    this.manager.stopDeviceScan();
+    this.stopScan();
     this.teardown();
     this.publish({ device: null, status: null, reason: null, searching: false });
   }
@@ -168,16 +184,16 @@ export class BleLink {
       const found = await this.scan(generation);
       if (this.isStale(generation)) return;
       if (found === null) {
-        // **故障として出さない。**別のスマホがつながっている間はアドバタイズが出ないが、
-        // デバイスは心拍の来ない接続を 30 秒ほどで自分から切る
+        // **故障として出さない**（`reason` を立てない）。別のスマホがつながっている間は
+        // アドバタイズが出ないが、デバイスは心拍の来ない接続を 30 秒ほどで自分から切る
         // （`docs/interfaces/ble-gatt.md`「前提」）。**探し続けていれば戻るので、
         // 人にさせることは「待つ」だけ**——ここで電源の入れ直しを促さない。
-        this.fail(
-          "デバイスを探しています。見つからないときは、デバイスの電源が入っていて" +
-            "近くにあることを確かめてください（別のスマホがつながったままでも、" +
-            "しばらく待てば繋がります）。",
-          { retry: true },
-        );
+        //
+        // **`fail()` を呼ぶと、走行前の点検で ✗ が出る**（`../ride/pre-ride.ts`）。
+        // スキャンは 20 秒ごとにやり直すので、**✗ が 20 秒おきに点滅する**ことになり、
+        // **本物の ✗（権限が下りていないなど、人が直さないと進まないもの）が
+        // 読み飛ばされるようになる。** 実機で確かめて直した（#126）。
+        this.keepSearching();
         return;
       }
 
@@ -280,7 +296,7 @@ export class BleLink {
   private scan(generation: number): Promise<Device | null> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        this.manager.stopDeviceScan();
+        this.stopScan();
         resolve(null);
       }, this.config.scanTimeoutMs);
 
@@ -288,13 +304,13 @@ export class BleLink {
         if (this.isStale(generation)) return;
         if (error !== null) {
           clearTimeout(timer);
-          this.manager.stopDeviceScan();
+          this.stopScan();
           reject(error);
           return;
         }
         if (device === null) return;
         clearTimeout(timer);
-        this.manager.stopDeviceScan();
+        this.stopScan();
         resolve(device);
       });
     });
@@ -317,7 +333,20 @@ export class BleLink {
     });
   }
 
-  /** 理由を出して、必要なら次の試行を予約する。 */
+  /**
+   * **理由を出さずに**、次の試行だけ予約する。
+   *
+   * **`fail()` との違いは「人が直すことがあるか」。** 見つからないだけなら、
+   * 待てば直る（`attempt()` の中の注記）。**そこに ✗ を出さない。**
+   */
+  private keepSearching(): void {
+    this.publish({ device: null, status: null, reason: null, searching: true });
+    if (this.stopped) return;
+    if (this.retryTimer !== null) clearTimeout(this.retryTimer);
+    this.retryTimer = setTimeout(() => void this.attempt(), this.config.retryDelayMs);
+  }
+
+  /** 理由を出して、必要なら次の試行を予約する。**人が直すもの**はこちら。 */
   private fail(reason: string, { retry, delayMs }: { retry: boolean; delayMs?: number }): void {
     this.publish({ device: null, status: null, reason, searching: retry });
     if (!retry || this.stopped) return;

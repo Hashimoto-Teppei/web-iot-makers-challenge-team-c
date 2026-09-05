@@ -149,7 +149,17 @@ function device({
     // **探している最中を赤にしない。**スキャンには数秒かかるので、
     // **起動直後の数秒がいつも故障に見える**（本物の赤が読み飛ばされるようになる）。
     if (deviceReason === null && deviceChecking) {
-      return { key: "device", label, state: "checking", detail: "デバイスを探しています…" };
+      // **待てば直ることを、この行に書いておく。**別のスマホがつながっている間は
+      // アドバタイズが出ないが、デバイスは 30 秒ほどで自分から手放す
+      // （`docs/interfaces/ble-gatt.md`「前提」）。**書いておかないと、
+      // 人は電源を切りに行く**——それが要らなくなったことが伝わらない。
+      return {
+        key: "device",
+        label,
+        state: "checking",
+        detail:
+          "デバイスを探しています…（別のスマホがつながったままでも、しばらく待てば繋がります）",
+      };
     }
     return {
       key: "device",
