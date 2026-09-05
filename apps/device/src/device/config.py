@@ -9,6 +9,8 @@
 
 from pathlib import Path
 
+from device.notify import LightPattern, NotifyConfig, Tone
+
 # device_id を保存する場所。
 #
 # **ログとは別のファイルに置く。** 一緒に消えると device_id が変わり、取り込みの一意キー
@@ -66,3 +68,44 @@ LINK_TICK_INTERVAL_S = 1
 # 一番読みたい行がその中に埋もれる**（`ALERT_DROP_LOG_EVERY` と同じ理由）。
 # 1本目は必ず出るので、起きていること自体は分かる。
 TICK_ERROR_LOG_EVERY = 60
+
+# --- 警告の出し分け（`../../../../docs/notifications/arbitration.md`） ---
+#
+# **時間・回数・記号はすべて仮の値**（`../../../../docs/unverified.md` 45 / 46）。
+# 実地で調整するため、`notify.py` に直書きせずここへ集める。
+
+NOTIFY_CONFIG = NotifyConfig(
+    # `lv` ごとの保持時間（ms）。**危険が去ったという通知は届かない**ので、時間で消すしかない。
+    #
+    # **`lv 1` を 3 秒にしてあるのは、スマホ側の再送間隔（2 秒）より長くするため。**
+    # 揃えると、保持が切れてから次の再送が届くまでの隙間で表示が消える——BLE の書き込みは
+    # 必ず多少遅れるので、これは確率ではなく毎回起きる。**片方だけ調整しないこと。**
+    hold_ms={1: 3_000, 2: 4_000, 3: 6_000},
+    # `lv` ごとに鳴らすもの。**`kind` では分けない**——5種類の音を走行中に聞き分けることは
+    # できず、増やすと3段階の区別まで一緒に潰れる。
+    tones={
+        1: Tone(beeps=1, on_ms=100, gap_ms=0),
+        2: Tone(beeps=2, on_ms=100, gap_ms=100),
+        3: Tone(beeps=2, on_ms=600, gap_ms=200),
+    },
+    # `lv` ごとの光。**`lv 3` は点灯**（点滅させない）。
+    lights={
+        1: LightPattern(lit=True, blink_hz=0.5),
+        2: LightPattern(lit=True, blink_hz=2.0),
+        3: LightPattern(lit=True, blink_hz=None),
+    },
+    # `kind` の記号。**4文字固定・英大文字。半角カタカナを混ぜない**——1つだけカナにすると
+    # そこだけ「読む」動作が要る。5つとも同じ文字種・同じ4桁なら桁の形だけで見分けられる。
+    symbols={
+        "rear_object": "REAR",
+        "approach": "APPR",
+        "brake": "BRK ",
+        "corner": "CRNR",
+        "stop": "STOP",
+    },
+    # 同じ `lv` が並んだときの順（強い順）。**後ろは振り向かないと見えず、通信が死んでいても
+    # 出る唯一のもの**なので `rear_object` が先頭。以下、猶予の短い順。
+    priority=("rear_object", "approach", "brake", "corner", "stop"),
+    # 通信断のチャイム。**`lv 1` と同じ音を1回**。落ちた瞬間だけで、以後は鳴らさない。
+    link_down_tone=Tone(beeps=1, on_ms=100, gap_ms=0),
+)
