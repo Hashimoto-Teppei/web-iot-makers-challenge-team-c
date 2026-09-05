@@ -19,6 +19,15 @@ dev = [
 device = [
   "bluezero>=0.9",
 ]
+# 開発機で「ラズパイのふり」をするための依存（`tools/mock_peripheral.py`）。
+# **既定では入らない。** 要るときだけ `uv sync --group mock`。
+#
+# **`dependencies` へ移さないこと。** bless は macOS では CoreBluetooth（pyobjc）を、
+# Linux では BlueZ を掴むので、**CI の Linux で入れると意味の違うものが入る。**
+# 模擬は開発機で人が動かすものなので、CI では要らない。
+mock = [
+  "bless>=0.3",
+]
 
 [build-system]
 requires = ["hatchling"]
