@@ -90,6 +90,7 @@ describe("parseStatus", () => {
       link: "up",
       warns: 3,
       dropped: 0,
+      cfg: {},
     });
   });
 
@@ -109,10 +110,25 @@ describe("parseStatus", () => {
       link: "down",
       warns: 0,
       dropped: 0,
+      cfg: {},
     });
   });
 
   it("JSON でなければ落とす", () => {
     expect(() => parseStatus("nope")).toThrow(BleProtocolError);
+  });
+});
+
+describe("parseStatus の cfg", () => {
+  it("上書きを読む", () => {
+    expect(parseStatus('{"state":"idle","cfg":{"hold2":5000}}').cfg).toEqual({ hold2: 5000 });
+  });
+
+  it("cfg が無ければ空（古いデバイスでも購読を壊さない）", () => {
+    expect(parseStatus('{"state":"idle"}').cfg).toEqual({});
+  });
+
+  it("数でない値は落とす", () => {
+    expect(parseStatus('{"state":"idle","cfg":{"hold2":"5000"}}').cfg).toEqual({});
   });
 });
