@@ -52,6 +52,7 @@ const { values } = parseArgs({
     pref: { type: "string", default: String(PREF_OKAYAMA) },
     out: { type: "string" },
     encoding: { type: "string" },
+    check: { type: "string" },
   },
 });
 
@@ -64,6 +65,7 @@ if (!values.in) {
       "  --pref      都道府県コード（既定: 33 = 岡山県）",
       "  --out       生成する SQL の出力先（既定: scripts/stop-signs/out/stop-signs-<pref>.sql）",
       "  --encoding  CSV の文字コード（既定: UTF-8 で読み、化けたら Shift_JIS）",
+      "  --check     いま D1 に入っている版。一致したら SQL を作らずに終わる（省略可）",
     ].join("\n"),
   );
   process.exit(1);
@@ -101,6 +103,25 @@ if (signs.length === 0) {
 }
 
 const version = versionOf(signs);
+
+// **版が同じなら、書く必要のあるものが1行も無い。**取り込みは DELETE + INSERT で
+// 表を丸ごと置き換えるので、**中身が1件も変わっていなくても 28,651 行を書き直す。**
+//
+// **突き合わせる相手は呼ぶ側から受け取る。**このスクリプトはファイルも通信も持たない方針で
+// （`csv.ts` / `sql.ts` の冒頭）、**D1 を自分で読みに行かない。**
+//
+// **`--check` を必須にしない。**渡さなければ今までどおり必ず生成する——
+// **原本を持つ人が D1 を読めるとは限らない**（読めるのはデプロイ担当）。
+if (values.check === version) {
+  console.log(
+    [
+      `取り込み不要: 版が変わっていません（${version} / ${signs.length} 件）。`,
+      "  SQL は作っていません。D1 に流し込む手順ごと飛ばしてください。",
+    ].join("\n"),
+  );
+  process.exit(0);
+}
+
 const sql = buildImportSql({ pref, signs, version, importedAt: new Date().toISOString() });
 
 await mkdir(dirname(outputPath), { recursive: true });

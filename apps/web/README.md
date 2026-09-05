@@ -164,13 +164,21 @@ pnpm db:migrate:local
 # 1. JARTIC の交通規制情報オープンデータ（CSV）を scripts/stop-signs/data/ に置く
 #    https://www.jartic.or.jp/service/opendata/ （一時停止 = 共通規制種別コード 63、岡山県 = 33）
 #    ファイルは1都道府県警察につき1つ（例: 岡山県警_202607_k_2.1.csv）。Shift-JIS / CR+LF
-# 2. 抽出して SQL を作る
-pnpm stop-signs:extract --in scripts/stop-signs/data/<ファイル名>.csv --pref 33
-# 3. 流し込む先に表を作っておく（**先に済ませないと no such table: stop_signs で止まる**）
+# 2. いま D1 に入っている版を読む（デプロイ担当。読めないなら手順 3 の --check を省く）
+pnpm exec wrangler d1 execute team-c-db --remote \
+  --command "SELECT version FROM stop_sign_versions WHERE pref = 33"
+# 3. 抽出して SQL を作る。版が変わっていなければ「取り込み不要」と出て、SQL は作られない
+pnpm stop-signs:extract --in scripts/stop-signs/data/<ファイル名>.csv --pref 33 --check <その版>
+# 4. 流し込む先に表を作っておく（**先に済ませないと no such table: stop_signs で止まる**）
 pnpm db:migrate:local
-# 4. 手元の D1 に流し込む（Cloudflare 上へ入れるのはデプロイ担当だけ。--local を --remote に）
+# 5. 手元の D1 に流し込む（Cloudflare 上へ入れるのはデプロイ担当だけ。--local を --remote に）
 pnpm exec wrangler d1 execute team-c-db --local --file=scripts/stop-signs/out/stop-signs-33.sql
 ```
+
+**`--check` は省略できる。**渡さなければ今までどおり必ず SQL を作る
+——**原本を持つ人が D1 を読めるとは限らない**（読めるのはデプロイ担当）。
+版は中身から決まるので、**同じ CSV を入れ直しただけなら値も変わらない**
+（`scripts/stop-signs/sql.ts` の `versionOf`）。
 
 **リモートに対する wrangler のコマンドが `[code: 7403] not valid or not authorized` で落ちることがある。**
 認証は切れておらず、**もう一度実行すると通る**（2026-09-01 に `db:migrate:remote` で発生）。
