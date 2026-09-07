@@ -180,6 +180,36 @@ export default function HomeScreen() {
         )}
 
         {/*
+          **手元の標識の範囲から出ていたことを、走行後に見せる**（#72）。
+          **走行中には出していない**——危険の警告ではないので、デバイスの出力を
+          取り合わせない（`@/ride/coverage`）。
+
+          **走り終えるまで出さないのは、走行中にこの画面を見る理由を作らないため**である。
+        */}
+        {!ride.running && ride.lastRide !== null && (
+          <View style={styles.rows}>
+            {ride.lastRide.outsideCoverage !== null ? (
+              <Text style={styles.notice}>
+                {`手元の標識の範囲の外を走りました（${new Date(
+                  ride.lastRide.outsideCoverage.since,
+                ).toLocaleTimeString("ja-JP")} から ${ride.lastRide.outsideCoverage.fixes} 点）。` +
+                  "その間、一時停止の事前通知は動いていません。"}
+              </Text>
+            ) : (
+              signsMeta?.bounds == null && (
+                // **判定していないことを「出ていない」と混ぜない。**古い同梱物には
+                // 外接矩形が入っておらず、**そのときは黙るのではなく黙ったと言う。**
+                <Text style={styles.note}>
+                  手元の標識に範囲が入っていないため、範囲の外を走ったかは確かめていません（
+                  <Text style={styles.rowLabel}>docs/setup.md</Text>{" "}
+                  の手順で同梱物を作り直すと出ます）。
+                </Text>
+              )
+            )}
+          </View>
+        )}
+
+        {/*
           **溜まっているものを走行前後に見せる。**送れていないことは、
           **走ったのにデータが無いと分かるまで誰にも見えない**——中継の連続失敗を
           出しているのと同じ理由である（`docs/interfaces/mobile-api.md`「失敗したときの約束」）。

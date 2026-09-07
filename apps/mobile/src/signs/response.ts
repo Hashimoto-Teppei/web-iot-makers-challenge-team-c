@@ -14,6 +14,10 @@
  */
 
 import type { StopSign } from "../detect/types";
+// **`.ts` を付けているのは、このファイルを Node から直接読むため**（`./store.ts` と同じ理由。
+// 同梱物を作る `scripts/build-signs-db.ts` がここを通る）。型だけの import と違い、
+// 値の import は拡張子を省くと Node が解決に失敗する。
+import { boundsOf } from "./bounds.ts";
 import type { SignsMeta } from "./store";
 
 export type ParsedStopSigns = {
@@ -102,7 +106,10 @@ export function parseStopSignsResponse(
   });
 
   return {
-    meta: { pref, version, count, builtAt: builtAt.toISOString() },
+    // **外接矩形はここで作る。**同梱物の生成（`scripts/build-signs-db.ts`）と
+    // 起動時の更新（`./update.ts`）が両方ここを通るので、**作る場所が1つで済む**
+    // ——2か所で作ると、片方だけ古い切り方の矩形を持った `signs.db` ができる。
+    meta: { pref, version, count, builtAt: builtAt.toISOString(), bounds: boundsOf(signs) },
     signs,
   };
 }

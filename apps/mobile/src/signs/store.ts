@@ -27,6 +27,7 @@ import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 // （同梱物を作る `scripts/build-signs-db.ts` がここを通る。Node の ESM 解決は
 // 拡張子を省けない）。Metro も Vitest もそのまま解決する。
 import type { StopSign } from "../detect/types";
+import type { SignBounds } from "./bounds.ts";
 import { cellOf, cellRange } from "./cell.ts";
 import { meta as metaTable, signs as signsTable } from "./schema.ts";
 
@@ -40,6 +41,13 @@ export type SignsMeta = {
   count: number;
   /** 同梱物を作った時刻（ISO 8601、UTC） */
   builtAt: string;
+  /**
+   * 手元の標識の外接矩形（`./bounds.ts`）。**持っていなければ `null`**（0 件の DB）。
+   *
+   * **走行中に位置と突き合わせる**（#72）。走行前の画面に出す `count` / `version` と違い、
+   * **これは走行後に「範囲の外へ出ていた」と見せるためのもの**である。
+   */
+  bounds: SignBounds | null;
 };
 
 /**
@@ -179,6 +187,10 @@ export function createDrizzleSignStore(db: SyncSqliteDatabase): SignStore {
       version: metaTable.version,
       count: metaTable.count,
       builtAt: metaTable.builtAt,
+      minLat: metaTable.minLat,
+      maxLat: metaTable.maxLat,
+      minLon: metaTable.minLon,
+      maxLon: metaTable.maxLon,
     })
     .from(metaTable)
     .limit(1)
@@ -204,7 +216,18 @@ export function createDrizzleSignStore(db: SyncSqliteDatabase): SignStore {
 
       // **行が無いことを 0 件に潰さない。**「まだ持っていない」と
       // 「その県に標識が無い」は別のこと（`docs/interfaces/stop-signs-delivery.md`）。
-      return row ?? null;
+      if (row === undefined) return null;
+
+      const { minLat, maxLat, minLon, maxLon, ...rest } = row;
+      return {
+        ...rest,
+        // **4つそろっているときだけ矩形として扱う。**欠けた矩形で判定すると、
+        // **走っていない向きだけ「範囲の外」になる**（`./schema.ts`）。
+        bounds:
+          minLat !== null && maxLat !== null && minLon !== null && maxLon !== null
+            ? { minLat, maxLat, minLon, maxLon }
+            : null,
+      };
     },
   };
 }
@@ -243,8 +266,18 @@ export function createDrizzleSignWriter(db: SyncSqliteDatabase): SignWriter {
             .values(rows.slice(i, i + INSERT_CHUNK))
             .run();
         }
+        // **`bounds` は列4つに開く。**`meta` をそのまま渡さないのは、
+        // オブジェクトのままの列が `meta` テーブルに無いためである。
+        const { bounds, ...rest } = meta;
         tx.insert(metaTable)
-          .values({ id: 1, ...meta })
+          .values({
+            id: 1,
+            ...rest,
+            minLat: bounds?.minLat ?? null,
+            maxLat: bounds?.maxLat ?? null,
+            minLon: bounds?.minLon ?? null,
+            maxLon: bounds?.maxLon ?? null,
+          })
           .run();
       });
     },

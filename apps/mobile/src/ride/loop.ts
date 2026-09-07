@@ -17,9 +17,11 @@
  */
 
 import type { StopSign, Warning } from "../detect/types";
+import type { SignBounds } from "../signs/bounds";
 import type { BeatMessage } from "../v2v/alert";
 import type { SelfMessage } from "../v2v/messages";
 import { NeighborStore, type NeighborsConfig, neighborsDefaults } from "../v2v/neighbors";
+import { CoverageWatch, type OutsideCoverage } from "./coverage";
 import { type RegisteredDetector, registeredDetectors } from "./detectors";
 import type { DeviceLink } from "./device";
 import { WarnGate, type WarnGateConfig, warnGateDefaults } from "./warn-gate";
@@ -91,6 +93,13 @@ export type RideStatus = {
   /** 最後に POST が成功した時刻（UTC ミリ秒）。一度も無ければ `null` */
   lastPostOkAt: number | null;
   /**
+   * **手元の標識の範囲の外に居たこと**（#72）。出ていなければ `null`。
+   *
+   * **走行中に出さない。**危険の警告ではないので、デバイスの出力を取り合わせない
+   * ——**走行後の画面で見せる**（`./coverage.ts`）。
+   */
+  outsideCoverage: OutsideCoverage | null;
+  /**
    * 検知が例外を投げた回数（累計）。
    *
    * **0 でないことに意味がある。**1つの検知の不具合で走行ループ全体を止めないように
@@ -115,6 +124,13 @@ export type RideDeps = {
    * `docs/interfaces/stop-signs-delivery.md`「一時停止の標識をスマホに配る」。
    */
   signs?: readonly StopSign[];
+  /**
+   * 手元の標識の外接矩形（`../signs/bounds.ts` / `signs.db` の `meta`）。
+   *
+   * **`signs` と違って絞らない。**渡すのは県ぶんの矩形そのもので、
+   * **持っていなければ `null`**（そのときは範囲の外かを判定しない）。
+   */
+  bounds?: SignBounds | null;
   /**
    * 自分の時計。**既定は `Date.now`。**
    *
@@ -153,6 +169,8 @@ export class RideLoop {
   private readonly gate: WarnGate;
   private readonly detectors: readonly RegisteredDetector[];
   private readonly now: () => number;
+  /** 手元の範囲の外に出たことの記録（#72）。**走行のあいだ持ち続ける** */
+  private readonly coverage: CoverageWatch;
 
   private signs: readonly StopSign[];
   /** 直近に取り込めた測位。`mv` の判定に使う */
@@ -180,6 +198,7 @@ export class RideLoop {
     this.detectors = deps.detectors ?? registeredDetectors;
     this.signs = deps.signs ?? [];
     this.now = deps.now ?? Date.now;
+    this.coverage = new CoverageWatch(deps.bounds ?? null);
   }
 
   /**
@@ -244,7 +263,11 @@ export class RideLoop {
    */
   async onFix(fix: SelfMessage): Promise<void> {
     const accepted = this.store.acceptSelf(fix, this.now());
+    // **取り込めた測位だけを見る**（#72）。`acceptSelf` は精度が粗い測位を落としており
+    // （`../v2v/messages.ts` の `maxHaccM`）、**捨てたはずの1点で「範囲の外を走った」と
+    // 言うことになる**——記録は消えない作りなので、**1点の濡れ衣が走行ごと汚す。**
     if (accepted) {
+      this.coverage.record(fix.lat, fix.lon, fix.t);
       this.lastFix = fix;
       this.lastFixAt = this.now();
     }
@@ -276,6 +299,7 @@ export class RideLoop {
       peers: this.peerCount,
       postFailures: this.postFailures,
       lastPostOkAt: this.lastPostOkAt,
+      outsideCoverage: this.coverage.outside(),
       detectorErrors: this.detectorErrors,
     };
   }

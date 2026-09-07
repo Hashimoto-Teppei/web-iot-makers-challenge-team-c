@@ -9,7 +9,13 @@ import {
   preRideChecks,
 } from "./pre-ride";
 
-const meta: SignsMeta = { pref: 33, version: "v1", count: 28_651, builtAt: "2026-09-01T00:00:00Z" };
+const meta: SignsMeta = {
+  pref: 33,
+  version: "v1",
+  count: 28_651,
+  builtAt: "2026-09-01T00:00:00Z",
+  bounds: { minLat: 34.3, maxLat: 35.4, minLon: 133.2, maxLon: 134.5 },
+};
 
 /** そろっている状態（走行前）。**各テストは1つだけ壊す。** */
 const ready: PreRideInput = {
@@ -33,6 +39,7 @@ const riding: RideStatus = {
   lastFixAt: 1,
   peers: 0,
   postFailures: 0,
+  outsideCoverage: null,
   lastPostOkAt: 1,
   detectorErrors: 0,
 };

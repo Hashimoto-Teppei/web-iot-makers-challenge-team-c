@@ -22,7 +22,24 @@ describe("parseStopSignsResponse", () => {
       version: ETAG,
       count: 2,
       builtAt: "2026-09-01T09:00:00.000Z",
+      bounds: { minLat: 34.6612, maxLat: 34.6625, minLon: 133.9345, maxLon: 133.9355 },
     });
+  });
+
+  it("外接矩形は標識の全件から作る（#72。走行後に範囲の外へ出たと言えるようにする）", () => {
+    const parsed = parseStopSignsResponse(ok, ETAG, BUILT_AT);
+    // **同梱物の生成と起動時の更新が同じここを通る**ので、矩形の作り方は1つで済む。
+    expect(parsed.meta.bounds).toEqual({
+      minLat: 34.6612,
+      maxLat: 34.6625,
+      minLon: 133.9345,
+      maxLon: 133.9355,
+    });
+  });
+
+  it("0 件なら矩形を作らない（`null`。0 件と『範囲が無い』を同じにしない）", () => {
+    const empty = parseStopSignsResponse({ ...ok, count: 0, signs: [] }, ETAG, BUILT_AT);
+    expect(empty.meta.bounds).toBeNull();
   });
 
   it("進入方向が無い標識は null のまま通す", () => {
