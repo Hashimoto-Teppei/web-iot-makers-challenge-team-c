@@ -16,6 +16,7 @@
 import type { RegisteredDetector } from "../ride/detectors";
 import { createMockDeviceLink } from "../ride/device";
 import { type RideConfig, RideLoop, type RideStatus } from "../ride/loop";
+import { boundsOf } from "../signs/bounds";
 import type { AlertMessage, BeatMessage, WarnMessage } from "../v2v/alert";
 import { type RunConfig, runDefaults, runScenario, type Scenario, type SimTick } from "./run";
 
@@ -78,6 +79,10 @@ export async function runRide(
     now: () => now,
     ...(options.detectors === undefined ? {} : { detectors: options.detectors }),
     ...(scenario.signs === undefined ? {} : { signs: scenario.signs }),
+    // **シナリオの `signs` は「その端末が持っている全部」**である（実機と違い、
+    // セルで絞る前の段階が無い）。**手元の範囲の外へ出たか**（#72）はここから作る
+    // ——`signs.db` の `meta` を持たないシミュレータで、同じ判定を通すため。
+    bounds: boundsOf(scenario.signs ?? []),
     // **`RunConfig` と共通のものは橋渡しする。**渡さないと、シミュレータが
     // 「走行中」と見なす速度とループが使う速度が食い違い、**どちらもそれらしく見える**。
     config: { neighbors: cfg.neighbors, movingSpdMps: cfg.movingSpdMps, ...options.ride },

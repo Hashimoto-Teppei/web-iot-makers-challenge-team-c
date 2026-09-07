@@ -93,6 +93,20 @@ export const meta = sqliteTable("meta", {
   count: integer("count").notNull(),
   /** 同梱物を作った時刻（ISO 8601、UTC）。**人が「いつのものか」を見るためだけに持つ** */
   builtAt: text("built_at").notNull(),
+  /**
+   * 手元の標識の外接矩形（`./bounds.ts`）。**走行中に「持っている範囲の外へ出た」ことを
+   * 見るために持つ**（#72）。
+   *
+   * **行から毎回計算しない。** 数万行の `MIN` / `MAX` は索引が無いので全件走査になり、
+   * それを走行のたびに走らせることになる。`count` を持っているのと同じ理由である。
+   *
+   * **4つとも `null` は「矩形が無い」**（標識が 0 件の DB）。**片方だけある行を作らない**
+   * ——読む側は4つそろっているときだけ矩形として扱う（`./store.ts`）。
+   */
+  minLat: real("min_lat"),
+  maxLat: real("max_lat"),
+  minLon: real("min_lon"),
+  maxLon: real("max_lon"),
 });
 
 /**
@@ -124,6 +138,10 @@ CREATE TABLE meta (
   pref INTEGER NOT NULL,
   version TEXT NOT NULL,
   count INTEGER NOT NULL,
-  built_at TEXT NOT NULL
+  built_at TEXT NOT NULL,
+  min_lat REAL,
+  max_lat REAL,
+  min_lon REAL,
+  max_lon REAL
 );
 `;

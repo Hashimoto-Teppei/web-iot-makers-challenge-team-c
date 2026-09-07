@@ -13,6 +13,7 @@
 import { describe, expect, it } from "vitest";
 import { runDetectorInputs } from "../sim/run";
 import { stopSignAhead } from "../sim/scenarios";
+import { boundsOf } from "./bounds";
 import { buildSignsDatabase } from "./node";
 import type { SignsMeta } from "./store";
 
@@ -21,6 +22,7 @@ const META: SignsMeta = {
   version: '"33.sim"',
   count: stopSignAhead.signs?.length ?? 0,
   builtAt: "2026-09-01T00:00:00Z",
+  bounds: boundsOf(stopSignAhead.signs ?? []),
 };
 
 describe("stopSignAhead のシナリオ", () => {

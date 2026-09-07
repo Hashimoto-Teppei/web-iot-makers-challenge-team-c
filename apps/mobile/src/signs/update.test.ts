@@ -16,6 +16,7 @@ const OLD_META: SignsMeta = {
   version: '"33.old"',
   count: 1,
   builtAt: "2026-08-01T00:00:00Z",
+  bounds: { minLat: 34.6612, maxLat: 34.6612, minLon: 133.9345, maxLon: 133.9345 },
 };
 
 /** 岡山市内あたり。 */
@@ -78,6 +79,9 @@ describe("updateStopSigns", () => {
       version: '"33.new"',
       count: 1,
       builtAt: NOW.toISOString(),
+      // **入れ替えで矩形も入れ替わる**（#72）。ここが古いままだと、
+      // **新しい県を持っているのに前の県の範囲で「外に出た」と言う。**
+      bounds: { minLat: 34.6615, maxLat: 34.6615, minLon: 133.9348, maxLon: 133.9348 },
     });
     // **差分ではなく入れ替え。**古い標識は残らない。
     const ids = signs.store.near(34.6612, 133.9345).map((sign) => sign.id);

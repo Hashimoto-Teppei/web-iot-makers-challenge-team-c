@@ -85,13 +85,19 @@ export function useSignStore(): SignStore {
  * **引き直しを忘れないこと。**忘れると、入れ替えたのに**画面には古い版と件数が
  * 出続ける**——「更新できたのかどうか人に見せる」という、この仕組みの目的そのものが
  * 果たせなくなる（`docs/interfaces/stop-signs-delivery.md`「『持っていない』と『0件』を混ぜない」）。
+ *
+ * **投げさせない**（`safeMeta`）。**端末の `signs.db` は上書きされない**ので
+ * （{@link signsAssetSource}）、**列が増えた版のアプリを上書きインストールすると、
+ * 古い形の `signs.db` を新しい SQL で引くことになる**（#72 で `meta` に外接矩形を足した）。
+ * ここで投げると**ホーム画面も設定画面も描画ごと落ちる**——**走行を始められないのは
+ * 同じでも、理由が読めないのとでは直し方が違う**（`docs/setup.md` のトラブル表）。
  */
 export function useSignsMeta(store: SignStore): SignsMeta | null {
   const { outcome } = useSignsUpdateSnapshot();
   // **`outcome` は計算に使わない。引き直す合図として置いてある**
   // ——外すと、入れ替えたのに画面が古い版と件数のままになる。
   // biome-ignore lint/correctness/useExhaustiveDependencies: 上記のとおり意図的な依存。
-  return useMemo(() => store.meta(), [store, outcome]);
+  return useMemo(() => safeMeta(store), [store, outcome]);
 }
 
 /**

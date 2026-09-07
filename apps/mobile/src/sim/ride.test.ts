@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { approachDefaults, detectApproach } from "../detect/approach";
 import { register } from "../ride/detectors";
+import { destination, rider } from "./node";
 import { runRide } from "./ride";
+import type { Scenario } from "./run";
 import {
   appCrashMidRide,
   approachFromBehind,
@@ -78,5 +80,70 @@ describe("runRide", () => {
     const down = frames.filter((frame) => frame.tick.beat === null);
     expect(down.length).toBeGreaterThan(0);
     expect(down.every((frame) => frame.written.length === 0)).toBe(true);
+  });
+});
+
+/**
+ * **手元の標識の範囲から出たことに気づけるか**（#72）。
+ *
+ * 実機を待たずに確かめられる形にしてある——**位置のモックだけで、走行後の画面に出る値
+ * （`RideStatus.outsideCoverage`）まで通る**（`docs/adr/0002-development-lifecycle.md`）。
+ */
+describe("手元の標識の範囲（#72）", () => {
+  const BASE = { lat: 34.6617, lon: 133.9344 };
+  const ME = "a1000001";
+
+  /**
+   * 出発地点の四方 40m に標識を置き、**北へ 5 m/s で 20 秒走る**シナリオ。
+   *
+   * **8 秒目に矩形の北の辺を越える。**四方に置いてあるのは、
+   * **出発した時点では確実に中に居る**ようにするため（1件だけだと矩形が点に潰れ、
+   * 送信前の丸め（`../v2v/messages.ts`）だけで外に出たことになる）。
+   */
+  const leavingSignArea: Scenario = {
+    name: "手元の標識の範囲から北へ出る",
+    observerId: ME,
+    durationMs: 20_000,
+    signs: [0, 90, 180, 270].map((bearingDeg) => ({
+      id: `sim-edge-${bearingDeg}`,
+      ...destination(BASE.lat, BASE.lon, bearingDeg, 40),
+      approach: null,
+    })),
+    nodes: [rider({ id: ME, ...BASE, legs: [{ durationMs: 20_000, bearingDeg: 0, speedMps: 5 }] })],
+  };
+
+  it("範囲の外へ出ると、走行後に見る値に残る", async () => {
+    const frames = await runRide(leavingSignArea, { detectors: [] });
+
+    // 走り出した時点では中に居る。**ここが `null` でなければ、矩形か丸めが疑わしい。**
+    expect(frames[0]?.status.outsideCoverage).toBeNull();
+
+    const last = frames.at(-1)?.status.outsideCoverage;
+    expect(last).not.toBeNull();
+    // 40m を 5 m/s で 8 秒。**測位の丸めがあるので秒はぴったりを求めない。**
+    expect(last?.since).toBeGreaterThanOrEqual(frames[0]?.tick.now ?? 0);
+    expect(last?.fixes).toBeGreaterThan(5);
+  });
+
+  it("範囲の中を走り続けたら、何も残らない", async () => {
+    const staying: Scenario = {
+      ...leavingSignArea,
+      name: "手元の標識の範囲の中を走り続ける",
+      // 40m の矩形の中で往復する（北へ 4 秒、南へ 4 秒）。
+      nodes: [
+        rider({
+          id: ME,
+          ...BASE,
+          legs: [
+            { durationMs: 4_000, bearingDeg: 0, speedMps: 5 },
+            { durationMs: 4_000, bearingDeg: 180, speedMps: 5 },
+          ],
+        }),
+      ],
+      durationMs: 8_000,
+    };
+
+    const frames = await runRide(staying, { detectors: [] });
+    expect(frames.at(-1)?.status.outsideCoverage).toBeNull();
   });
 });

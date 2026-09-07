@@ -27,6 +27,9 @@ const META: SignsMeta = {
   version: '"33.2026-09-01"',
   count: 4,
   builtAt: "2026-09-01T00:00:00Z",
+  // **`ALL` の外接矩形**（下の4件から手で書いた。`boundsOf()` はここでは通さない
+  // ——生成側と同じ関数で期待値を作ると、その関数が間違っていても通る）。
+  bounds: { minLat: 34.6608, maxLat: 34.6645, minLon: 133.9341, maxLon: 133.9375 },
 };
 
 /** 自セルの中。進入方向つき。 */
@@ -127,6 +130,8 @@ const NEW_META: SignsMeta = {
   version: '"33.2026-10-01"',
   count: 1,
   builtAt: "2026-10-01T00:00:00Z",
+  // 1件だけなので、その点そのもの（下の `REPLACEMENT`）。
+  bounds: { minLat: 34.6614, maxLat: 34.6614, minLon: 133.9346, maxLon: 133.9346 },
 };
 
 /** 入れ替え後に残る唯一の標識。**自セルの中**なので `near()` から引ける。 */
@@ -153,6 +158,17 @@ function writerSuite(name: string, create: () => { store: SignStore; writer: Sig
 
       expect(store.meta()?.count).toBe(1200);
       expect(store.near(HERE.lat, HERE.lon)).toHaveLength(1200);
+    });
+
+    it("矩形が無い素性も書ける（4列とも null。読み直しても null のまま）", () => {
+      // **0 件の DB を作る道はここには無い**（`./update.ts` が弾く）が、
+      // **古い同梱物には矩形が入っていない。**読めずに落ちると、
+      // **標識を持っているのに「持っていない」端末**になる（#72）。
+      const { store, writer } = create();
+      writer.replace({ ...NEW_META, bounds: null }, [REPLACEMENT]);
+
+      expect(store.meta()?.bounds).toBeNull();
+      expect(store.meta()?.count).toBe(1);
     });
 
     it("進入方向が無い標識を null のまま書く（0 や位置で埋めない）", () => {

@@ -371,3 +371,34 @@ describe("RideLoop の状態", () => {
     expect(onStatus).toHaveBeenCalledWith(expect.objectContaining({ fix: "ok", peers: 0 }));
   });
 });
+
+/**
+ * **手元の標識の範囲から出たことを走行後に見せる**（#72）。判定そのものは
+ * `./coverage.test.ts` と `../signs/bounds.test.ts` が見る。ここが見るのは
+ * **どの測位を食わせるか**である。
+ */
+describe("RideLoop と手元の標識の範囲（#72）", () => {
+  /** 基準点を囲む小さな矩形。**外へ出すには数百メートル動かせばよい。** */
+  const BOUNDS = {
+    minLat: BASE.lat - 0.001,
+    maxLat: BASE.lat + 0.001,
+    minLon: BASE.lon - 0.001,
+    maxLon: BASE.lon + 0.001,
+  };
+
+  it("範囲の外の測位で残る", async () => {
+    const { loop } = setup({ bounds: BOUNDS });
+    await loop.onFix({ ...fix(START + 1_000), lat: BASE.lat + 0.05 });
+
+    expect(loop.status().outsideCoverage).toMatchObject({ fixes: 1 });
+  });
+
+  it("取り込めなかった測位では残らない（1点の濡れ衣で走行を汚さない）", async () => {
+    const { loop } = setup({ bounds: BOUNDS });
+    // **精度が粗すぎて捨てられる測位**（`../v2v/messages.ts` の `maxHaccM` は 50m）。
+    // 捨てた点で「範囲の外を走った」と言うと、**走行後の画面が嘘をつく。**
+    await loop.onFix({ ...fix(START + 1_000), lat: BASE.lat + 0.05, hacc: 500 });
+
+    expect(loop.status().outsideCoverage).toBeNull();
+  });
+});

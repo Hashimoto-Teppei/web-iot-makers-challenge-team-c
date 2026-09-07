@@ -15,19 +15,40 @@ import { blocksMockDevice } from "../lib/mock-guard";
 import { createDiscardingRideLogStore, type RideLogStore, type RideRecording } from "../log/store";
 import { createNearbySigns } from "../signs/nearby";
 import type { SignStore } from "../signs/store";
+import { safeMeta } from "../signs/update";
 import { exchangeViaApi, refuseMockExchange } from "./api";
+import type { OutsideCoverage } from "./coverage";
 import type { DeviceLink } from "./device";
 import { watchFixes } from "./location";
 import { RideLoop, type RideStatus } from "./loop";
 import { setRiding, useRiding } from "./riding";
 
 /** 開始と停止の一回ぶん。**止め忘れを防ぐために、止める関数をここに集める。** */
-type Session = { stops: (() => void)[]; cancelled: boolean; recording: RideRecording };
+type Session = {
+  stops: (() => void)[];
+  cancelled: boolean;
+  recording: RideRecording;
+  /** 止めたあとに結果を読むために持つ（`RideControl.lastRide`） */
+  loop: RideLoop;
+};
+
+/**
+ * **直前の走行が残したもの。走行を終えたあとに画面が読む**（#72）。
+ *
+ * **`status` は走行を終えると `null` に戻す**（動いていないものを動いているように
+ * 見せないため）ので、**走行後に見せたいものはこちらへ移す。**
+ */
+export type LastRide = {
+  /** 手元の標識の範囲の外に居たか。**出ていなければ `null`**（`./coverage.ts`） */
+  outsideCoverage: OutsideCoverage | null;
+};
 
 export type RideControl = {
   running: boolean;
   /** 走行ループの状態。始めるまでは `null` */
   status: RideStatus | null;
+  /** 直前の走行が残したもの。**まだ1回も走っていなければ `null`** */
+  lastRide: LastRide | null;
   /** 測位の権限が下りないなど、人に伝えるべきこと */
   error: string | null;
   start: () => void;
@@ -55,6 +76,7 @@ export function useRideLoop(
   device: DeviceLink | null,
 ): RideControl {
   const [status, setStatus] = useState<RideStatus | null>(null);
+  const [lastRide, setLastRide] = useState<LastRide | null>(null);
   const [error, setError] = useState<string | null>(null);
   // **走行中かはアプリで1つだけ持つ**（`./riding.ts`）——設定画面から走行中に
   // 標識を入れ替えられないようにするため、画面の外からも見える必要がある。
@@ -85,6 +107,8 @@ export function useRideLoop(
     record(() => session.recording.end(Date.now()));
     sessionRef.current = null;
     setRiding(false);
+    // **走行後に見せるものだけ、状態を消す前に移す**（#72）。
+    setLastRide({ outsideCoverage: session.loop.status().outsideCoverage });
     // **古い状態を残さない。**残すと、走行を終えたあとも「測位: 取れている」や
     // 中継の失敗の赤字が出たままになり、**動いていないのに動いているように見える。**
     setStatus(null);
@@ -120,17 +144,24 @@ export function useRideLoop(
       setError(`走行ログを開けません（この走行は記録されません）: ${String(reason)}`);
       recording = createDiscardingRideLogStore().startRide(device.deviceId, Date.now());
     }
-    const session: Session = { stops: [], cancelled: false, recording };
-    sessionRef.current = session;
+    // **前の走行の結果を消してから始める。**残すと、**今回の走行で出たことと
+    // 前回出たことが見分けられない。**
+    setLastRide(null);
 
     const loop = new RideLoop({
       device,
       exchange,
       onStatus: setStatus,
+      // **手元の範囲は走行を始めた時点のものを使う。**走行中に標識を取りに行かないので
+      // （`docs/interfaces/stop-signs-delivery.md`）、途中で変わることはない。
+      // **読めなければ `null`** ——判定しないだけで、走行は始める。
+      bounds: safeMeta(signs)?.bounds ?? null,
       // **書いた警告だけを記録する**（`./loop.ts` の `onWarn`）。
       // **保存に失敗しても走行を止めない**——記録は副産物であって、目的ではない。
       onWarn: (warning, t) => record(() => recording.addWarning(warning, t)),
     });
+    const session: Session = { stops: [], cancelled: false, recording, loop };
+    sessionRef.current = session;
     // **走行を始めた時点の口を使い続ける。**走行中に標識を取りに行かない
     // （`docs/interfaces/stop-signs-delivery.md`「走行中は取りに行かない」）。
     const nearby = createNearbySigns(signs);
@@ -174,5 +205,5 @@ export function useRideLoop(
   // 判断し続ける）。
   useEffect(() => stop, [stop]);
 
-  return { running, status, error, start, stop };
+  return { running, status, lastRide, error, start, stop };
 }
