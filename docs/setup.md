@@ -353,6 +353,7 @@ pnpm --filter web db:migrate:local   # 手元の D1（SQLite）にマイグレ�
 | `node -v` が 24 以外 | 別に入れた Node が優先されている。`mise doctor` で問題を確認する |
 | `pnpm install` が `ERR_PNPM_...` で失敗 | `node_modules` を消してやり直す。それでもだめならエラー全文を貼って聞く |
 | `Untrusted config file` と言われる | `mise trust` を実行してからやり直す |
+| アプリが赤い画面で `Unable to load script` と出る | Metro に届いていない。**USB を挿し直すと `adb reverse` が消える**ので、`adb reverse tcp:8081 tcp:8081` を実行してからアプリを開き直す |
 | CI だけ落ちて手元では通る | まず `pnpm lint:fix` を実行してコミットする。整形漏れがいちばん多い |
 | `pnpm dev` でポートが使えないと言われる | 5173 番を別のプロセスが使っている。前に起動した dev サーバーが残っていないか確認する |
 | Windows で `Filename too long` と言われる | `git config --global core.longpaths true` を実行してから clone し直す |
