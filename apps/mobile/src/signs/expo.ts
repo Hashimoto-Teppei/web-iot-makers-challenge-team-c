@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "r
 // Metro の資産として読み込む。返るのは中身ではなく資産の ID である
 // （`src/types/assets.d.ts`）。`metro.config.js` の `assetExts` に `db` を足してある。
 import signsAssetId from "../../assets/signs.db";
+import { createStore } from "../lib/store";
 import { isRiding } from "../ride/riding";
 import { fetchStopSignsViaApi } from "./api";
 import {
@@ -115,30 +116,17 @@ export type SignsUpdateState = {
   outcome: SignsUpdateOutcome | null;
 };
 
-let updateState: SignsUpdateState = { running: false, outcome: null };
-const listeners = new Set<() => void>();
+const updateStore = createStore<SignsUpdateState>({ running: false, outcome: null });
 /** **起動につき1回**を守るための印。画面の再マウントでは戻さない。 */
 let updateStarted = false;
 
 function publish(next: SignsUpdateState): void {
-  updateState = next;
-  for (const listen of listeners) listen();
-}
-
-function subscribe(listen: () => void): () => void {
-  listeners.add(listen);
-  return () => {
-    listeners.delete(listen);
-  };
+  updateStore.set(next);
 }
 
 function useSignsUpdateSnapshot(): SignsUpdateState {
   // 第3引数（サーバー側の値）は web ビルドの初期描画で要る。同じものでよい。
-  return useSyncExternalStore(
-    subscribe,
-    () => updateState,
-    () => updateState,
-  );
+  return useSyncExternalStore(updateStore.subscribe, updateStore.get, updateStore.get);
 }
 
 /**
@@ -308,7 +296,7 @@ export function useSelectPref(store: SignStore): {
       // **フックの値ではなくモジュールの値を見る**（`isRiding()` と同じ理由）——
       // フックの値は再描画まで古く、**同じ描画の中で2回押されると2回とも素通りする。**
       // **`null` を返す**——何もしていないので、呼んだ画面は留まる。
-      if (updateState.running) return null;
+      if (updateStore.get().running) return null;
 
       const abort = new AbortController();
       let timedOut = false;
