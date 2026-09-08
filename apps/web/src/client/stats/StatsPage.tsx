@@ -87,6 +87,9 @@ export function StatsPage({ sample }: StatsPageProps) {
               type="button"
               role="tab"
               aria-selected={layer === item.value}
+              // **説明と結び付ける。**離れた場所に置いた `<p>` は、
+              // **これが無いと読み上げでタブと繋がらない**（タブ名しか読まれない）。
+              aria-describedby="layer-note"
               onClick={() => setLayer(item.value)}
             >
               {item.label}
@@ -122,10 +125,17 @@ export function StatsPage({ sample }: StatsPageProps) {
 
       {/* **タブの説明は操作列の外に出す。**中に入れると `flex-wrap` で
           チェックボックスの横に回り込み、**どのタブの説明なのか分からなくなる。** */}
-      <p className="layer-note">{layerNote(layer)}</p>
+      <p className="layer-note" id="layer-note">
+        {layerNote(layer)}
+      </p>
 
       {error && <p className="error">エラー: {error}</p>}
-      {loading && <p className="loading">読み込み中…</p>}
+      {/* **読み込み中でなくても場所を空けておく。****出たり消えたりすると、
+          下の地図の高さが1行ぶん変わる**（高さは残りを配る形になっている。`../index.css`）——
+          **下限の入力を1文字打つたびに地図が跳ねる。** */}
+      <p className="loading" aria-live="polite">
+        {loading ? "読み込み中…" : ""}
+      </p>
 
       {data?.truncated && (
         <p className="note">区画が多いため、危険率の高い {cells.length} 件だけ表示しています。</p>

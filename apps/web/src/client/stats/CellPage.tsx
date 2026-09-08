@@ -59,9 +59,12 @@ export function CellPage({ lat, lon, sample }: CellPageProps) {
 
       {data && (
         <>
+          {/* **1つずつ要素に分ける。**地続きの文字列のままだと、
+           **狭い画面で「0」と「件」の間で行が折れる。** */}
           <p className="totals">
-            通行 {data.totals.rides} 走行 ／ 警告 {countOf(data.totals.detections)} 件 ／ 一時不停止{" "}
-            {data.totals.violations} 件
+            <span>通行 {data.totals.rides} 走行</span>
+            <span>警告 {countOf(data.totals.detections)} 件</span>
+            <span>一時不停止 {data.totals.violations} 件</span>
           </p>
 
           {data.hours.length === 0 ? (

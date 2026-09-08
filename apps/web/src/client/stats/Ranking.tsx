@@ -59,9 +59,12 @@ export function Ranking({ cells, selected, onSelect, sample }: RankingProps) {
           <th scope="col">危険率</th>
           <th scope="col">発生</th>
           <th scope="col">通行</th>
-          {/* **列名を空にする。**中のリンクの文字（「時間帯別」）が
-              そのまま列の意味になっているので、**同じ言葉を2度置かない。** */}
-          <th scope="col" />
+          {/* **見出しは置くが、目には見せない。**中のリンクの文字（「時間帯別」）が
+              そのまま列の意味になっているので、**同じ言葉を2度並べたくない**——
+              ただし**空の `<th>` にすると、読み上げでリンクの列が何の列か分からなくなる。** */}
+          <th scope="col">
+            <span className="visually-hidden">場所の詳細</span>
+          </th>
         </tr>
       </thead>
       <tbody>

@@ -165,7 +165,8 @@ export function StatsMap({ cells, selected, onSelect }: StatsMapProps) {
           <code>apps/web/.env.example</code> を <code>apps/web/.env</code>{" "}
           に写して鍵を入れてください （手順は <code>docs/interfaces/web-ui.md</code>「地図の鍵」）。
         </p>
-        <p>鍵が無くても、右のランキングはそのまま動きます。</p>
+        {/* **「右の」と書かない。**狭い画面では順位表は地図の下に来る（`../index.css`）。 */}
+        <p>鍵が無くても、順位表はそのまま動きます。</p>
       </div>
     );
   }

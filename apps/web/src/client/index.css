@@ -56,9 +56,33 @@
   --space-8: 2rem;
   --space-12: 3rem;
   --space-16: 4rem;
+  --space-24: 6rem;
 
   --radius: 0.5rem;
   --radius-sm: 0.375rem;
+
+  /*
+   * **ページの最大幅。****ヘッダー帯の中身と本文で同じ値を使う**
+   * ——別々に持つと、片方を広げたときに**帯の題字と見出しの左端がずれる。**
+   *
+   * **80rem から広げた**（変更・2026-09-08）。**1920px の画面で、地図と順位表が
+   * 左上の小さな箱になり、右側が丸ごと空いていた。**本文の1行の長さは
+   * `.stats header p` の 60rem が別に押さえているので、**広げても文章は伸びない。**
+   */
+  --page-max: 96rem;
+
+  /*
+   * **地図と順位表の高さ**（変更・2026-09-08）。
+   *
+   * **画面の高さちょうどに収めるのをやめた。**帯・見出し・操作列・注記の高さは
+   * 文字の折り返しで変わるので、**残りを配る形にすると、収まるかどうかが
+   * 文の長さと画面幅で決まってしまう**（実際にはみ出した）。
+   * **縦のスクロールを許して、地図には読める高さを先に渡す。**
+   *
+   * **`dvh` を混ぜるのは、縦に長い画面で下が空いて見えないようにするため。**
+   * 上下の `rem` が下限と上限で、**どちらも地図が読める範囲**に置いてある。
+   */
+  --panel-h: clamp(22rem, 60dvh, 40rem);
 
   /* 影は1段だけ。**罫線で区切るトーンなので、影を重ねると別のトーンになる。** */
   --shadow: 0 1px 2px rgba(27, 31, 29, 0.04), 0 1px 3px rgba(27, 31, 29, 0.06);
@@ -78,6 +102,18 @@
 
 body {
   margin: 0;
+}
+
+/*
+ * **`#root` を器にする**（`index.html`）。**`body` に置いても効かない**——
+ * React が描くのは `#root` の中なので、**帯と `<main>` は `body` の子ではない。**
+ *
+ * **`min-height` で下限だけを決める**（変更・2026-09-08）。
+ * **`height` で画面に固定すると、中身が入りきらない画面ではみ出した。**
+ * **中身の方が高ければ、ページを縦に送ってもらう。**
+ */
+#root {
+  min-height: 100dvh;
 }
 
 a {
@@ -110,7 +146,7 @@ a {
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--space-2) var(--space-6);
-  max-width: 80rem;
+  max-width: var(--page-max);
   margin: 0 auto;
   padding: var(--space-4) var(--space-6);
 }
@@ -130,9 +166,13 @@ a {
 
 /* **`body` に直接 padding を置かない。**中央寄せの器で受ける。 */
 .stats {
-  max-width: 80rem;
+  width: 100%;
+  max-width: var(--page-max);
   margin: 0 auto;
-  padding: var(--space-8) var(--space-6) var(--space-16);
+  /* **下だけ厚くする**（変更・2026-09-08）。**一番下の面（地図・順位表・表）が
+     画面の下端に貼り付くと、ページがそこで終わっているのか、
+     まだ下があるのかが分からない。** */
+  padding: var(--space-8) var(--space-6) var(--space-24);
 }
 
 .stats > header {
@@ -190,7 +230,9 @@ a {
  * 打ち消して、説明が操作列に付いて見えるようにする。
  */
 .layer-note {
-  margin: -0.75rem 0 var(--space-4);
+  /* **`.controls` の `margin-bottom` を打ち消す。**中間の値を書かないため、
+     段階の値をそのまま反転させる（`:root` の注記）。 */
+  margin: calc(var(--space-4) * -1) 0 var(--space-4);
   padding: 0 var(--space-4);
   color: var(--text-muted);
   font-size: 0.875rem;
@@ -251,12 +293,16 @@ a {
 
 /* ── 地図と順位表 ──────────────────────────────────────────── */
 
+/*
+ * **地図と順位表。**高さは地図（`--panel-h`）が決め、順位表がそれにそろう。
+ * **`align-items` を既定（`stretch`）のままにする**——`start` にすると、
+ * **行の少ない順位表だけが途中で終わり、2つが「同じものの2つの見せ方」に見えない。**
+ */
 .panels {
   display: grid;
   /* 地図と順位表を横に並べる。狭い画面では縦に積む（下の media query）。 */
   grid-template-columns: 3fr 2fr;
   gap: var(--space-4);
-  align-items: start;
 }
 
 /*
@@ -265,7 +311,7 @@ a {
  * **理由と数字は `stats/config.ts` の `MAP_STYLES`**（地の側もそこで一段暗くしてある）。
  */
 .map {
-  height: 32rem;
+  height: var(--panel-h);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   overflow: hidden;
@@ -289,10 +335,17 @@ a {
   font-size: 0.875em;
 }
 
+/*
+ * **地図と同じ高さにそろえる。**行が多ければ中でスクロールし、
+ * **少ないときは面だけが地図の高さまで残る**（`stretch` で伸びる）。
+ * **右側だけが途中で終わると、2つが「同じものの2つの見せ方」に見えない。**
+ */
 .ranking-panel {
-  /* 順位表が長くなっても、地図の高さの中で収める（並べて見るための画面なので）。 */
-  max-height: 32rem;
+  max-height: var(--panel-h);
   overflow-y: auto;
+  /* **横も器の中で流す。**狭い画面では列が入りきらない（座標と種別の列が広い）。
+     **`.table-card` と同じ扱い**——表を縮めるのではなく、器の中だけを横に送る。 */
+  overflow-x: auto;
 }
 
 .ranking {
@@ -378,6 +431,23 @@ a {
   text-align: center;
 }
 
+/*
+ * **目には見せず、読み上げには残す。**見出しを空にすると、
+ * **読み上げのときに列が何なのか分からなくなる**（`stats/Ranking.tsx`）。
+ * **`display: none` にしない**——消すと読み上げからも消える。
+ */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
 /* ── 注記・状態 ───────────────────────────────────────────── */
 
 .note {
@@ -405,7 +475,10 @@ a {
   color: #8f0f22;
 }
 
+/* **文字が無くても1行ぶんの高さを持つ。**取り直しのたびに出たり消えたりするので、
+   **持たせないと、下の地図と順位表が1行ぶん上下する**（`stats/StatsPage.tsx`）。 */
 .loading {
+  min-height: 1.7em;
   margin: 0 0 var(--space-4);
   color: var(--text-muted);
 }
@@ -436,9 +509,12 @@ a {
 }
 
 /* **合計も内容の幅に合わせる**（下の `.hours` と同じ理由で、器だけ広いと数字が散る）。
-   **`flex` にしない**——中身は地続きの文字列なので、**丸ごと1つの要素**として扱われ、
-   `gap` も `flex-wrap` も効かない。 */
+   **3つを `flex` で並べる**（変更・2026-09-08）——1つの文字列のままだと、
+   **狭い画面で「0」と「件」の間で行が折れていた。**折るなら項目の切れ目で折る。 */
 .totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-6);
   /* **`inline-block` にしない。**下の `.table-card` と横に並んでしまう。
      **`fit-content` なら、ブロックのまま中身の幅に縮む。** */
   width: fit-content;
@@ -450,6 +526,11 @@ a {
   background: var(--surface);
   box-shadow: var(--shadow);
   font-weight: 700;
+}
+
+/* 項目の中では折らない（上の注記のとおり）。 */
+.totals span {
+  white-space: nowrap;
 }
 
 /*
@@ -504,14 +585,53 @@ a {
 }
 
 @media (max-width: 60rem) {
+  /* 地図と順位表を縦に積む。 */
   .panels {
     grid-template-columns: 1fr;
+  }
+
+  .map {
+    height: 24rem;
   }
 
   .ranking-panel {
     /* 縦に積んだときは、順位表の中でスクロールさせない
        （地図の横に並んでいないので、高さを合わせる相手がいない）。 */
     max-height: none;
+  }
+
+  /*
+   * **6列を 390px の画面に収める**（変更・2026-09-08）。
+   * **横に送っていたが、切れていることが画面から分からず、
+   * 「時間帯別」への導線が黙って消えていた。**
+   *
+   * **左右の詰めと文字だけを縮める。****上下は詰めない**——
+   * **行そのものが指で押す的**なので、44px を切らせない。
+   */
+  .ranking {
+    font-size: 0.8125rem;
+  }
+
+  .ranking th,
+  .ranking td {
+    padding: 0.6875rem var(--space-1);
+  }
+
+  /*
+   * **押す的をセルいっぱいに広げる。****押せるのは行ではなく、
+   * 中のボタンとリンクそのもの**なので、**文字の高さのままだと 44px に足りない。**
+   * 上下の詰めをここで持たせ、セル側は左右だけにする。
+   */
+  .ranking td:has(button),
+  .ranking td:has(a) {
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .ranking td button,
+  .ranking td a {
+    display: block;
+    padding: 0.6875rem 0;
   }
 
   .stats h1 {
