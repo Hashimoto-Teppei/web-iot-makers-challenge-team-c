@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import type { StatsCell, StatsLayer, StatsSample } from "../../shared/api";
+import type { StatsCell, StatsCoverage, StatsLayer, StatsSample } from "../../shared/api";
 import { navigate, statsPath } from "../route";
 import { Ranking } from "./Ranking";
 import { cellId, StatsMap } from "./StatsMap";
@@ -34,6 +34,57 @@ const LAYERS: { value: StatsLayer; label: string; note: string }[] = [
  */
 const layerNote = (layer: StatsLayer): string =>
   LAYERS.find((item) => item.value === layer)?.note ?? "";
+
+/**
+ * 日付（日本時間）。**時刻は出さない**——**規模を伝えるのに時刻は要らず、
+ * 出すと詳細画面で時刻を丸めた意味が薄れる**（`docs/interfaces/web-ui.md`）。
+ */
+const day = new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo",
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+});
+/** 同じ年の終わりの日。**年を2度出さない**（「2026年8月24日〜2026年8月30日」は読ませすぎ）。 */
+const dayInYear = new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo",
+  month: "long",
+  day: "numeric",
+});
+const year = new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric" });
+const period = (from: number, to: number): string =>
+  `${day.format(from)}〜${year.format(from) === year.format(to) ? dayInYear.format(to) : day.format(to)}`;
+
+/**
+ * データの出どころと規模の一行（#154）。
+ *
+ * **率だけを出さない。****分母が分からないと、率の重みが判断できない**——
+ * 8走行のうち6回の 75% と、800走行のうち600回の 75% は、読む人にとって別のものである。
+ * **順位表の行にある「通行」はその区画の分母**で、ここに出すのは**画面全体の分母**である。
+ *
+ * **サンプルを混ぜているかどうかも同じ行に出す。**混ざった数と実走行の数は
+ * **見た目で区別が付かない**ので、**何を見ているのかを数字の隣に置く。**
+ */
+function Coverage({ coverage, sample }: { coverage: StatsCoverage; sample: StatsSample }) {
+  const span =
+    coverage.from === null || coverage.to === null ? null : period(coverage.from, coverage.to);
+
+  return (
+    <p className="coverage">
+      {coverage.rides === 0 ? (
+        "まだ走行データがありません。"
+      ) : (
+        <>
+          いまの集計は <strong>{coverage.rides} 走行</strong>
+          （端末 {coverage.devices} 台{span ? `、${span}` : ""}）ぶんです。
+        </>
+      )}{" "}
+      {sample === "include"
+        ? "デモ用のサンプル（岡山駅から岡山大学津島キャンパスまでの区間で合成した走行）を含みます。"
+        : "デモ用のサンプルは除いています。"}
+    </p>
+  );
+}
 
 export type StatsPageProps = {
   /**
@@ -77,6 +128,12 @@ export function StatsPage({ sample }: StatsPageProps) {
           <strong>危険率</strong>を出しています。
           <strong>危険率 = 危険が起きた走行数（発生）÷ その区画を通った走行数（通行）</strong>。
         </p>
+        {/* **データの出どころと規模**（#154）。**読み込み中は前の値を出したままにする**
+            ——消すと、下の地図と順位表がずれて跳ねる（`.loading` と同じ理由）。
+            **`sample` は応答が返したものを使う**（画面の状態ではない）——**取り直している間、
+            前の数字に新しい札が付く**。「240走行」と「サンプルは除いています」が同時に出ると、
+            この行が防ぎたかった取り違えがそのまま起きる。 */}
+        {data && <Coverage coverage={data.coverage} sample={data.sample} />}
       </header>
 
       <div className="controls">
@@ -142,9 +199,11 @@ export function StatsPage({ sample }: StatsPageProps) {
       )}
       {data && data.unlocated > 0 && (
         <p className="note">
-          位置が記録されていない{layer === "detection" ? "警告" : "一時不停止"}が {data.unlocated}{" "}
-          件
-          {layer === "detection"
+          {/* **応答の `layer` を使う**（上の `Coverage` と同じ理由。取り直している間、
+              前のレイヤーの件数に新しいレイヤーの名前が付く）。 */}
+          位置が記録されていない{data.layer === "detection" ? "警告" : "一時不停止"}が{" "}
+          {data.unlocated} 件
+          {data.layer === "detection"
             ? "（GPS が取れていない間のもの）"
             : "（標識を取り込み直して、位置を辿れなくなったもの）"}
           。地図と順位には入っていません。

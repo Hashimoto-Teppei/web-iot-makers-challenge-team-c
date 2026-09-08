@@ -90,6 +90,13 @@ export function StatsMap({ cells, selected, onSelect }: StatsMapProps) {
             // 走行後に振り返る画面なので、余計な操作系は出さない。
             streetViewControl: false,
             mapTypeControl: false,
+            // **ホイールで地図を拡大しない。ページを送る**（変更・2026-09-08）。
+            // **既定（`auto`）では、地図の上にポインタがある間ホイールが地図に吸われる。**
+            // この画面は**地図と順位表で画面の大半が埋まる**ので、
+            // **ポインタがどちらかの上にあるのが普通の状態**であり、
+            // **「下までスクロールできない」ように見える**（実際に報告された）。
+            // 拡大は ctrl / ⌘ を押しながら、指なら2本で。
+            gestureHandling: "cooperative",
             // **彩度を落とす。**既定の黄色い道路の上では、赤い円の濃さが読めない
             // （`./config.ts` の `MAP_STYLES`）。
             styles: MAP_STYLES,
@@ -149,6 +156,25 @@ export function StatsMap({ cells, selected, onSelect }: StatsMapProps) {
       circle.setOptions(strokeFor(cellId(cell) === selectedId, cell.rate));
     }
   }, [cells, selected]);
+
+  // **最初の1回だけ、円が全部入る範囲へ合わせる。**
+  //
+  // **初期値（`DEFAULT_CENTER` / `DEFAULT_ZOOM`）だけでは、データの一部しか見えない**
+  // ——**地図の高さは画面の幅と高さで変わる**ので（`--panel-h`。`../index.css`）、
+  // **固定の拡大率は、どこかの大きさで必ず外れる**（広い画面では引きすぎ、狭い画面では切れる）。
+  // **初期値は残す**——**セルが1件も無いとき**（データがまだ無い / 下限で全部隠れた）に出る。
+  //
+  // **2回目以降は合わせ直さない。**タブや下限を変えるたびに動くと、
+  // **人が動かした地図の位置が勝手に戻る。**
+  const fitted = useRef(false);
+  useEffect(() => {
+    if (!map || fitted.current || cells.length === 0) return;
+    const bounds = new google.maps.LatLngBounds();
+    for (const cell of cells) bounds.extend(centerOf(cell));
+    // 余白を置く。**円は点ではないので、中心で合わせると端の円が縁で切れる。**
+    map.fitBounds(bounds, 48);
+    fitted.current = true;
+  }, [map, cells]);
 
   // 選ばれたセルへ飛ぶ。**行をクリックすると地図がその場所へ飛ぶ**（1ページに並べた理由そのもの）。
   useEffect(() => {

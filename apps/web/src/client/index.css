@@ -192,6 +192,12 @@ a {
   color: var(--text-muted);
 }
 
+/* **データの出どころと規模の一行**（`stats/StatsPage.tsx`。#154）。
+   見出しの説明文のすぐ下に続くので、段落どうしの間だけ空ける。 */
+.stats header p + p {
+  margin-top: var(--space-2);
+}
+
 .stats header strong {
   color: var(--text);
 }

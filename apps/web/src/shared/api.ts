@@ -130,6 +130,25 @@ export type StatsCell = {
   rate: number;
 };
 
+/**
+ * 集計に使った走行の規模。**率の分母がどれだけの走行から出ているか**を画面に出すためのもの
+ * （#154。`docs/interfaces/web-ui.md`「データの出どころと規模」）。
+ *
+ * **8走行のうち6回の 75% と、800走行のうち600回の 75% は、読む人にとって別のもの**である。
+ * **`sample` の指定を反映した数**——除いて見ているときは、サンプルを抜いた規模が入る。
+ *
+ * **`device_id` そのものは入らない**（台数だけ）。公開の画面に出さないと決めてある。
+ */
+export type StatsCoverage = {
+  /** 集計に入った走行の数。**測位点のある走行だけ**（点が1つも無い走行は率に効かない） */
+  rides: number;
+  /** その走行を出した端末の数 */
+  devices: number;
+  /** 最初と最後の測位の時刻（UTC ミリ秒）。**1件も無ければ `null`** */
+  from: number | null;
+  to: number | null;
+};
+
 /** `GET /api/stats/cells` の応答。**マップとランキングは同じこれを見る**（同じデータの2つの見せ方）。 */
 export type StatsResponse = {
   layer: StatsLayer;
@@ -138,6 +157,8 @@ export type StatsResponse = {
   minRides: number;
   /** **率の高い順。**`rides` が `minRides` に満たないセルは入っていない */
   cells: StatsCell[];
+  /** 集計に使った走行の規模。**`minRides` で隠したセルのぶんも入っている**（画面全体の分母） */
+  coverage: StatsCoverage;
   /**
    * **場所が分からなかった数。**地図にも順位にも入っていない。
    *

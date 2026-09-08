@@ -35,6 +35,7 @@ CORS の設定や API の URL を環境変数で配線する必要はない。
 | `pnpm db:migrate:remote` | Cloudflare 上の D1 に適用（**デプロイ担当のみ**） |
 | `pnpm stop-signs:extract` | JARTIC の CSV から一時停止の標識を抜き出し、D1 に流す SQL を作る（下） |
 | `pnpm sample:generate` | デモ用のサンプルデータ（合成した走行）の SQL を作る（下） |
+| `pnpm recompute` | 不停止を全走行ぶん計算し直す（`--token <ADMIN_TOKEN>`。下） |
 | `pnpm deploy:cf` | Cloudflare へデプロイ（**デプロイ担当のみ**） |
 
 `wrangler.jsonc` にバインディングを足したら `pnpm cf-typegen` を実行して `Env` を更新する。
@@ -214,7 +215,14 @@ pnpm exec wrangler d1 execute team-c-db --local --file=scripts/stop-signs/out/st
 - **`ADMIN_TOKEN` が要る。**未設定なら 503 を返して通さない（空を「認証なし」として扱わない）
 
 ```sh
-# ローカルで叩く（.dev.vars に ADMIN_TOKEN を置いてから pnpm dev）
+# 全走行ぶんを計算し直す（more が false になるまで自動で叩き直す。Windows でも動く）
+pnpm recompute --token <ADMIN_TOKEN>
+pnpm recompute --token <ADMIN_TOKEN> --api https://<デプロイ先>   # デプロイ先を計算し直す
+
+# しきい値を変えて試す（既定は docs/interfaces/web-stats.md「しきい値の既定値」から写してある）
+pnpm recompute --token <ADMIN_TOKEN> --stop-speed 1.0 --radius 25
+
+# 1回ぶんだけ手で叩く（.dev.vars に ADMIN_TOKEN を置いてから pnpm dev）
 curl -X POST http://localhost:5173/api/admin/recompute \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{"thresholds":{"stopSpeedMps":1.5,"radiusM":20,"bearingToleranceDeg":60,"maxHaccM":30}}'
@@ -259,6 +267,8 @@ echo "$TOKEN"   # .dev.vars に控える。Cloudflare 側から読み出す手�
 curl 'http://localhost:5173/api/stats/cells?layer=detection&minRides=5'
 ```
 
+- **セルと一緒に、集計に使った走行の規模（`coverage`）を返す。**走行数・端末数・期間で、
+  **画面の見出しの下に出している分母そのもの**（#154。`docs/interfaces/web-stats.md`）
 - **返すのはセルに丸めたものだけ。**生の測位点も `device_id` も返さない
   （`docs/adr/0007-keep-raw-ride-logs.md`。**これを守ることが生ログを保存する条件そのもの**）
 - **率は走行の数で数える**（件数ではない）。**分子も分母も走行の数**
@@ -298,6 +308,8 @@ curl 'http://localhost:5173/api/stats/cell?lat=34.647&lon=133.927'
 
 **デモとスライドのために、合成した走行を入れる。**`rides` と `detections` の `sample` の列で
 見分ける（別のテーブルにしない。`docs/interfaces/web-service.md`）。
+**対象は岡山駅から岡山大学津島キャンパスまでの区間**——**発表を聞く人が場所を思い浮かべられる**
+ようにするため（#154）。**区間の中の標識を12か所、1か所あたり20走行**作る。
 **`POST /api/logs` はこの列を受け取らない——立てられるのはこのスクリプトだけ。**
 
 ```sh
@@ -310,8 +322,14 @@ pnpm dev
 pnpm sample:generate
 # 4. 手元の D1 に入れる（何度でも入れ直せる。sample = 1 の行を先に消してから入る）
 pnpm exec wrangler d1 execute team-c-db --local --file=scripts/seed/out/sample.sql
-# 5. 不停止のタブを見るには、投入のあとで再計算を叩く（あの表はそこでしか作られない。上の節）
+# 5. 不停止のタブを見るには、投入のあとで再計算を回す（あの表はそこでしか作られない。上の節）。
+#    1回で計算できるのは20走行までなので、残りが無くなるまで叩き直すスクリプトを使う
+pnpm recompute --token <ADMIN_TOKEN>
 ```
+
+**サンプルを入れただけでは「一時不停止」のタブは 0% のまま**である。
+**`stop_violations` を作るのは再計算だけ**で、取り込みの中では計算しない
+（`docs/interfaces/web-stats.md`「いつ計算するか」）。
 
 **生成した SQL はコミットしない**（`.gitignore`）。**作り直せるものなので、生成器の方が正本。**
 
