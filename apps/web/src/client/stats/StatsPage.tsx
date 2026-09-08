@@ -200,41 +200,51 @@ export function StatsPage({ sample }: StatsPageProps) {
         {loading ? "読み込み中…" : ""}
       </p>
 
-      {data?.truncated && (
-        <p className="note">区画が多いため、危険率の高い {cells.length} 件だけ表示しています。</p>
-      )}
-      {data && data.unlocated > 0 && (
-        <p className="note">
-          {/* **応答の `layer` を使う**（上の `Coverage` と同じ理由。取り直している間、
-              前のレイヤーの件数に新しいレイヤーの名前が付く）。 */}
-          位置が記録されていない{data.layer === "detection" ? "警告" : "一時不停止"}が{" "}
-          {data.unlocated} 件
-          {data.layer === "detection"
-            ? "（GPS が取れていない間のもの）"
-            : "（標識を取り込み直して、位置を辿れなくなったもの）"}
-          。地図と順位には入っていません。
-        </p>
-      )}
+      {/* **取り直している間だけ、結果をまとめて薄くして触れなくする。**
+          **理由は `docs/interfaces/web-ui.md`「レイヤーを切り替える」**（残す理由も含めてそこが正本）。
 
-      <div className="panels">
-        <StatsMap
-          cells={cells}
-          selected={stillThere ? selected : null}
-          onSelect={onSelect}
-          hovered={hoverThere ? hovered : null}
-          onHover={onHover}
-        />
-        {/* **順位表は面に載せる。**地図は自分で面を持っている（`.map` に枠と影がある）ので、
-            並べたときに片方だけ地の上に浮いていると、2つが同じものの2つの見せ方に見えない。 */}
-        <div className="card ranking-panel">
-          <Ranking
+          **`inert` にするのは、薄いままの行が押せると、取り直しの結果に無いセルへ飛べるから。**
+          **`pointer-events` では止まらない**——順位表の行はボタンとリンクで、
+          **キーボードと読み上げからは押せたままになる。**
+          **状態を読み上げているのは上の `aria-live` の行**で、`aria-busy` は薄くするための印である
+          （**ただの `<div>` に付けた `aria-busy` は読み上げられない**）。 */}
+      <div className="results" aria-busy={loading} inert={loading}>
+        {data?.truncated && (
+          <p className="note">区画が多いため、危険率の高い {cells.length} 件だけ表示しています。</p>
+        )}
+        {data && data.unlocated > 0 && (
+          <p className="note">
+            {/* **応答の `layer` を使う**（上の `Coverage` と同じ理由。取り直している間、
+                前のレイヤーの件数に新しいレイヤーの名前が付く）。 */}
+            位置が記録されていない{data.layer === "detection" ? "警告" : "一時不停止"}が{" "}
+            {data.unlocated} 件
+            {data.layer === "detection"
+              ? "（GPS が取れていない間のもの）"
+              : "（標識を取り込み直して、位置を辿れなくなったもの）"}
+            。地図と順位には入っていません。
+          </p>
+        )}
+
+        <div className="panels">
+          <StatsMap
             cells={cells}
             selected={stillThere ? selected : null}
             onSelect={onSelect}
-            sample={sample}
             hovered={hoverThere ? hovered : null}
             onHover={onHover}
           />
+          {/* **順位表は面に載せる。**地図は自分で面を持っている（`.map` に枠と影がある）ので、
+              並べたときに片方だけ地の上に浮いていると、2つが同じものの2つの見せ方に見えない。 */}
+          <div className="card ranking-panel">
+            <Ranking
+              cells={cells}
+              selected={stillThere ? selected : null}
+              onSelect={onSelect}
+              sample={sample}
+              hovered={hoverThere ? hovered : null}
+              onHover={onHover}
+            />
+          </div>
         </div>
       </div>
     </main>

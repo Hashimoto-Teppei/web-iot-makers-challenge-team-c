@@ -631,6 +631,32 @@ a {
   color: var(--text-muted);
 }
 
+/*
+ * **取り直している間、前の結果を薄くする**（理由は `../../../docs/interfaces/web-ui.md`。
+ * 触れなくする側は `inert` で、`stats/StatsPage.tsx` にある）。
+ *
+ * **`opacity` だけにする**——高さも位置も変えないので、**入れ替わった瞬間に跳ねない。**
+ *
+ * **薄くなる側だけ 0.25 秒待たせる。**下限の入力は**1文字打つたびに取り直す**ので、
+ * **待たせないと、打つたびに地図と順位表が点滅する**（`stats/StatsPage.tsx` が
+ * 「1行ぶん跳ねる」のを防いでいるのと同じ話）。**戻る側は待たせない**
+ * ——新しい数字は出た瞬間に濃くする。
+ */
+.results[aria-busy="true"] {
+  opacity: 0.4;
+  transition-delay: 0.25s;
+}
+
+.results {
+  transition: opacity 0.15s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .results {
+    transition: none;
+  }
+}
+
 /* ── 場所の詳細 ───────────────────────────────────────────── */
 
 /* **`.stats header p` より詳細度を上げる。**`.back` は詳細画面の `<header>` の中にある
