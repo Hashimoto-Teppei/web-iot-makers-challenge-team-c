@@ -35,19 +35,22 @@ export function CellPage({ lat, lon, sample }: CellPageProps) {
     <main className="stats stats--cell">
       <header>
         <p className="back">
-          <Link to={statsPath(sample)}>← どこが危ないか（一覧）</Link>
+          <Link to={statsPath(sample)}>← 一覧にもどる</Link>
         </p>
         {/* **応答が返した代表座標を出す**（渡した値ではない）。**セルの中のどの点を渡しても
             同じ内訳が返る**ので、渡した値をそのまま出すと、**下に並ぶ数字とは別のセルの名前**が
             見出しになる。読み込み中だけは、渡した値を丸めずに出す。 */}
+        {/* **座標だけを見出しにしない。**数字が単独で置かれると、
+         **何の数字なのかが見出しから読めない。**「区画」を頭に付けるだけで足りる。 */}
         <h1>
-          {(data?.lat ?? lat).toFixed(3)}, {(data?.lon ?? lon).toFixed(3)} の内訳
+          区画 {(data?.lat ?? lat).toFixed(3)}, {(data?.lon ?? lon).toFixed(3)}
         </h1>
+        {/* **「セル」の定義を書き直さない。**一覧で一度説明した語なので、
+            ここでは寸法だけを添える（`docs/interfaces/web-ui.md`「画面に出す言葉」）。 */}
         <p>
-          セル（緯度経度を小数第3位で切り捨てた升目、岡山でおよそ 111m × 92m）1つぶん。
-          <strong>数字は日本時間の時間帯ごと</strong>で、
-          <strong>検知と不停止は件数、通過は走行の数</strong>で数えている。
-          {sample === "exclude" && <strong>サンプルデータは除いている。</strong>}
+          この区画（約110m四方）の<strong>時間帯ごとの内訳</strong>です。時刻は日本時間。
+          <strong>警告と一時不停止は件数、通行は走行数</strong>で数えています。
+          {sample === "exclude" && <strong>デモ用のサンプルは除いています。</strong>}
         </p>
       </header>
 
@@ -57,13 +60,13 @@ export function CellPage({ lat, lon, sample }: CellPageProps) {
       {data && (
         <>
           <p className="totals">
-            合計: 通過 {data.totals.rides} 走行 / 検知 {countOf(data.totals.detections)} 件 / 不停止{" "}
+            通行 {data.totals.rides} 走行 ／ 警告 {countOf(data.totals.detections)} 件 ／ 一時不停止{" "}
             {data.totals.violations} 件
           </p>
 
           {data.hours.length === 0 ? (
             <p className="note">
-              このセルには、まだ何も入っていません。通過も検知も不停止も 0 件です。
+              この区画には、まだ何も入っていません。通行も警告も一時不停止も 0 件です。
             </p>
           ) : (
             <div className="card table-card">
@@ -71,13 +74,13 @@ export function CellPage({ lat, lon, sample }: CellPageProps) {
                 <thead>
                   <tr>
                     <th scope="col">時間帯</th>
-                    <th scope="col">通過</th>
+                    <th scope="col">通行</th>
                     {kinds.map((kind) => (
                       <th key={kind} scope="col">
                         {kindLabel(kind)}
                       </th>
                     ))}
-                    <th scope="col">不停止</th>
+                    <th scope="col">一時不停止</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -98,30 +101,30 @@ export function CellPage({ lat, lon, sample }: CellPageProps) {
             </div>
           )}
 
+          {/* **BLE という語を画面に出さない。**利用者から見えているのは
+              「スマホと切れている」ことだけで、**その下の通信方式は読む人の判断を変えない。** */}
           {data.tEstimated > 0 && (
             <p className="note">
-              このうち {data.tEstimated} 件は、
-              <strong>デバイスが推定した時刻で打たれた検知</strong>
-              です（BLE が切れている間のもの）。時刻がずれているぶん場所も確かではないため、
-              <strong>地図とランキングには入っていません。</strong>
+              このうち {data.tEstimated} 件は
+              <strong>スマホと切れている間にデバイスが記録した警告</strong>
+              です。時刻が推定のため場所も確かではなく、
+              <strong>地図と順位には入っていません。</strong>
             </p>
           )}
 
+          {/* **落ちた理由を2つとも並べない。**読む人が知る必要があるのは
+              「どの区画にも入っていない」ことだけで、**取り込み直しの経緯は運用側の事情。** */}
           {(data.unlocated.detections.length > 0 || data.unlocated.violations > 0) && (
             <p className="note">
-              <strong>場所が分からなかったもの（このセルに限らない全体の数）</strong>:{" "}
+              <strong>位置が記録されていないもの（この区画に限らない全体の数）</strong>:{" "}
               {data.unlocated.detections
                 .map((count) => `${kindLabel(count.kind)} ${count.count} 件`)
-                .join(" / ")}
-              {data.unlocated.detections.length > 0 && data.unlocated.violations > 0 && " / "}
-              {data.unlocated.violations > 0 && `不停止 ${data.unlocated.violations} 件`}
-              。検知は<strong>測位が出ていない間に発火したもの</strong>、 不停止は
-              <strong>標識を取り込み直して位置を辿れなくなったもの</strong>で、
-              どのセルにも入っていない。
-              <strong>
-                一覧の「場所が分からなかった数」より多くなることがある——あちらは時刻が推定の検知を
-                最初から除いているため。
-              </strong>
+                .join(" ／ ")}
+              {data.unlocated.detections.length > 0 && data.unlocated.violations > 0 && " ／ "}
+              {data.unlocated.violations > 0 && `一時不停止 ${data.unlocated.violations} 件`}
+              。どの区画にも入っていません。
+              <strong>一覧に出る数より多いことがあります</strong>
+              （一覧は時刻が推定の警告を最初から除いているため）。
             </p>
           )}
         </>

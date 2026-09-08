@@ -98,7 +98,7 @@ a {
 
 /*
  * **ヘッダー帯。**画面の一番上に置く。
- * **プロダクト名は置かない**（未確定。決めるのはこの画面の外）。
+ * **サービス名を置く**（名前そのものは仮称。`client/App.tsx`）。
  */
 .site-header {
   background: var(--surface);
@@ -180,6 +180,18 @@ a {
 }
 
 .controls label {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+/*
+ * **選んでいるタブの説明。**以前は `title` 属性にしか無く、**マウスを乗せるまで読めなかった**
+ * （`stats/StatsPage.tsx`）。**操作列の外に置く**ので、`.controls` の `margin-bottom` を
+ * 打ち消して、説明が操作列に付いて見えるようにする。
+ */
+.layer-note {
+  margin: -0.75rem 0 var(--space-4);
+  padding: 0 var(--space-4);
   color: var(--text-muted);
   font-size: 0.875rem;
 }

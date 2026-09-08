@@ -16,9 +16,24 @@ import { useStats } from "./use-stats";
  */
 
 const LAYERS: { value: StatsLayer; label: string; note: string }[] = [
-  { value: "detection", label: "検知", note: "走行中にその場で発火した警告" },
-  { value: "violation", label: "不停止", note: "走行ログと標識から、あとから計算した判定" },
+  {
+    value: "detection",
+    label: "走行中の警告",
+    note: "走行中にデバイスがその場で鳴らした警告です。",
+  },
+  {
+    value: "violation",
+    label: "一時不停止",
+    note: "走行データと標識の位置から、あとで計算した判定です。",
+  },
 ];
+
+/**
+ * **2つのタブの違いを画面に出す。**以前は `title` 属性にしか説明が無く、
+ * **マウスを乗せるまで読めなかった**——初めて見る人にはタブの名前だけでは差が分からない。
+ */
+const layerNote = (layer: StatsLayer): string =>
+  LAYERS.find((item) => item.value === layer)?.note ?? "";
 
 export type StatsPageProps = {
   /**
@@ -53,23 +68,25 @@ export function StatsPage({ sample }: StatsPageProps) {
     <main className="stats">
       <header>
         <h1>どこが危ないか</h1>
+        {/* **画面に「セル」「率」と書かない**（`docs/interfaces/web-ui.md`「画面に出す言葉」）。
+            **切り捨ての方法は読む人の判断を変えない**ので「約110m四方」に畳み、
+            **式を1つ出すことで「危険率」「発生」「通行」の3語を同時に定義する**
+            ——この3語が順位表の列見出しとそのまま対応している。 */}
         <p>
-          走行ログから、<strong>セル</strong>（緯度経度を小数第3位で切り捨てた升目、 岡山でおよそ
-          111m × 92m）ごとに率を出したもの。
-          <strong>率 = そのセルで1件以上あった走行の数 ÷ そのセルを通った走行の数</strong>
-          で、件数では数えていない。
+          自転車の走行データをもとに、<strong>約110m四方の区画</strong>ごとの
+          <strong>危険率</strong>を出しています。
+          <strong>危険率 = 危険が起きた走行数（発生）÷ その区画を通った走行数（通行）</strong>。
         </p>
       </header>
 
       <div className="controls">
-        <div className="tabs" role="tablist" aria-label="レイヤー">
+        <div className="tabs" role="tablist" aria-label="表示する内容">
           {LAYERS.map((item) => (
             <button
               key={item.value}
               type="button"
               role="tab"
               aria-selected={layer === item.value}
-              title={item.note}
               onClick={() => setLayer(item.value)}
             >
               {item.label}
@@ -87,11 +104,10 @@ export function StatsPage({ sample }: StatsPageProps) {
               navigate(statsPath(e.target.checked ? "include" : "exclude"), { replace: true })
             }
           />
-          サンプルデータを混ぜる
+          デモ用のサンプルを含める
         </label>
 
         <label>
-          順位に出す通過の下限
           <input
             type="number"
             min={0}
@@ -100,24 +116,28 @@ export function StatsPage({ sample }: StatsPageProps) {
             // **小数はサーバーの検証に弾かれて画面全体が「クエリの形式が正しくありません」になる。**
             onChange={(e) => setMinRides(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
           />
-          走行
+          走行以上が通った区画だけ表示
         </label>
       </div>
+
+      {/* **タブの説明は操作列の外に出す。**中に入れると `flex-wrap` で
+          チェックボックスの横に回り込み、**どのタブの説明なのか分からなくなる。** */}
+      <p className="layer-note">{layerNote(layer)}</p>
 
       {error && <p className="error">エラー: {error}</p>}
       {loading && <p className="loading">読み込み中…</p>}
 
       {data?.truncated && (
-        <p className="note">セルが多いため、率の高い方から {cells.length} 件だけ出しています。</p>
+        <p className="note">区画が多いため、危険率の高い {cells.length} 件だけ表示しています。</p>
       )}
       {data && data.unlocated > 0 && (
         <p className="note">
-          場所が分からなかった{layer === "detection" ? "検知" : "不停止"}が {data.unlocated}{" "}
-          件あります
+          位置が記録されていない{layer === "detection" ? "警告" : "一時不停止"}が {data.unlocated}{" "}
+          件
           {layer === "detection"
-            ? "（測位が出ていない間の検知）"
+            ? "（GPS が取れていない間のもの）"
             : "（標識を取り込み直して、位置を辿れなくなったもの）"}
-          。これは地図にも順位にも入っていません。
+          。地図と順位には入っていません。
         </p>
       )}
 
