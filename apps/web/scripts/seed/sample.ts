@@ -45,9 +45,25 @@ const DEPART_M = 40;
 /** 停止する走行が減速する範囲（メートル）。既定の判定半径 20m の中に入る。 */
 const STOP_ZONE_M = 8;
 
-/** 軸にする標識の数と、1つあたりの走行の数。**通過の下限（既定5走行）を超える数にしてある。** */
+/** 軸にする標識の数。 */
 const SIGNS = 12;
-const RIDES_PER_SIGN = 20;
+
+/**
+ * 標識ごとの走行の数。**場所によって変える**（変更・2026-09-08。#157）。
+ *
+ * **以前は全部 20 の固定だった。**その結果、**地図の円がどれも半径 62.6m の同じ大きさ**になり、
+ * **「半径＝通行の多さ」という情報がデモの画面に1つも出ていなかった**
+ * （`docs/interfaces/web-ui.md`「地図の描き方」）。
+ *
+ * **下の危険率とは独立に並べてある。****相関させると「通行が多い＝危ない」に見え、
+ * 色と半径を別々の情報に割り当てた意味が消える**——**通行が多くて率が低い場所**
+ * （交通量が多いだけ）と**通行が少なくて率が高い場所**（本当に危ない）を見分けられることが、
+ * 2つを別々に割り当てた理由そのものである。
+ *
+ * **どれも通行の下限（既定5走行）を超えている。**下回ると、その区画は既定の画面から消える。
+ * **区間の南（岡山駅側）から北（大学側）の順に対応する**（以下の配列すべて同じ）。
+ */
+const RIDES_PER_SIGN = [48, 12, 34, 8, 26, 40, 20, 16, 30, 11, 44, 6];
 
 /**
  * サンプルを作る区間。**岡山駅から岡山大学津島キャンパスまで**（決定済み・2026-09-08。#154）。
@@ -65,13 +81,18 @@ const ROUTE_TO = { lat: 34.6935, lon: 133.9203 }; // 岡山大学津島キャン
 const CORRIDOR_M = 300;
 
 /**
- * 標識ごとの「危なさ」。**場所によって率を変える**——全部同じにすると、
+ * 標識ごとの「危なさ」（率）。**場所によって変える**——全部同じにすると、
  * **順位表が意味を持っているのかどうかを画面から確かめられない。**
- * `RIDES_PER_SIGN` 走行のうち何走行で起こすか、を並べたもの（検知 / 不停止）。
- * **区間の南（岡山駅側）から北（大学側）の順に対応する。**
+ *
+ * **件数ではなく率で持つ**（変更・2026-09-08。#157）。走行の数が場所ごとに違うので
+ * （上の `RIDES_PER_SIGN`）、**件数で書くと、率が走行の数に引きずられて決まる。**
+ * 実際に起こす走行の数は `Math.round(率 × 走行の数)` で出す。
+ *
+ * **画面の色の段（0 / 1〜9 / 10〜19 / 20〜39 / 40% 以上。`src/client/stats/config.ts`）が
+ * すべて出るように選んである。**1つでも欠けると、**その段の色が正しいかを画面で確かめられない。**
  */
-const DETECTION_HITS = [15, 12, 10, 9, 7, 6, 5, 4, 3, 2, 1, 0];
-const STOP_SKIPS = [11, 3, 14, 1, 8, 0, 6, 12, 2, 9, 5, 4];
+const DETECTION_RATES = [0.55, 0.05, 0.32, 0, 0.12, 0.45, 0.08, 0.22, 0.02, 0.15, 0.28, 0.65];
+const STOP_RATES = [0.3, 0.62, 0.05, 0.48, 0.18, 0, 0.25, 0.08, 0.55, 0.14, 0.35, 0.02];
 
 type Sign = { id: string; lat: number; lon: number; approachLat: number; approachLon: number };
 
@@ -257,9 +278,12 @@ const statements: string[] = [
 let startedAt = Date.UTC(2026, 7, 24, 0, 0, 0);
 let rideIndex = 0;
 for (const [signIndex, sign] of signs.entries()) {
-  const detectionHits = DETECTION_HITS[signIndex] ?? 0;
-  const stopSkips = STOP_SKIPS[signIndex] ?? 0;
-  for (let i = 0; i < RIDES_PER_SIGN; i++) {
+  // **標識の数が配列より多いときは末尾の値を使い回す**（取り込み次第で増えうる）。
+  // **0 を配ると、その標識だけ走行が1本も出ずに地図から消える。**
+  const rides = RIDES_PER_SIGN[signIndex] ?? RIDES_PER_SIGN[RIDES_PER_SIGN.length - 1] ?? 20;
+  const detectionHits = Math.round((DETECTION_RATES[signIndex] ?? 0) * rides);
+  const stopSkips = Math.round((STOP_RATES[signIndex] ?? 0) * rides);
+  for (let i = 0; i < rides; i++) {
     statements.push(
       ...buildRide(
         sign,

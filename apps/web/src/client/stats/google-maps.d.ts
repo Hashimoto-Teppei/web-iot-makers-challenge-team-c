@@ -57,6 +57,7 @@ declare namespace google.maps {
     /** 地図がまだ初期化しきっていないと `undefined` を返す。 */
     getZoom(): number | undefined;
     setZoom(zoom: number): void;
+    addListener(eventName: string, handler: () => void): MapsEventListener;
   }
 
   /**
@@ -78,12 +79,22 @@ declare namespace google.maps {
     strokeColor?: string;
     strokeOpacity?: number;
     strokeWeight?: number;
+    /** 地図に出すか。**`map` を外さずに隠せる**ので、作り直さずに使い回せる。 */
+    visible?: boolean;
+    /** 押せるか。**`false` にすると、下に重なっている円をクリックできる。** */
+    clickable?: boolean;
+    /** 重なり順。**大きいほど上。** */
+    zIndex?: number;
   };
 
   class Circle {
     constructor(options?: CircleOptions);
     setMap(map: Map | null): void;
     setOptions(options: CircleOptions): void;
+    setCenter(center: LatLngLiteral): void;
+    /** メートル */
+    setRadius(radius: number): void;
+    setVisible(visible: boolean): void;
     addListener(eventName: string, handler: () => void): MapsEventListener;
   }
 

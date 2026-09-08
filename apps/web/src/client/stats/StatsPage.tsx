@@ -104,16 +104,22 @@ export function StatsPage({ sample }: StatsPageProps) {
   const [layer, setLayer] = useState<StatsLayer>("detection");
   const [minRides, setMinRides] = useState(5);
   const [selected, setSelected] = useState<StatsCell | null>(null);
+  // **指しているだけのセル**（#157）。**選択とは別に持つ**——
+  // 混ぜると、**順位表を上から下へなぞるだけで地図が飛び回る。**
+  const [hovered, setHovered] = useState<StatsCell | null>(null);
 
   const query = useMemo(() => ({ layer, sample, minRides }), [layer, sample, minRides]);
   const { data, error, loading } = useStats(query);
 
   // 参照が変わるたびに地図の円を置き直すので、関数は固定しておく。
   const onSelect = useCallback((cell: StatsCell) => setSelected(cell), []);
+  const onHover = useCallback((cell: StatsCell | null) => setHovered(cell), []);
 
   const cells = data?.cells ?? [];
   // 取り直しでセルが入れ替わったら、選択も外す（消えたセルを指したままにしない）。
   const stillThere = selected && cells.some((cell) => cellId(cell) === cellId(selected));
+  // 指していたセルが消えたときも同じ（印だけが古い場所に残らないように）。
+  const hoverThere = hovered && cells.some((cell) => cellId(cell) === cellId(hovered));
 
   return (
     <main className="stats">
@@ -211,7 +217,13 @@ export function StatsPage({ sample }: StatsPageProps) {
       )}
 
       <div className="panels">
-        <StatsMap cells={cells} selected={stillThere ? selected : null} onSelect={onSelect} />
+        <StatsMap
+          cells={cells}
+          selected={stillThere ? selected : null}
+          onSelect={onSelect}
+          hovered={hoverThere ? hovered : null}
+          onHover={onHover}
+        />
         {/* **順位表は面に載せる。**地図は自分で面を持っている（`.map` に枠と影がある）ので、
             並べたときに片方だけ地の上に浮いていると、2つが同じものの2つの見せ方に見えない。 */}
         <div className="card ranking-panel">
@@ -220,6 +232,8 @@ export function StatsPage({ sample }: StatsPageProps) {
             selected={stillThere ? selected : null}
             onSelect={onSelect}
             sample={sample}
+            hovered={hoverThere ? hovered : null}
+            onHover={onHover}
           />
         </div>
       </div>

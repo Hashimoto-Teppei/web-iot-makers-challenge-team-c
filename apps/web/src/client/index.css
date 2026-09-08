@@ -34,8 +34,8 @@
   --accent: #0f6f6c;
 
   /*
-   * **危険（データ）。**地図の円と、率にまつわる表示だけに使う。
-   * **`src/client/stats/config.ts` の `CIRCLE_COLOR` と同じ値**——
+   * **危険（データ）。**率にまつわる表示だけに使う。
+   * **`src/client/stats/config.ts` の `RATE_BANDS` の中位の段と同じ値**——
    * 円は Google Maps に直接渡すので CSS からは触れず、**2箇所に同じ値がある。**
    * **片方だけ変えないこと。**
    */
@@ -317,11 +317,112 @@ a {
  * **理由と数字は `stats/config.ts` の `MAP_STYLES`**（地の側もそこで一段暗くしてある）。
  */
 .map {
+  position: relative;
   height: var(--panel-h);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   overflow: hidden;
   box-shadow: var(--shadow);
+}
+
+/*
+ * **地図そのものを描く器。****Google Maps は渡した要素の中身を作り替える**ので、
+ * **凡例を同じ要素に入れると消される**（`stats/StatsMap.tsx`）。
+ */
+.map__canvas {
+  position: absolute;
+  inset: 0;
+}
+
+/*
+ * **凡例。**円の色と大きさが何を指すかを画面に出す（`stats/Legend.tsx`）。
+ *
+ * **左上に置く。**下の帯は Google のロゴ・地図データの表示・利用規約へのリンクが使う場所で、
+ * **重ねると隠すことになる**（実際に隠していた）。右上は全画面のボタン、右下は拡大の操作系が使う。
+ * **空いているのは左上だけ**である（地図の種類の切り替えは出していない。
+ * `stats/StatsMap.tsx` の `mapTypeControl`）。
+ *
+ * **半透明にしない。**下に円や道路が透けると、**色見本そのものが別の色に見える**
+ * ——色を読むための部品なので、これは意味が壊れる。
+ */
+.legend {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  /* **地図の操作を邪魔しない。**凡例の上でも地図を掴んで動かせる。 */
+  pointer-events: none;
+}
+
+.legend__title {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--text-muted);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.legend ul {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+/* 色の段の見本。**円と同じ塗りと縁を持たせる**（`stats/config.ts` の `RATE_BANDS`）。 */
+.legend__chip {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 1px solid;
+  border-radius: 0.1875rem;
+}
+
+/*
+ * 大きさの見本。**縮尺ではなく比だけ**（`stats/Legend.tsx`）。
+ * **高さがばらつくので、`align-items` で底ではなく中心にそろえる。**
+ */
+.legend__sizes li {
+  align-items: center;
+}
+
+.legend__circle {
+  border: 1px solid var(--text-muted);
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.legend__note {
+  color: var(--text-muted);
+}
+
+/*
+ * **狭い画面では大きさの見本ごと畳む**（色の段だけ残す）。
+ * 縦に積んだときの地図は 24rem しかなく、**凡例が地図の上の帯を丸ごと食う。**
+ * **残すのは色の方**——大きさは円どうしを見比べれば向きが分かるが、
+ * **色は段の意味が書いていないと読めない。**
+ */
+@media (max-width: 40rem) {
+  .legend__group:last-child {
+    display: none;
+  }
 }
 
 .map--empty {
@@ -409,13 +510,54 @@ a {
   font-weight: 400;
 }
 
+/*
+ * **率の段の色。地図の円と同じものを数字の隣に置く**（`stats/Ranking.tsx`）。
+ * **順位表と地図で色の意味が同じであること**が、2つを1ページに並べた前提である。
+ */
+.rate__chip {
+  display: inline-block;
+  width: 0.625rem;
+  height: 0.625rem;
+  margin-right: 0.375rem;
+  border: 1px solid;
+  border-radius: 0.125rem;
+  vertical-align: baseline;
+}
+
+/*
+ * **指している行。****選択（赤）とは別の色にする**——同じ色にすると、
+ * 「いま指しているもの」と「選んだもの」が区別できない（`stats/config.ts`）。
+ * **地図の円に重なるリングと同じ青緑**で、2つが同じものを指していることを見せる。
+ *
+ * **`:hover` ではなくクラスで塗る。****地図の円を指したときにも同じ行が光る**必要があり、
+ * `:hover` はマウスがその行の上にあるときしか効かない。
+ */
+.ranking tbody tr.is-hovered,
 .ranking tbody tr:hover {
   background: var(--bg);
 }
 
-/* **選択はデータ側の色。**選ばれた行は、地図の上でも縁が濃くなっている円と同じものを指す。 */
-.ranking tr.is-selected,
-.ranking tr.is-selected:hover {
+/*
+ * 左端に印。**背景の差だけでは、器の中を送ったときに見つけられない。**
+ *
+ * **`<tr>` ではなく最初のセルに置く。**`border-collapse: collapse`（上の `.ranking`）では
+ * **行の影が描かれないブラウザがある**——**貼り付いた見出しの罫線をセル側に置いたのと同じ理由**
+ * で、あちらは「行に付いてこない」、こちらは「そもそも出ない」。
+ */
+.ranking tbody tr.is-hovered td:first-child,
+.ranking tbody tr:hover td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/*
+ * **選択はデータ側の色。**選ばれた行は、地図の上でも縁が濃くなっている円と同じものを指す。
+ *
+ * **`tbody` を書いて、上の `.is-hovered` と同じ強さにそろえる。**
+ * 書かないと**`.is-hovered` の方が強くなり、選んだ行の色が消える**——
+ * **選んだ行の円を地図で指した瞬間に、「指している」と「選んだ」が見分けられなくなる。**
+ */
+.ranking tbody tr.is-selected,
+.ranking tbody tr.is-selected:hover {
   background: var(--danger-weak);
 }
 
