@@ -20,7 +20,7 @@ from device.alert import Level, Link, Warn
 
 # LCD の桁数。**16×2 のキャラクタ LCD を前提にすることは決定済み**
 # （`../../../../docs/notifications/arbitration.md`「画面の割り付け」）。
-# 部品そのものは未確定（#13）だが、決まっているのはこの前提の方である。
+# 部品も LCD1602A（16×2）に決まった（#13。`../../../../docs/hardware.md`）。
 LCD_COLUMNS = 16
 
 # 停止中の情報に開放する桁数。**上段の16桁すべてと、下段の 8〜15 桁**で合わせて24文字。
