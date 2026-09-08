@@ -22,10 +22,29 @@
 
 ## 1. OS を書き込む
 
+### すでに CHIRIMEN が入った SD がある場合
+
+**まず版を見る。焼き直さずに済むこともある。**
+
+```sh
+cat /etc/os-release && python3 -V
+```
+
+**`VERSION_CODENAME=bookworm` かつ Python が 3.11 なら、そのまま使ってよい**（下の 2 へ進む）。
+CHIRIMEN Lite も Raspberry Pi OS Lite (32-bit) が土台なので、条件を満たせば違いは無い。
+**CHIRIMEN の Node.js は使わないが、消す必要も無い**（`CLAUDE.md`）。
+
+**違っていたら、この節のとおり焼き直す。** バージョンを選べないのは
+**Zero W が ARMv6 で、`uv` が Python 3.11 を落としてこられない**ためである
+（`adr/0008-device-dependencies.md` / `unverified.md` 40）。
+**システムの Python がそのまま `uv sync` の前提になる。**
+
+### 新しく書き込む
+
 [Raspberry Pi Imager](https://www.raspberrypi.com/software/) を使う。
 
 1. **デバイス**: `Raspberry Pi Zero`
-2. **OS**: `Raspberry Pi OS (other)` → **`Raspberry Pi OS Lite (32-bit)`**
+2. **OS**: `Raspberry Pi OS (other)` → **`Raspberry Pi OS Lite (32-bit)`**（**Bookworm**）
 3. **ストレージ**: microSD
 
 **64-bit を選ばない。** Zero W の ARMv6 では起動しない。
