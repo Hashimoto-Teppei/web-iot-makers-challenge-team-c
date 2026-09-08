@@ -1,5 +1,7 @@
+import { useEffect, useRef } from "react";
 import type { StatsCell, StatsSample } from "../../shared/api";
 import { cellPath, Link } from "../route";
+import { bandForPercent, ratePercent } from "./config";
 import { cellId } from "./StatsMap";
 
 /**
@@ -21,25 +23,64 @@ export type RankingProps = {
   onSelect: (cell: StatsCell) => void;
   /** 詳細へ飛ぶときに引き継ぐ。**飛んだ先で件数が変わって見えないため** */
   sample: StatsSample;
+  /** いま指されているセル。**地図の円を指している間も入る**（#157） */
+  hovered: StatsCell | null;
+  /** 行を指したことを親へ返す。**外れたら `null`** */
+  onHover: (cell: StatsCell | null) => void;
 };
 
-/**
- * 表示する率（整数のパーセント）。**色の判定もこの値から出す**（下）。
- *
- * **率そのもので色を決めてはいけない。**`0.004` は **「0%」と表示されるのに 0 より大きい**ので、
- * **「0%」の行が赤くなる**——**危険が1件も出ていない行が赤い**という、
- * 避けたかったものがそのまま出る（通過が 200 走行を超えれば起こる）。
- */
-const percent = (rate: number): number => Math.round(rate * 100);
 /** 代表座標。**小数第3位まで**（それ以上出すと、丸めた意味が無くなる） */
 const coords = (cell: StatsCell): string => `${cell.lat.toFixed(3)}, ${cell.lon.toFixed(3)}`;
 
-/** 率のセル。**表示と色を同じ値から出す**ための小さな入れ物。 */
+/**
+ * 率のセル。**表示と色を同じ値から出す**ための小さな入れ物
+ * （`./config.ts` の `ratePercent` — 率そのものから色を決めると、
+ * **「0%」の行が赤くなる**）。
+ *
+ * **地図の円と同じ段の色を、数字の隣に小さく置く**（#157）。
+ * **順位表と地図で色の意味が同じであること**が、この2つを1ページに並べた前提であり、
+ * **置かないと、地図の色が何段目なのかを目で数えることになる。**
+ */
 function Rate({ value }: { value: number }) {
-  return <td className={value > 0 ? "rate" : "rate rate--zero"}>{value}%</td>;
+  const band = bandForPercent(value);
+  return (
+    <td className={value > 0 ? "rate" : "rate rate--zero"}>
+      <span
+        className="rate__chip"
+        style={{ background: band.fill, borderColor: band.stroke }}
+        // 意味は隣の数字が持っている。**読み上げで色見本を読ませない。**
+        aria-hidden="true"
+      />
+      {value}%
+    </td>
+  );
 }
 
-export function Ranking({ cells, selected, onSelect, sample }: RankingProps) {
+export function Ranking({ cells, selected, onSelect, sample, hovered, onHover }: RankingProps) {
+  const body = useRef<HTMLTableSectionElement>(null);
+
+  // **地図から指された行を、順位表の中に送り込む。**順位表は中でスクロールするので
+  // （`../index.css` の `.ranking-panel`）、**強調しただけでは器の外にいて見えない。**
+  //
+  // **`scrollIntoView` を使わない。****あれは画面まで含めて祖先を全部スクロールする**ので、
+  // **ページごと下へ動く**——**地図がカーソルの下から逃げ、`mouseout` で印が消える。**
+  // **動かすのは順位表の器だけ**にして、**行が器の中に見えているときは何もしない。**
+  useEffect(() => {
+    const panel = body.current?.closest<HTMLElement>(".ranking-panel");
+    const row = hovered
+      ? body.current?.querySelector<HTMLElement>(`[data-cell="${CSS.escape(cellId(hovered))}"]`)
+      : null;
+    if (!panel || !row) return;
+
+    const box = row.getBoundingClientRect();
+    const inside = panel.getBoundingClientRect();
+    // 見出しは貼り付いているので（`../index.css`）、**その下に送り込むと隠れる。**
+    const head = body.current?.previousElementSibling?.getBoundingClientRect().height ?? 0;
+
+    if (box.top < inside.top + head) panel.scrollTop += box.top - inside.top - head;
+    else if (box.bottom > inside.bottom) panel.scrollTop += box.bottom - inside.bottom;
+  }, [hovered]);
+
   if (cells.length === 0) {
     return (
       <p className="ranking__empty">
@@ -67,11 +108,26 @@ export function Ranking({ cells, selected, onSelect, sample }: RankingProps) {
           </th>
         </tr>
       </thead>
-      <tbody>
+      <tbody ref={body}>
         {cells.map((cell, index) => (
           <tr
             key={cellId(cell)}
-            className={selected && cellId(selected) === cellId(cell) ? "is-selected" : undefined}
+            data-cell={cellId(cell)}
+            className={
+              [
+                selected && cellId(selected) === cellId(cell) ? "is-selected" : "",
+                hovered && cellId(hovered) === cellId(cell) ? "is-hovered" : "",
+              ]
+                .filter(Boolean)
+                .join(" ") || undefined
+            }
+            onMouseEnter={() => onHover(cell)}
+            onMouseLeave={() => onHover(null)}
+            // **キーボードでも印が出るようにする。**行の中のボタンとリンクに
+            // 焦点が移ったときに上がってくる（React の `onFocus` は上に伝わる）。
+            // **これが無いと、マウスを使わない人には地図との対応が見えない。**
+            onFocus={() => onHover(cell)}
+            onBlur={() => onHover(null)}
           >
             <td>{index + 1}</td>
             <td>
@@ -82,8 +138,8 @@ export function Ranking({ cells, selected, onSelect, sample }: RankingProps) {
             </td>
             {/* **率 0 を赤で強めない。**赤はこの画面で「危ない」を指す色に予約してある
                 （`../index.css` の `--danger`）ので、**危険が1件も出ていない行が赤い**と、
-                色の意味がその場で壊れる。**表示と同じ値で判定する**（上の `percent`）。 */}
-            <Rate value={percent(cell.rate)} />
+                色の意味がその場で壊れる。**表示と同じ値で判定する**（`./config.ts`）。 */}
+            <Rate value={ratePercent(cell.rate)} />
             <td>{cell.hits}</td>
             <td>{cell.rides}</td>
             <td>
