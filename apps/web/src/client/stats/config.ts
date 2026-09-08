@@ -58,9 +58,21 @@ export const Z_INDEX_SELECTED = 10000;
 /** 率（0〜1）を重なり順に写す。**率が同じなら順序は問わない。** */
 export const zIndexForRate = (rate: number): number => Math.round(rate * 1000);
 
-/** 地図の初期表示（岡山駅の周辺）。**セルが1つも無いときはここが出る。** */
-export const DEFAULT_CENTER = { lat: 34.6651, lng: 133.9183 };
-export const DEFAULT_ZOOM = 14;
+/**
+ * 地図の初期表示。**岡山駅と岡山大学津島キャンパスの中間**（変更・2026-09-08。#154）。
+ *
+ * **セルが1件でもあれば、円が全部入る範囲へ合わせる**ので（`StatsMap.tsx` の `fitBounds`）、
+ * **ここが出るのはセルが1つも無いとき**——データがまだ無いか、下限で全部隠れたときである。
+ *
+ * **岡山駅の真上に置くのをやめた。**サンプルは**駅から大学までの区間**に並ぶので
+ * （`scripts/seed/sample.ts`）、**駅を中心にすると北半分が画面の外に出る。**
+ *
+ * **固定の拡大率でデータに合わせようとしない。**地図の高さは画面の幅と高さで変わり
+ * （`--panel-h`。`../index.css`）、**14 では狭い画面で 3.2km の区間が切れ、
+ * 13 では広い画面で引きすぎる**——**どの値を選んでも、どこかの大きさで外れる。**
+ */
+export const DEFAULT_CENTER = { lat: 34.6788, lng: 133.9184 };
+export const DEFAULT_ZOOM = 13;
 
 /** ランキングの行から飛んだときの拡大率。**セル1つが画面に収まる程度。** */
 export const FOCUS_ZOOM = 18;

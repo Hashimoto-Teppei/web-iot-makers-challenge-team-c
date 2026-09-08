@@ -12,6 +12,8 @@
  * **実走行の GPS ログは使わない**（`CLAUDE.md`）。実在する一時停止の標識の位置を軸に、
  * **合成した走行**を並べている。
  *
+ * **対象は岡山駅から岡山大学津島キャンパスまでの区間**（下の `ROUTE_FROM` / `ROUTE_TO`）。
+ *
  * **`stop_signs` に行を足さない。**あの表は端末へ配る元でもあるので
  * （`GET /api/stop-signs`）、**架空の標識を足すと、それがそのまま全員の手元へ配られる。**
  * サンプルの走行は**実在する標識の進入方向から**作る。
@@ -44,16 +46,32 @@ const DEPART_M = 40;
 const STOP_ZONE_M = 8;
 
 /** 軸にする標識の数と、1つあたりの走行の数。**通過の下限（既定5走行）を超える数にしてある。** */
-const SIGNS = 6;
-const RIDES_PER_SIGN = 8;
+const SIGNS = 12;
+const RIDES_PER_SIGN = 20;
+
+/**
+ * サンプルを作る区間。**岡山駅から岡山大学津島キャンパスまで**（決定済み・2026-09-08。#154）。
+ *
+ * **県内から適当に6か所選ぶのをやめた**——**発表を聞く人が場所を思い浮かべられない。**
+ * 岡山駅と大学を結ぶ通学路は、**この題材（自転車の事故と違反）でいちばん通行の多い区間**であり、
+ * **地図を初めて見る人でも、円がどこに並んでいるのかが一目で分かる。**
+ *
+ * **実走行の GPS ログではない**（`CLAUDE.md`）。実在する標識の位置と進入方向だけを軸にして、
+ * **走行そのものは合成している。**
+ */
+const ROUTE_FROM = { lat: 34.6648, lon: 133.9185 }; // 岡山駅
+const ROUTE_TO = { lat: 34.6935, lon: 133.9203 }; // 岡山大学津島キャンパス
+/** 区間の中心線からどれだけ離れた標識まで使うか（メートル）。 */
+const CORRIDOR_M = 300;
 
 /**
  * 標識ごとの「危なさ」。**場所によって率を変える**——全部同じにすると、
  * **順位表が意味を持っているのかどうかを画面から確かめられない。**
- * 8走行のうち何走行で起こすか、を並べたもの（検知 / 不停止）。
+ * `RIDES_PER_SIGN` 走行のうち何走行で起こすか、を並べたもの（検知 / 不停止）。
+ * **区間の南（岡山駅側）から北（大学側）の順に対応する。**
  */
-const DETECTION_HITS = [6, 5, 3, 2, 1, 0];
-const STOP_SKIPS = [5, 1, 4, 0, 2, 3];
+const DETECTION_HITS = [15, 12, 10, 9, 7, 6, 5, 4, 3, 2, 1, 0];
+const STOP_SKIPS = [11, 3, 14, 1, 8, 0, 6, 12, 2, 9, 5, 4];
 
 type Sign = { id: string; lat: number; lon: number; approachLat: number; approachLon: number };
 
@@ -66,6 +84,26 @@ const { values } = parseArgs({
     out: { type: "string" },
   },
 });
+
+/**
+ * 区間の中心線に対する位置。**`along` は岡山駅からの距離、`offset` は中心線からの離れ**
+ * （どちらもメートル）。**平面と見なして計算する**——区間は 3km ほどしかなく、
+ * **地球の丸みは、300m の帯に入るかどうかの判定を変えない。**
+ */
+function onRoute(lat: number, lon: number): { along: number; offset: number } {
+  const cos = Math.cos((ROUTE_FROM.lat * Math.PI) / 180);
+  const toM = (a: { lat: number; lon: number }, b: { lat: number; lon: number }) => ({
+    x: (b.lon - a.lon) * M_PER_DEG_LAT * cos,
+    y: (b.lat - a.lat) * M_PER_DEG_LAT,
+  });
+  const route = toM(ROUTE_FROM, ROUTE_TO);
+  const point = toM(ROUTE_FROM, { lat, lon });
+  const len = Math.hypot(route.x, route.y);
+  // 中心線の向きの成分が `along`、直交する成分の大きさが `offset`。
+  const along = (point.x * route.x + point.y * route.y) / len;
+  const offset = Math.abs((point.x * route.y - point.y * route.x) / len);
+  return { along, offset };
+}
 
 /**
  * 標識を `GET /api/stop-signs` から読む。**`approach` がある行だけ**を使う——
@@ -85,13 +123,36 @@ async function readSigns(apiBase: string, pref: number): Promise<Sign[]> {
 
   const body = (await res.json()) as { signs?: StopSign[] };
   const signs = body.signs ?? [];
-  return signs
+  const onCorridor = signs
     .filter(
       (sign): sign is StopSign & { approach: { lat: number; lon: number } } =>
         sign.approach !== null,
     )
-    .slice(0, SIGNS)
-    .map((sign) => ({
+    .map((sign) => ({ sign, at: onRoute(sign.lat, sign.lon) }))
+    // 区間の中の帯に入るものだけ。**`along` が区間の外に出たものも落とす**
+    // （手前や向こう側の標識が、駅と大学を結ぶ線から外れた場所に円を作ってしまう）。
+    .filter(
+      ({ at }) =>
+        at.offset <= CORRIDOR_M &&
+        at.along >= 0 &&
+        at.along <= onRoute(ROUTE_TO.lat, ROUTE_TO.lon).along,
+    )
+    .sort((a, b) => a.at.along - b.at.along);
+
+  // **区間全体に散らす。**先頭から `SIGNS` 件取ると**駅前に固まり、大学側が空になる**——
+  // 地図の上で「駅から大学まで」に見えるかどうかが、この間引きで決まる。
+  // **両端を含む等間隔で拾う**（一定間隔で間引くと、割り切れないぶん北の端が余って落ちる）。
+  const last = onCorridor.length - 1;
+  const picked =
+    onCorridor.length <= SIGNS
+      ? onCorridor
+      : Array.from(
+          { length: SIGNS },
+          (_, i) => onCorridor[Math.round((i * last) / (SIGNS - 1))] ?? onCorridor[last],
+        );
+  return picked
+    .filter((item) => item !== undefined)
+    .map(({ sign }) => ({
       id: sign.id,
       lat: sign.lat,
       lon: sign.lon,
@@ -175,9 +236,9 @@ const signs = await readSigns(values.api ?? "", Number(values.pref));
 if (signs.length === 0) {
   console.error(
     [
-      "進入方向つきの一時停止の標識が見つかりません。先に取り込んでください",
-      "（README.md「一時停止の標識」）。サンプルの走行は実在する標識の進入方向から作るので、",
-      "**進入方向が登録されていない標識だけでは作れません。**",
+      "岡山駅〜岡山大学津島キャンパスの区間に、進入方向つきの一時停止の標識が見つかりません。",
+      "先に取り込んでください（README.md「一時停止の標識」）。サンプルの走行は実在する標識の",
+      "進入方向から作るので、進入方向が登録されていない標識だけでは作れません。",
     ].join("\n"),
   );
   process.exit(1);
@@ -228,9 +289,8 @@ console.log(
     "手元の D1 に入れる:",
     `  pnpm exec wrangler d1 execute team-c-db --local --file=${out}`,
     "",
-    "不停止のタブを見るには、投入のあとで再計算を叩く（この表はそこでしか作られない）:",
-    "  curl -X POST http://localhost:5173/api/admin/recompute \\",
-    "    -H 'Authorization: Bearer <ADMIN_TOKEN>' -H 'Content-Type: application/json' \\",
-    '    -d \'{"thresholds":{"stopSpeedMps":1.5,"radiusM":20,"bearingToleranceDeg":60,"maxHaccM":30}}\'',
+    "不停止のタブを見るには、投入のあとで再計算を回す（この表はそこでしか作られない）。",
+    `1回で計算できるのは20走行までなので、${rideIndex} 走行ぶんは残りが無くなるまで叩き直す:`,
+    "  pnpm recompute --token <ADMIN_TOKEN>",
   ].join("\n"),
 );

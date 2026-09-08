@@ -8,7 +8,7 @@
  * 数え方の正本は `docs/interfaces/web-stats.md`「率で見る」。
  */
 
-import type { StatsCell } from "../../shared/api";
+import type { StatsCell, StatsCoverage } from "../../shared/api";
 import { type Cell, cellCorner, cellKey, cellOf } from "../../shared/cell";
 import type { StatsLimits } from "./config";
 
@@ -153,6 +153,33 @@ function nearestByTime(sorted: readonly RidePoint[], t: number): RidePoint | und
   if (!after) return before;
   if (!before) return after;
   return t - before.t <= after.t - t ? before : after;
+}
+
+/**
+ * 集計に使った走行の規模を数える。**率の分母がどれだけの走行から出ているかを画面に出す**
+ * ため（#154。`docs/interfaces/web-ui.md`「データの出どころと規模」）。
+ *
+ * **8走行のうち6回の 75% と、800走行のうち600回の 75% は、読む人にとって別のもの**である。
+ *
+ * **読んだ測位点から数える。****`rides` をもう一度読まない**——
+ * **集計に入ったのは点のある走行だけ**なので、行数を数えると
+ * **画面に出ている率より大きい分母**が出て、2つが食い違う。
+ *
+ * **`device_id` そのものは返さない**（台数だけ）。公開の画面に出さないと決めてある
+ * （`docs/interfaces/web-ui.md`）。
+ */
+export function summarizeRides(points: readonly RidePoint[]): StatsCoverage {
+  const rides = new Set<string>();
+  const devices = new Set<string>();
+  let from: number | null = null;
+  let to: number | null = null;
+  for (const point of points) {
+    rides.add(rideKey(point));
+    devices.add(point.deviceId);
+    if (from === null || point.t < from) from = point.t;
+    if (to === null || point.t > to) to = point.t;
+  }
+  return { rides: rides.size, devices: devices.size, from, to };
 }
 
 export type AggregateResult = {

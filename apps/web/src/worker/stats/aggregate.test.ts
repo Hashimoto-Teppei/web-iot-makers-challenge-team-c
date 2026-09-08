@@ -5,6 +5,7 @@ import {
   type LocatedEvent,
   matchDetections,
   type RidePoint,
+  summarizeRides,
 } from "./aggregate";
 import type { StatsLimits } from "./config";
 
@@ -193,5 +194,28 @@ describe("aggregateCells", () => {
     const { cells } = aggregateCells([point("aaa00001", T0, 34.66599, 133.91899)], [], limits());
 
     expect(cells[0]).toMatchObject({ lat: 34.665, lon: 133.918 });
+  });
+});
+
+describe("summarizeRides", () => {
+  it("走行と端末を重複なく数え、最初と最後の時刻を返す", () => {
+    const points: RidePoint[] = [
+      { deviceId: "0a1b2c3d", logId: "aaa00001", t: T0 + 1000, lat: LAT, lon: LON },
+      { deviceId: "0a1b2c3d", logId: "aaa00001", t: T0, lat: LAT, lon: LON },
+      { deviceId: "0a1b2c3d", logId: "bbb00001", t: T0 + 5000, lat: LAT, lon: LON },
+      { deviceId: "4e5f6a7b", logId: "aaa00001", t: T0 + 9000, lat: LAT, lon: LON },
+    ];
+
+    // 走行は (device_id, log_id) の組。**同じ log_id でも端末が違えば別の走行**である。
+    expect(summarizeRides(points)).toEqual({
+      rides: 3,
+      devices: 2,
+      from: T0,
+      to: T0 + 9000,
+    });
+  });
+
+  it("点が1つも無ければ期間は null（0 や現在時刻にしない）", () => {
+    expect(summarizeRides([])).toEqual({ rides: 0, devices: 0, from: null, to: null });
   });
 });

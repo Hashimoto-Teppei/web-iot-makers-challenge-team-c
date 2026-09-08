@@ -19,6 +19,11 @@ declare namespace google.maps {
     streetViewControl?: boolean;
     mapTypeControl?: boolean;
     /**
+     * ホイールと指の扱い。公式のリファレンスでは
+     * `"cooperative" | "greedy" | "none" | "auto"`（既定は `"auto"`）。
+     */
+    gestureHandling?: "cooperative" | "greedy" | "none" | "auto";
+    /**
      * 既定の地図の配色を上書きする。**`mapId` を渡すと効かなくなる**
      * （そのときはクラウド側のスタイルが正本になる）。この画面は `mapId` を使っていない。
      */
@@ -44,9 +49,23 @@ declare namespace google.maps {
   class Map {
     constructor(element: HTMLElement, options?: MapOptions);
     panTo(position: LatLngLiteral): void;
+    /**
+     * 見える範囲を `bounds` に合わせる。**`padding` はピクセル**（数のほかに辺ごとの指定も
+     * 取れるが、この画面は数しか渡さない——**推測で広げない**、上の注記）。
+     */
+    fitBounds(bounds: LatLngBounds, padding?: number): void;
     /** 地図がまだ初期化しきっていないと `undefined` を返す。 */
     getZoom(): number | undefined;
     setZoom(zoom: number): void;
+  }
+
+  /**
+   * 緯度経度の矩形。**空のまま作って `extend` で広げられる**（公式のリファレンスどおり、
+   * 引数はどちらも省略できる）。
+   */
+  class LatLngBounds {
+    constructor(sw?: LatLngLiteral, ne?: LatLngLiteral);
+    extend(point: LatLngLiteral): LatLngBounds;
   }
 
   type CircleOptions = {

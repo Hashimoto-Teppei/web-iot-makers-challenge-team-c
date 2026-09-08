@@ -34,7 +34,7 @@ import {
   recomputeRequest,
 } from "./recompute/request";
 import { type RideResult, replaceViolations } from "./recompute/write";
-import { aggregateCells, matchDetections, type RidePoint } from "./stats/aggregate";
+import { aggregateCells, matchDetections, type RidePoint, summarizeRides } from "./stats/aggregate";
 import { MAX_MATCH_GAP_MS, statsDefaults } from "./stats/config";
 import { aggregateCellDetail } from "./stats/detail";
 import { readDetections, readRidePoints, readViolations } from "./stats/query";
@@ -394,6 +394,9 @@ const routes = app
         sample,
         minRides,
         cells,
+        // **`minRides` で隠したセルのぶんも入る。**画面に出すのは**全体の分母**であって、
+        // 順位に残ったセルの合計ではない（#154）。
+        coverage: summarizeRides(points),
         // **検知の側は行のまま返る**（詳細画面が種別ごとに数えるため。`stats/aggregate.ts`）。
         // **この応答が返すのは数だけ**である（`docs/interfaces/web-stats.md`）。
         unlocated: Array.isArray(found.unlocated) ? found.unlocated.length : found.unlocated,
