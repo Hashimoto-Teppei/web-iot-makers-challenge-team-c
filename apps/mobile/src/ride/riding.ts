@@ -12,14 +12,13 @@
  */
 
 import { useSyncExternalStore } from "react";
+import { createStore } from "../lib/store";
 
-let riding = false;
-const listeners = new Set<() => void>();
+const store = createStore(false);
 
 /** **呼ぶのは `./use-ride-loop.ts` だけ。** 画面から直に触らない。 */
 export function setRiding(next: boolean): void {
-  riding = next;
-  for (const listen of listeners) listen();
+  store.set(next);
 }
 
 /**
@@ -28,22 +27,11 @@ export function setRiding(next: boolean): void {
  * **取得の最中に走り出したかを見るのはこちら**——フックの値は再描画まで古いままである。
  */
 export function isRiding(): boolean {
-  return riding;
-}
-
-function subscribe(listen: () => void): () => void {
-  listeners.add(listen);
-  return () => {
-    listeners.delete(listen);
-  };
+  return store.get();
 }
 
 /** 画面から見る用。**走行中に押させないボタンはこれで塞ぐ。** */
 export function useRiding(): boolean {
   // 第3引数（サーバー側の値）は web ビルドの初期描画で要る。同じものでよい。
-  return useSyncExternalStore(
-    subscribe,
-    () => riding,
-    () => riding,
-  );
+  return useSyncExternalStore(store.subscribe, store.get, store.get);
 }

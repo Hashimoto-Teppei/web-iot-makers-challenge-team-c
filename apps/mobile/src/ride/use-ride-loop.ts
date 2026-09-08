@@ -17,8 +17,8 @@ import { createNearbySigns } from "../signs/nearby";
 import type { SignStore } from "../signs/store";
 import { safeMeta } from "../signs/update";
 import { exchangeViaApi, refuseMockExchange } from "./api";
-import type { OutsideCoverage } from "./coverage";
 import type { DeviceLink } from "./device";
+import { type LastRide, setLastRide, useLastRide } from "./last-ride";
 import { watchFixes } from "./location";
 import { RideLoop, type RideStatus } from "./loop";
 import { setRiding, useRiding } from "./riding";
@@ -30,17 +30,6 @@ type Session = {
   recording: RideRecording;
   /** 止めたあとに結果を読むために持つ（`RideControl.lastRide`） */
   loop: RideLoop;
-};
-
-/**
- * **直前の走行が残したもの。走行を終えたあとに画面が読む**（#72）。
- *
- * **`status` は走行を終えると `null` に戻す**（動いていないものを動いているように
- * 見せないため）ので、**走行後に見せたいものはこちらへ移す。**
- */
-export type LastRide = {
-  /** 手元の標識の範囲の外に居たか。**出ていなければ `null`**（`./coverage.ts`） */
-  outsideCoverage: OutsideCoverage | null;
 };
 
 export type RideControl = {
@@ -76,11 +65,13 @@ export function useRideLoop(
   device: DeviceLink | null,
 ): RideControl {
   const [status, setStatus] = useState<RideStatus | null>(null);
-  const [lastRide, setLastRide] = useState<LastRide | null>(null);
   const [error, setError] = useState<string | null>(null);
   // **走行中かはアプリで1つだけ持つ**（`./riding.ts`）——設定画面から走行中に
   // 標識を入れ替えられないようにするため、画面の外からも見える必要がある。
   const running = useRiding();
+  // **走行後に見せるものも画面の外に持つ**（`./last-ride.ts`）——走行の停止は
+  // **アンマウントの後片付けからも走る**ので、state に置くとその経路だけ消える（#143）。
+  const lastRide = useLastRide();
   const sessionRef = useRef<Session | null>(null);
 
   /**
@@ -107,7 +98,8 @@ export function useRideLoop(
     record(() => session.recording.end(Date.now()));
     sessionRef.current = null;
     setRiding(false);
-    // **走行後に見せるものだけ、状態を消す前に移す**（#72）。
+    // **走行後に見せるものだけ、状態を消す前に移す**（#72）。**移す先は画面の外**
+    // ——ここは画面を離れたときにも通るため（#143。`./last-ride.ts`）。
     setLastRide({ outsideCoverage: session.loop.status().outsideCoverage });
     // **古い状態を残さない。**残すと、走行を終えたあとも「測位: 取れている」や
     // 中継の失敗の赤字が出たままになり、**動いていないのに動いているように見える。**

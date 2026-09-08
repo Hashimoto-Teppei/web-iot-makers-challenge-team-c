@@ -14,6 +14,7 @@
  */
 
 import { useSyncExternalStore } from "react";
+import { createStore } from "../lib/store";
 import {
   clampDeviceConfig,
   DEVICE_CONFIG_DEFAULTS,
@@ -35,32 +36,18 @@ export type DeviceConfigOutcome = {
   reason: string | null;
 };
 
-let config: DeviceConfig = { ...DEVICE_CONFIG_DEFAULTS };
-let outcome: DeviceConfigOutcome = { state: "default", reason: null };
-
 /**
- * **値と結果で購読を分ける。**まとめると、`./link.ts` が結果を書き込むたびに
+ * **値と結果でストアを分ける。**まとめると、`./link.ts` が結果を書き込むたびに
  * 「値が変わった」として自分自身を呼び戻し、**接続のたびに無限再帰で落ちる**
  * （`setDeviceConfigOutcome` → 購読 → `applyConfig` → `setDeviceConfigOutcome` → …）。
  * **書く側が聞きたいのは値の変更だけ**である。
  */
-const configListeners = new Set<() => void>();
-const outcomeListeners = new Set<() => void>();
-
-function notify(listeners: ReadonlySet<() => void>): void {
-  for (const listen of listeners) listen();
-}
-
-function subscribeTo(listeners: Set<() => void>, listen: () => void): () => void {
-  listeners.add(listen);
-  return () => {
-    listeners.delete(listen);
-  };
-}
+const configStore = createStore<DeviceConfig>({ ...DEVICE_CONFIG_DEFAULTS });
+const outcomeStore = createStore<DeviceConfigOutcome>({ state: "default", reason: null });
 
 /** いまの値。**React の外から見る用**（接続したときに `./link.ts` が読む）。 */
 export function getDeviceConfig(): DeviceConfig {
-  return config;
+  return configStore.get();
 }
 
 /**
@@ -71,8 +58,7 @@ export function getDeviceConfig(): DeviceConfig {
  * デバイスの中身が食い違う「動いているつもり」そのものである。
  */
 export function setDeviceConfig(key: DeviceConfigKey, value: number): void {
-  config = { ...config, [key]: clampDeviceConfig(key, value) };
-  notify(configListeners);
+  configStore.set({ ...configStore.get(), [key]: clampDeviceConfig(key, value) });
 }
 
 /**
@@ -82,19 +68,17 @@ export function setDeviceConfig(key: DeviceConfigKey, value: number): void {
  * 既定の値を明示して書き直す**（`./device-config.ts` の `deviceConfigWrite`）。
  */
 export function resetDeviceConfig(): void {
-  config = { ...DEVICE_CONFIG_DEFAULTS };
-  notify(configListeners);
+  configStore.set({ ...DEVICE_CONFIG_DEFAULTS });
 }
 
 /** 書いた結果を記録する。**呼ぶのは `./link.ts` だけ。** */
 export function setDeviceConfigOutcome(next: DeviceConfigOutcome): void {
-  outcome = next;
-  notify(outcomeListeners);
+  outcomeStore.set(next);
 }
 
 /** 書いた結果。**切断したら `default` に戻す**（デバイス側の上書きも消えるため）。 */
 export function getDeviceConfigOutcome(): DeviceConfigOutcome {
-  return outcome;
+  return outcomeStore.get();
 }
 
 /**
@@ -103,23 +87,15 @@ export function getDeviceConfigOutcome(): DeviceConfigOutcome {
  * **結果（`DeviceConfigOutcome`）では呼ばれない。**上を見ること。
  */
 export function subscribeDeviceConfig(listen: () => void): () => void {
-  return subscribeTo(configListeners, listen);
+  return configStore.subscribe(listen);
 }
 
 /** 画面から見る用。 */
 export function useDeviceConfig(): DeviceConfig {
-  return useSyncExternalStore(
-    (listen) => subscribeTo(configListeners, listen),
-    () => config,
-    () => config,
-  );
+  return useSyncExternalStore(configStore.subscribe, configStore.get, configStore.get);
 }
 
 /** 画面から見る用（書いた結果）。 */
 export function useDeviceConfigOutcome(): DeviceConfigOutcome {
-  return useSyncExternalStore(
-    (listen) => subscribeTo(outcomeListeners, listen),
-    () => outcome,
-    () => outcome,
-  );
+  return useSyncExternalStore(outcomeStore.subscribe, outcomeStore.get, outcomeStore.get);
 }
