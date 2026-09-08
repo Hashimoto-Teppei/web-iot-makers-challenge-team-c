@@ -27,18 +27,21 @@ export function App() {
 /**
  * 画面の一番上の帯。
  *
- * **プロダクト名を置いていない。**まだ決まっておらず、`README.md` にも `docs/` にも
- * 定義が無い（未確定）。**名前が決まったら、下の文字列を差し替えるだけで済む。**
+ * **チーム名ではなくサービス名を置く**（`docs/interfaces/web-ui.md`「画面に出す言葉」）。
+ * 初めて開いた人が帯に求めるのは「これは何のサイトか」であって、**作った人の名前ではない。**
+ *
+ * **下の名前は仮称である**（正式名称は未確定。決めるのはこの画面の外）。
+ * **決まったら差し替えるのは3箇所**——下の2行と、`apps/web/index.html` の `<title>`。
  *
  * **リンクにしない。**帯からどこかへ飛ぶ先が無い——画面は2つで、
- * **一覧へ戻る導線は詳細画面の「← どこが危ないか（一覧）」が持っている。**
+ * **一覧へ戻る導線は詳細画面の「← 一覧にもどる」が持っている。**
  */
 function SiteHeader() {
   return (
     <header className="site-header">
       <div className="site-header__inner">
-        <p className="site-header__title">チームC — Web×IoT メイカーズチャレンジ</p>
-        <p className="site-header__tagline">自転車の事故と違反を未然に防ぐ</p>
+        <p className="site-header__title">自転車ヒヤリマップ 岡山</p>
+        <p className="site-header__tagline">走行データから、危ない場所を見つける</p>
       </div>
     </header>
   );

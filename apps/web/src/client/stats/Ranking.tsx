@@ -43,7 +43,7 @@ export function Ranking({ cells, selected, onSelect, sample }: RankingProps) {
   if (cells.length === 0) {
     return (
       <p className="ranking__empty">
-        順位に出せるセルがありません。通過が下限に満たないか、まだ走行ログが入っていません。
+        表示できる区画がありません。通行の下限に満たないか、まだ走行データが入っていません。
       </p>
     );
   }
@@ -53,11 +53,18 @@ export function Ranking({ cells, selected, onSelect, sample }: RankingProps) {
       <thead>
         <tr>
           <th scope="col">#</th>
-          <th scope="col">場所（セルの南西の角）</th>
-          <th scope="col">率</th>
-          <th scope="col">出た走行</th>
-          <th scope="col">通過</th>
-          <th scope="col">内訳</th>
+          {/* **「セルの南西の角」と書かない。**南西の角は**円を置くときの実装の都合**
+              （`./StatsMap.tsx`）で、**読む人の判断を何も変えない。** */}
+          <th scope="col">場所（緯度, 経度）</th>
+          <th scope="col">危険率</th>
+          <th scope="col">発生</th>
+          <th scope="col">通行</th>
+          {/* **見出しは置くが、目には見せない。**中のリンクの文字（「時間帯別」）が
+              そのまま列の意味になっているので、**同じ言葉を2度並べたくない**——
+              ただし**空の `<th>` にすると、読み上げでリンクの列が何の列か分からなくなる。** */}
+          <th scope="col">
+            <span className="visually-hidden">場所の詳細</span>
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -82,7 +89,7 @@ export function Ranking({ cells, selected, onSelect, sample }: RankingProps) {
             <td>
               {/* **`<a href>` のまま置く。**場所の詳細は人に見せて話す画面なので、
                   新しいタブで開けることと URL を渡せることに意味がある（`../route.tsx`）。 */}
-              <Link to={cellPath(cell, sample)}>時間帯</Link>
+              <Link to={cellPath(cell, sample)}>時間帯別</Link>
             </td>
           </tr>
         ))}
