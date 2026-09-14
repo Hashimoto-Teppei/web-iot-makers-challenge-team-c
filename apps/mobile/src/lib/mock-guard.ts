@@ -16,11 +16,32 @@
  *
  * **手元の `apps/web` に向けているときは通す**——自分のサーバーならどちらの害も無い。
  * **文書だけでは止まらない**ので、経路の中で止める。
+ *
+ * **止める入口は2つある。**ネイティブモジュールが無いときの
+ * {@link MOCK_DEVICE_ID} と、開発機の疑似ペリフェラルの
+ * {@link MOCK_PERIPHERAL_DEVICE_ID} である。**後者の方が見つけにくい**
+ * ——実機の BLE を通るので、アプリ側からは本物と区別がつかない。
  */
 
 import { MOCK_DEVICE_ID } from "../ride/device";
 import { DEFAULT_API_BASE_URL } from "./api-base";
 
+/**
+ * 開発機の疑似ペリフェラル（`apps/device/tools/mock_peripheral.py`）が名乗る端末ID。
+ *
+ * **本物の BLE を通るので、画面からは見分けられない。**`../ride/use-device-link.ts` の
+ * `isMock` は立たず、走行前の点検にも「モック」とは出ない（出ないのが正しい——
+ * BLE は本当に通っている）。**だから ID で止めるしかない。**
+ *
+ * **正本はここ。**Python 側（`mock_peripheral.py` の `MOCK_PERIPHERAL_DEVICE_ID`）は
+ * この値を書き写している。**Python から TypeScript は参照できない**ため
+ * （`CLAUDE.md`）、GATT の UUID と同じ扱いにする。
+ */
+export const MOCK_PERIPHERAL_DEVICE_ID = "a1000002";
+
+/** 共有のデプロイ先へ出してはいけない端末ID。**足すときは Python 側も揃える。** */
+const MOCK_DEVICE_IDS: readonly string[] = [MOCK_DEVICE_ID, MOCK_PERIPHERAL_DEVICE_ID];
+
 export function blocksMockDevice(deviceId: string, baseUrl: string): boolean {
-  return deviceId === MOCK_DEVICE_ID && baseUrl === DEFAULT_API_BASE_URL;
+  return MOCK_DEVICE_IDS.includes(deviceId) && baseUrl === DEFAULT_API_BASE_URL;
 }
