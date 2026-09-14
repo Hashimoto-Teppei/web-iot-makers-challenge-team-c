@@ -274,6 +274,7 @@ pnpm --filter web db:migrate:local   # 手元の D1（SQLite）にマイグレ�
   Windows では動きません（そのため担当を固定しています）。Android は Android Studio と JDK 17。
   どちらも初回ビルドに数時間かかります。
   担当になったら [`apps/mobile/README.md`](../apps/mobile/README.md) に手順があります。
+  **チームへ配る**ところまでは [`deploy-mobile.md`](./deploy-mobile.md)（TestFlight）。
   **Development Build を作る前に、同梱する一時停止の標識を1回だけ作ります**
   （生成物なのでリポジトリには入っていません。`docs/adr/0009-on-device-storage.md`）。
 
