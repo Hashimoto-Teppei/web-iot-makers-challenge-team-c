@@ -39,6 +39,7 @@ const riding: RideStatus = {
   lastFixAt: 1,
   peers: 0,
   postFailures: 0,
+  heldFixes: 0,
   outsideCoverage: null,
   lastPostOkAt: 1,
   detectorErrors: 0,

@@ -25,6 +25,14 @@ import type { OutsideCoverage } from "./coverage";
 export type LastRide = {
   /** 手元の標識の範囲の外に居たか。**出ていなければ `null`**（`./coverage.ts`） */
   outsideCoverage: OutsideCoverage | null;
+  /**
+   * **測位の更新が来ず、直近の測位で埋めて送った回数**（#167。`./fix-hold.ts`）。
+   *
+   * **0 かどうかが読みどころ。**埋めている間は画面もデバイスも正常に見えるので、
+   * ここに出さないと**測位が死んでいたことに誰も気づけない**
+   * （`docs/adr/0011-stationary-fix-hold.md` 決定 5）。
+   */
+  heldFixes: number;
 };
 
 const store = createStore<LastRide | null>(null);

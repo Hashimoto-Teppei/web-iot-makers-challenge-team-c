@@ -206,6 +206,18 @@ export default function HomeScreen() {
                 </Text>
               )
             )}
+
+            {/*
+              **測位の更新が来なかったことを、走り終えてから見せる**（#167）。
+              **埋めている間は画面もデバイスも正常に見える**ので、ここに出さないと
+              測位が死んでいたことに誰も気づけない（`@/ride/fix-hold`）。
+            */}
+            {ride.lastRide.heldFixes > 0 && (
+              <Text style={styles.note}>
+                {`測位の更新が来ない間、直前の位置で ${ride.lastRide.heldFixes} 回ぶん中継しました` +
+                  "（止まっている間はこれで周りから見えています）。"}
+              </Text>
+            )}
           </View>
         )}
 
