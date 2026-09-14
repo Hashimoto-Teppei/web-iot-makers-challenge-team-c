@@ -103,6 +103,10 @@ security find-identity -v -p codesigning
 **同じ番号は二度と受け付けられない。取り込みに失敗したぶんも消費される。**
 `version`（`1.0.0`）を上げるのは、配る中身の区切りを変えたいときだけでよい。
 
+**`app.json` を書き換えただけでは `Info.plist` に入らない。**次の 2-2 の `prebuild` が
+入れる。**飛ばすと前の番号のまま Archive され、アップロードの最後で弾かれる**
+（確かめ方は 2-3 の `CFBundleVersion`）。
+
 ### 2-2. ネイティブを作り直して Team を選び直す
 
 ```sh
@@ -196,6 +200,21 @@ TestFlight ▸ 「内部テスト」のグループ ▸ **テスター**に自�
   **こちらが書いた TypeScript には影響しない。**
 - **輸出コンプライアンスを聞かれない** —— `app.json` に
   `ITSAppUsesNonExemptEncryption: false` を入れてあるため。聞かれたら「該当しない」。
+- **「Sending analysis to App Store Connect...」で 40 分止まって見える** ——
+  **Cancel しない。**2026-09-14 に実際に起きた。`asset-description` という **2MB の部品ひとつだけ**が
+  `Checksums do not match` で **1,603 回**はねられ続け、**40 分後にそのまま通った**
+  （その後、本体の IPA 20MB は 4 パートを**再試行 0 回・2.3 秒**で送り終えている）。
+  **Apple 側の一時的な不調で、こちらの環境は関係ない**——回線が中身を壊しているなら、
+  小さい方ではなく 20MB の方が失敗する。
+
+  **本当に進んでいるかは、ログで分かる。**画面の進捗バーは当てにならない。
+
+  ```sh
+  D=$(ls -dt "$TMPDIR"/C_*.xcdistributionlogs | head -1)
+  tail -f "$D/ContentDelivery.log"
+  ```
+
+  `WILL RETRY PART 1` が流れ続けていれば**この現象**。`UPLOAD SUCCEEDED with no errors` が出れば完了。
 
 ## 5. 弾かれたときに見るところ
 

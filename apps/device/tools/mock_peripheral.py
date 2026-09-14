@@ -32,7 +32,17 @@
 
 そこで**プロセスごと入れ替える**（`os.execv` で自分を起動し直す）。プロセスが終われば
 CoreBluetooth の後始末でリンクが落ちる。**これが macOS でリンクを手放す唯一の道。**
-`device_id` は `mock-identity.json` に残るので、入れ替わっても同じデバイスとして戻る。
+`log_id` は `mock-identity.json` に残るので、入れ替わっても同じデバイスとして戻る。
+
+## なぜ `device_id` を固定しているか
+
+**模擬でも、本物の BLE を通って本物の位置が流れる。**モバイル側は疑似ペリフェラルを
+本物と区別できないので（実機の BLE を通っているため、区別できないのが正しい）、
+**走行を終えた瞬間に、実際の緯度経度が共有の Cloudflare の D1 へ永久に入る**
+——`POST /api/logs` の取り込みは**上書きも削除もできない**。
+
+そこで**モバイル側の歯止めに掛かる ID を名乗る**（`../../mobile/src/lib/mock-guard.ts`）。
+`uuid4()` から作ると実在しうる ID になり、**網に掛からない。**
 
 仕組みは実機と違うが、**Android から見える出来事は同じ**（切断 → アドバタイズ再開）で、
 確かめたいのは**アプリが立ち直れるか**なので目的を満たす。
@@ -71,8 +81,13 @@ ALERT_UUID = "68666e06-58cc-4540-90ad-18bfae31615f"
 CONFIG_UUID = "68666e05-58cc-4540-90ad-18bfae31615f"
 
 # **本物の識別子と別のファイルに置く。** 同じにすると、開発機で模擬を動かしただけで
-# 実機の `device_id` を上書きしうる（取り込みの一意キーが総入れ替えになる）。
+# 実機の `log_id` を上書きしうる。
 MOCK_IDENTITY_PATH = Path.home() / ".local" / "share" / "bike-device" / "mock-identity.json"
+
+# **模擬が名乗る `device_id`。正本は `../../mobile/src/lib/mock-guard.ts` の
+# `MOCK_PERIPHERAL_DEVICE_ID`。ここで決め直さない**（UUID と同じ扱い。
+# Python から TypeScript は参照できない）。**変えるときは両方を揃える。**
+MOCK_PERIPHERAL_DEVICE_ID = "a1000002"
 
 # 切ると決めてから、プロセスを入れ替えるまでの間（秒）。
 # **0 にしない** —— 最後の `status` を送り終える間を置く。
@@ -88,9 +103,11 @@ class MockDevice:
     """ラズパイのふりをする側。**BLE の管以外は実機と同じコードを呼ぶ。**"""
 
     def __init__(self) -> None:
+        # **`device_id` はファイルから読まない。**歯止めに掛かる値を必ず名乗る
+        # （上の「なぜ `device_id` を固定しているか」）。読むのは `log_id` だけ。
         ident = identity.load_or_create(MOCK_IDENTITY_PATH)
-        self.state = DeviceState(device_id=ident.device_id, log_id=ident.log_id)
-        self.local_name = identity.advertised_name(ident.device_id)
+        self.state = DeviceState(device_id=MOCK_PERIPHERAL_DEVICE_ID, log_id=ident.log_id)
+        self.local_name = identity.advertised_name(MOCK_PERIPHERAL_DEVICE_ID)
         # 走行ごとのしきい値の上書き（#124）。**判定は `tuning.py`**（実機と同じ道）。
         self.tuning = Tuning(
             notify_config=config.NOTIFY_CONFIG,
