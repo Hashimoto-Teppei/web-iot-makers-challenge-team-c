@@ -68,6 +68,7 @@ Web×IoT メイカーズチャレンジ **チームC** の開発リポジトリ�
 | `apps/device` | 後方物体検知・表示・BLE ペリフェラル | Python 3.11 / uv |
 | `apps/web` | 画面と API（1つの Worker） | React / Vite / Hono / D1 / Durable Objects / Drizzle |
 | `apps/mobile` | 測位・車車間の3検知・一時停止の事前通知・中継・シミュレータ | Expo (React Native) |
+| `apps/slides` | メンバー向け・発表用のスライド | Slidev |
 
 ## 開発をはじめる
 

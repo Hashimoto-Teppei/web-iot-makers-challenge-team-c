@@ -1,0 +1,19 @@
+/* 色とフォントだけをここで決める。レイアウトには手を入れない。
+   独自レイアウトを作り込むほど、テーマ（headmatter の theme:）を差し替えられなくなるため。 */
+
+:root {
+  --slidev-theme-primary: #0d9488;
+}
+
+/* 日本語は OS に入っているフォントだけで出す。当日ネットが無くても見た目が変わらないようにするため。
+   （テーマ自体は Nunito Sans と Fira Code を Google Fonts から読むが、
+   どちらも日本語のグリフを持たないので、日本語の見た目には効かない。） */
+/* テーマが html, body, #app, #page-root の4つに font-family を当てているので、
+   html だけを上書きしても効かない。同じ4つを指定する。 */
+html,
+body,
+#app,
+#page-root {
+  font-family:
+    -apple-system, "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", "Noto Sans JP", Meiryo, sans-serif;
+}
