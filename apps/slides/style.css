@@ -5,9 +5,15 @@
   --slidev-theme-primary: #0d9488;
 }
 
-/* Google Fonts を読まない。発表当日にネットが無くても同じ見た目で出す必要があり、
-   Windows と macOS のどちらにも最初から入っている日本語フォントだけを並べる。 */
-html {
+/* 日本語は OS に入っているフォントだけで出す。当日ネットが無くても見た目が変わらないようにするため。
+   （テーマ自体は Nunito Sans と Fira Code を Google Fonts から読むが、
+   どちらも日本語のグリフを持たないので、日本語の見た目には効かない。） */
+/* テーマが html, body, #app, #page-root の4つに font-family を当てているので、
+   html だけを上書きしても効かない。同じ4つを指定する。 */
+html,
+body,
+#app,
+#page-root {
   font-family:
     -apple-system, "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", "Noto Sans JP", Meiryo, sans-serif;
 }

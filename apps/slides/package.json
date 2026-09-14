@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "slidev onboarding.md",
     "dev:pitch": "slidev pitch.md",
-    "build": "slidev build onboarding.md pitch.md --out dist --router-mode hash && node scripts/build-index.mjs",
+    "build": "node scripts/build.mjs",
     "deploy:cf": "pnpm build && wrangler deploy"
   },
   "dependencies": {
