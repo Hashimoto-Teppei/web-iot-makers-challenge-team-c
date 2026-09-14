@@ -14,10 +14,45 @@
 （`pnpm install` は依存を入れますが、それだけならビルド環境は要りません）。
 共通の環境構築は [`docs/setup.md`](../../docs/setup.md) を先に済ませてください。
 
-手順は [Expo 公式の環境構築ガイド](https://docs.expo.dev/get-started/set-up-your-environment/?mode=development-build&platform=android)
+手順は [Expo 公式の環境構築ガイド](https://docs.expo.dev/get-started/set-up-your-environment/?mode=development-build)
 に沿っています（最終確認 2026-08-25）。
 
-### 1. JDK 17 を入れる
+### iOS（主ターゲット）
+
+**macOS と Xcode が要ります。Windows では作れません**（`../../docs/adr/0010-ios-primary-target.md`）。
+
+1. **Xcode** を App Store から入れ、一度起動してライセンスに同意します
+2. **CocoaPods** を入れます（`brew install cocoapods`）
+3. 同梱する標識を作ってから、ネイティブのプロジェクトを作ります
+
+```sh
+pnpm --filter mobile signs:build   # assets/signs.db を作る（下の「同梱する標識」）
+cd apps/mobile
+npx expo prebuild --platform ios   # ios/ を生成する
+(cd ios && pod install)            # ネイティブの依存を入れる
+```
+
+`pnpm --filter mobile ios`（＝ `expo run:ios`）は、この2つも中でやってくれます。
+実機に入れるときは `npx expo run:ios --device` です。
+
+**初回だけ、Xcode で署名を設定します。** `ios/C.xcworkspace` を開き
+（**`.xcodeproj` ではありません**——CocoaPods を使うと workspace 側が正になります）、
+ターゲットの **Signing & Capabilities** で **Automatically manage signing** に
+チェックを入れ、Team を選びます。
+
+> **`ios/` は `expo prebuild` の生成物です**（gitignore 済み）。
+> **走らせ直すと、Xcode で設定した署名も消えます。** 消えたら同じ手順で選び直してください。
+> **ここで詰まったら、それは設定ミスではなく仕様です。**
+
+**背景で動かすための設定は `app.json` に入っています**（`UIBackgroundModes` の
+`location` と `bluetooth-central`）。**消すと、走行の開始で例外になるか、
+画面を消した瞬間に BLE が止まります**（`../../docs/adr/0010-ios-primary-target.md`「影響」）。
+
+### Android（従）
+
+**以下の1〜4は Android のビルドにだけ必要です。** iOS だけを触る人は飛ばしてかまいません。
+
+#### 1. JDK 17 を入れる
 
 Android のビルドは JDK 17 でないと通りません（新しすぎても失敗します）。
 
@@ -40,7 +75,7 @@ winget install Microsoft.OpenJDK.17  # Windows
 > 中身は同じ Microsoft Build of OpenJDK 17 です。このリポジトリは他のツールも winget で入れるため、
 > Chocolatey を増やさず winget に揃えています。
 
-### 2. Android Studio と SDK を入れる
+#### 2. Android Studio と SDK を入れる
 
 [公式サイト](https://developer.android.com/studio)からインストールし、
 **Settings > Languages & Frameworks > Android SDK** を開きます。
@@ -52,7 +87,7 @@ winget install Microsoft.OpenJDK.17  # Windows
 
 `SDK Tools` タブでは **Android SDK Build-Tools** と **Android Emulator** を入れます。
 
-### 3. 環境変数を設定する
+#### 3. 環境変数を設定する
 
 ```sh
 # macOS: ~/.zshrc に追記してターミナルを開き直す
@@ -81,7 +116,7 @@ Windows は「システム環境変数の編集」から、ユーザー環境変
 さらに `git config --global core.longpaths true` を済ませておきます
 （React Native のビルドは Windows のパス長制限 260 文字を超えます）。
 
-### 4. 端末を用意してビルドする
+#### 4. 端末を用意してビルドする
 
 エミュレータを起動するか、実機を USB でつなぎます。実機の場合は
 設定 > デバイス情報 > **ビルド番号を7回タップ**して開発者オプションを出し、**USB デバッグ**をオンにします。
@@ -104,13 +139,14 @@ expo-modules-core）が大半で、開発機によっては数時間かかるこ
 
 `android/` `ios/` は `expo prebuild` の生成物で、gitignore 済みです。手で編集しないでください。
 
+
 ## API につなぐ
 
 `src/lib/api.ts` が `apps/web` の `AppType` を型として読み込み、`hc<AppType>()` でクライアントを作ります。
 API の URL やレスポンスの形が変わると、モバイル側は**型エラーとして**気づけます。
 
 **接続先の既定値はデプロイ先の Worker**（URL の正本は `src/lib/api-base.ts`）。
-**そのままビルドすれば配れる APK になります。**
+**そのままビルドすれば配れるアプリになります。**
 
 手元の `apps/web` に向けたいときだけ `.env.local` に書きます。
 **手順の正本は [`docs/setup.md`](../../docs/setup.md)**（`.env.example` をコピーして使います）。
@@ -128,9 +164,10 @@ API の URL やレスポンスの形が変わると、モバイル側は**型エ
 **`EXPO_PUBLIC_` で始まる環境変数はアプリのバンドルに埋め込まれ、利用者から読めます。**
 秘密の値をここに置かないでください（**URL は秘密ではない**ので、上の既定値はコミットしてあります）。
 
-**配る APK をビルドする前に `.env.local` を確かめてください。**
-手元に向けたまま残っていると、その URL は自分の PC を指すうえ、Android のリリースビルドは
-暗号化されていない http 通信を既定で拒否するため、通信できません。
+**配るビルドを作る前に `.env.local` を確かめてください。**
+手元に向けたまま残っていると、その URL は自分の PC を指すうえ、**リリースビルドは
+暗号化されていない http 通信を既定で拒否する**ため、通信できません
+（**iOS の ATS も Android と同じように拒否します**）。
 **消してから `--clear` 付きでビルドする**（＝既定の https に戻す）のが確実です。
 **消し忘れは画面に出ません**——起動して繋がらないことでしか分かりません。
 
@@ -261,5 +298,13 @@ Expo SDK が動作確認済みの組み合わせを固定しているためで�
 
 ## 配布
 
-ストアには出さず、APK を配って各自インストールします。iOS は Mac + Xcode が必要で、
-無料の Apple ID で署名すると7日で失効するため、デモ当日の直前に入れ直せる体制が要ります。
+- **iOS（主）** — **TestFlight で配ります**（`../../docs/adr/0010-ios-primary-target.md`）。
+  自分は内部テスター（審査なしで届く）、他のメンバーは外部テスター。
+  **ビルドは内部・外部どちらでも 90 日有効**なので、入れ直しは週単位では発生しません。
+  **外部グループへの1本目だけ Beta App Review を通る**ので、
+  **中身が未完成でも先に1本上げて審査に入れておきます**（デモ直前に当たると配布が止まるため）。
+  **手順はまだありません** → #162 で `docs/deploy-mobile.md` に書きます。
+- **Android（従）** — ストアには出さず、APK を配って各自インストールします。
+
+**無料の Apple ID による署名（7日で失効）は使いません**
+（`../../docs/adr/0010-ios-primary-target.md`「却下した案」）。

@@ -9,7 +9,7 @@
 所要時間の目安は 30分〜1時間（`pnpm install` とネットワークの速さ次第）。
 
 **ここで作るのは `apps/device`（Python）と `apps/web`（React / Hono）の開発環境です。**
-`apps/mobile`（Android アプリのビルド）と Cloudflare へのデプロイは担当を固定しているため、
+`apps/mobile`（iOS / Android アプリのビルド）と Cloudflare へのデプロイは担当を固定しているため、
 全員がセットアップする必要はありません（→「6. 担当が決まったら」）。
 
 ---
@@ -269,7 +269,10 @@ pnpm --filter web db:migrate:local   # 手元の D1（SQLite）にマイグレ�
 
 ### `apps/mobile` とデプロイは担当を固定している
 
-- **`apps/mobile`（Android）** — Android Studio と JDK 17、そして数時間かかる初回ビルドが必要です。
+- **`apps/mobile`** — **主ターゲットは iOS で、Android も残しています**
+  （`docs/adr/0010-ios-primary-target.md`）。**iOS のビルドと配布は macOS + Xcode 専用**で、
+  Windows では動きません（そのため担当を固定しています）。Android は Android Studio と JDK 17。
+  どちらも初回ビルドに数時間かかります。
   担当になったら [`apps/mobile/README.md`](../apps/mobile/README.md) に手順があります。
   **Development Build を作る前に、同梱する一時停止の標識を1回だけ作ります**
   （生成物なのでリポジトリには入っていません。`docs/adr/0009-on-device-storage.md`）。
@@ -293,6 +296,7 @@ pnpm --filter web db:migrate:local   # 手元の D1（SQLite）にマイグレ�
   ```sh
   # apps/mobile/.env.local
   EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:5173   # Android エミュレータからホスト PC を指す
+  # iOS シミュレータは http://localhost:5173（ホストと同じネットワークにいるため）
   # 実機からは PC の LAN 内 IP にする（例: http://192.168.1.5:5173）
   ```
 

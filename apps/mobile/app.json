@@ -8,7 +8,10 @@
     "scheme": "teamc",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "jp.teamc.bikealert"
+      "bundleIdentifier": "jp.teamc.bikealert",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -31,7 +34,11 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "走行中の位置から、周りの自転車との危険を判断するために使います。",
-          "isAndroidForegroundServiceEnabled": true
+          "isAndroidForegroundServiceEnabled": true,
+          "isIosBackgroundLocationEnabled": true,
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "motionUsagePermission": false
         }
       ],
       [
@@ -43,7 +50,13 @@
         }
       ],
       "expo-sqlite",
-      "react-native-ble-plx"
+      [
+        "react-native-ble-plx",
+        {
+          "modes": ["central"],
+          "bluetoothAlwaysPermission": "自転車に付けたデバイスへ、警告の指示を送るために使います。"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
