@@ -204,7 +204,7 @@ export class BleLink {
     device
       .writeCharacteristicWithResponseForService(SERVICE_UUID, ALERT_UUID, payload)
       // **握りつぶす。**書けなかった1通は捨てる——古い警告は無価値で、
-      // **遅れて鳴る警告は鳴らないより悪い。**心拍は次の1秒後に作り直される。
+      // **遅れて出る警告は出ないより悪い。**心拍は次の1秒後に作り直される。
       .catch(() => undefined);
   }
 

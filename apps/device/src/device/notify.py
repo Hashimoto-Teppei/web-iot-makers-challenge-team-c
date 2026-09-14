@@ -10,11 +10,11 @@
 **ここで決め直さない。**
 
 **`now_ms` を引数で受け取り、中で時計を呼ばない。** 同じ入力から同じ出力が出ないと、
-「延長では鳴らない」「上位が消えて戻っても鳴らない」を pytest で確かめられない
+「保持が切れたら消える」「上位が消えたら下位が表に出る」を pytest で確かめられない
 （`../../../../docs/adr/0002-development-lifecycle.md`）。
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from device.alert import Level, Link, Warn
 
@@ -35,18 +35,8 @@ _LINK_LABELS: dict[Link, str] = {"up": "OK", "nofix": "NOFIX", "down": "DOWN"}
 
 
 @dataclass(frozen=True)
-class Tone:
-    """鳴らすもの。**1回きりのイベント**であって、状態ではない。"""
-
-    beeps: int
-    on_ms: int
-    # 鳴らす音と音の間（ms）。1回きりのときは使われない。
-    gap_ms: int
-
-
-@dataclass(frozen=True)
 class LightPattern:
-    """光の状態。**発火中ずっと続く**もので、鳴らし直すという概念を持たない。
+    """光の状態。**毎周期の現在値**であって、イベントではない。
 
     `lit` が偽なら消灯。`blink_hz` が `None` なら点きっぱなし。
     """
@@ -60,7 +50,7 @@ LIGHT_OFF = LightPattern(lit=False)
 
 @dataclass(frozen=True)
 class NotifyConfig:
-    """保持時間・音・光・記号。**実値は `config.py` にある**（呼び出し側が渡す）。
+    """保持時間・光・記号。**実値は `config.py` にある**（呼び出し側が渡す）。
 
     **既定値をここに書かない。** しきい値をコードに直書きしないためであり
     （`../../README.md`）、この dataclass は形だけを決める。
@@ -69,16 +59,16 @@ class NotifyConfig:
     # `lv` ごとの保持時間（ms）。**再送間隔より長くすること**——等しいと、保持が切れてから
     # 次の再送が届くまでの隙間で表示が消える（BLE は必ず多少遅れるので毎回起きる）。
     hold_ms: dict[Level, int]
-    # `lv` ごとに鳴らすもの。
-    tones: dict[Level, Tone]
-    # `lv` ごとの光。
-    lights: dict[Level, LightPattern]
+    # `lv` ごとの警告の光。
+    warn_lights: dict[Level, LightPattern]
+    # `link` ごとの状態の光。**`up` でも消灯にしない**——消灯は「壊れて光っていない」と
+    # 区別できず、**LED が切れていることに誰も気づけない**
+    # （`../../../../docs/notifications/arbitration.md`「`link` の光」）。
+    link_lights: dict[Link, LightPattern]
     # `kind` ごとの4文字の記号。**英大文字に揃え、半角カタカナを混ぜない。**
     symbols: dict[str, str]
     # 同じ `lv` が並んだときの `kind` の順（強い順）。**ここに無い `kind` は一番弱い扱い。**
     priority: tuple[str, ...]
-    # 通信断のチャイム。**`lv 1` と同じ音を1回**鳴らす。
-    link_down_tone: Tone
 
 
 @dataclass(frozen=True)
@@ -89,10 +79,6 @@ class ActiveWarning:
     lv: Level
     # 保持時間の切れる時刻。同じ `kind` の `warn` が来るたびに伸びる。
     expires_at_ms: int
-    # この警告で今までに達した最大の `lv` と、それになった時刻。**鳴らした鍵に使う。**
-    # `lv` そのものを鍵にすると、**下がったときに鍵が変わって鳴ってしまう。**
-    peak_lv: Level
-    peak_at_ms: int
 
 
 @dataclass(frozen=True)
@@ -101,12 +87,10 @@ class Output:
 
     line1: str
     line2: str
-    # この周期で鳴らすもの。`None` は無音。**1周期に1つしか返さない。**
-    tone: Tone | None
-    # **状態**であって、イベントではない。毎周期の現在値。
-    light: LightPattern
-    # 更新した鍵の集合。**次の呼び出しにそのまま渡す。**
-    chimed: frozenset[str] = field(default_factory=frozenset)
+    # 選ばれている警告の `lv`。**状態**であって、イベントではない。毎周期の現在値。
+    warn_light: LightPattern
+    # `link` の状態。**警告とは別の LED なので、場所を取り合わない。**
+    link_light: LightPattern
 
 
 def hold_until(lv: Level, now_ms: int, config: NotifyConfig) -> int:
@@ -126,19 +110,13 @@ def merge_warning(
     **同じ `kind` を2件に増やさない。**保持時間を延ばし、`lv` を新しい方に置き換える
     （上がるのも下がるのも。`../../../../docs/notifications/arbitration.md`「発火中とみなす期間」）。
 
-    **`peak_lv` / `peak_at_ms` を動かすのは、`lv` が今までの最大を超えたときだけ。**
-    ここが鳴らし直しの鍵になっているので（`warning_key()`）、毎回動かすと
-    **再送のたびに鳴り続ける。**
-
-    **保持時間の切れたものはここで落とす。**落とさずに残すと、切れたあとに届いた同じ `kind` が
-    **古い `peak_at_ms` を引き継いで鍵が変わらず、鳴らない**——`arbitrate()` の側で
-    切れたものを無視するだけでは足りない。
+    **保持時間の切れたものはここで落とす**——`kept` の側の話である。
+    落とさないと、**別の `kind` の切れた警告が次の一覧へそのまま持ち越され**、
+    `arbitrate()` が毎周期落とし直すまで残る。
     """
     kept = [w for w in warnings if w.expires_at_ms > now_ms and w.kind != warn.kind]
     current = next((w for w in warnings if w.expires_at_ms > now_ms and w.kind == warn.kind), None)
 
-    peak_lv = warn.lv if current is None or warn.lv > current.peak_lv else current.peak_lv
-    peak_at_ms = now_ms if current is None or warn.lv > current.peak_lv else current.peak_at_ms
     # **短くしない。** `lv` が下がった `warn` で切り上げると、危険が続いているのに
     # 上位のぶんの保持が残り時間ごと消える（上の docstring の「延ばし」）。
     expires_at_ms = hold_until(warn.lv, now_ms, config)
@@ -147,38 +125,16 @@ def merge_warning(
 
     return [
         *kept,
-        ActiveWarning(
-            kind=warn.kind,
-            lv=warn.lv,
-            expires_at_ms=expires_at_ms,
-            peak_lv=peak_lv,
-            peak_at_ms=peak_at_ms,
-        ),
+        ActiveWarning(kind=warn.kind, lv=warn.lv, expires_at_ms=expires_at_ms),
     ]
-
-
-def warning_key(warning: ActiveWarning) -> str:
-    """鳴らしたことを覚えるための鍵（`arbitration.md`「鳴らしたことを鍵の集合で持つ」）。"""
-    return f"{warning.kind}:{warning.peak_lv}:{warning.peak_at_ms}"
-
-
-def link_down_key(link_since_ms: int) -> str:
-    """通信断のチャイムの鍵。
-
-    **`link` が `up` に戻ると候補から外れて集合から落ちる**ので、
-    次に落ちたときはまた鳴る（`link_since_ms` が変わるため、落ち直しても別の鍵になる）。
-    """
-    return f"link:down:{link_since_ms}"
 
 
 def arbitrate(
     warnings: list[ActiveWarning],
     link: Link,
-    link_since_ms: int,
     moving: bool,
     info: str | None,
     now_ms: int,
-    chimed: frozenset[str],
     config: NotifyConfig,
 ) -> Output:
     """発火中の警告から、この周期に出すものを決める。
@@ -192,36 +148,9 @@ def arbitrate(
     # **1件だけ選ぶ。重ねない。**`lv` の高い順 → 同じなら `kind` の固定順。
     selected = min(active, key=lambda w: (-w.lv, _priority_index(w.kind, config)), default=None)
 
-    # **候補の鍵。**発火中の警告すべてと、`link` が `down` なら通信断。
-    #
-    # **隠れている警告の鍵も候補に入れる。**入れないと、上位に隠れている間に集合から落ち、
-    # **表に戻った周期で2度目が鳴る**（`arbitration.md`「上位が消えて、すでに鳴った下位が
-    # 表に戻った → 鳴らさない」）。
-    candidates = {warning_key(w) for w in active}
-    down_key = link_down_key(link_since_ms) if link == "down" else None
-    if down_key is not None:
-        candidates.add(down_key)
-
-    # **鳴らすのは1周期に1つだけ。**2つ以上あれば通信断を先に出し、警告は次の周期へ回す
-    # ——**`link` が落ちたことに気づかせるのが `adr/0006` の成立条件**だからである。
-    # 回した警告は**鳴らしていないので集合に入らず**、次の周期でそのまま鳴る。
-    #
-    # **鳴る候補になるのは、選ばれた1件だけ。**隠れている警告はここに出てこない
-    # （表に出た周期で初めて鳴る）。
-    tone: Tone | None = None
-    rung: str | None = None
-    if down_key is not None and down_key not in chimed:
-        tone, rung = config.link_down_tone, down_key
-    elif selected is not None and (key := warning_key(selected)) not in chimed:
-        tone, rung = config.tones[selected.lv], key
-
-    # **渡された集合のうち、今回も候補だったものだけを残す。**足すだけにすると走行中ずっと
-    # 増え続ける。**鳴らしたものだけを足す**——発火中のものを一律に足すと、
-    # **上位に隠れて鳴らせなかった警告が、鳴らないまま鳴ったことにされる。**
-    kept = (chimed & candidates) | ({rung} if rung is not None else frozenset())
-
-    # **`light` は状態。**選ばれている警告の `lv` を毎周期そのまま出す。
-    light = config.lights[selected.lv] if selected is not None else LIGHT_OFF
+    # **光は状態。**選ばれている警告の `lv` を毎周期そのまま出す。
+    # **イベントではない**ので、「出し直す条件」を持たない。
+    warn_light = config.warn_lights[selected.lv] if selected is not None else LIGHT_OFF
 
     # **停止中で、発火中の警告が1件も無いときだけ**情報を出す。
     # **出してよいかの判断（この停止中にすでに警告が出たか）は呼び出し側**で、
@@ -231,9 +160,10 @@ def arbitrate(
     return Output(
         line1=_line1(selected, shown, config),
         line2=_line2(link, moving, shown),
-        tone=tone,
-        light=light,
-        chimed=frozenset(kept),
+        warn_light=warn_light,
+        # **警告の有無に関わらず、毎周期そのまま出す。**警告に譲らせない
+        # ——譲らせると、一番消してはいけないものが警告のたびに消える。
+        link_light=config.link_lights[link],
     )
 
 

@@ -9,7 +9,7 @@
 
 from pathlib import Path
 
-from device.notify import LightPattern, NotifyConfig, Tone
+from device.notify import LightPattern, NotifyConfig
 
 # device_id を保存する場所。
 #
@@ -93,18 +93,23 @@ NOTIFY_CONFIG = NotifyConfig(
     # 揃えると、保持が切れてから次の再送が届くまでの隙間で表示が消える——BLE の書き込みは
     # 必ず多少遅れるので、これは確率ではなく毎回起きる。**片方だけ調整しないこと。**
     hold_ms={1: 3_000, 2: 4_000, 3: 6_000},
-    # `lv` ごとに鳴らすもの。**`kind` では分けない**——5種類の音を走行中に聞き分けることは
-    # できず、増やすと3段階の区別まで一緒に潰れる。
-    tones={
-        1: Tone(beeps=1, on_ms=100, gap_ms=0),
-        2: Tone(beeps=2, on_ms=100, gap_ms=100),
-        3: Tone(beeps=2, on_ms=600, gap_ms=200),
-    },
-    # `lv` ごとの光。**`lv 3` は点灯**（点滅させない）。
-    lights={
+    # `lv` ごとの警告の光。**`lv 3` は点灯**（点滅させない）。
+    # **`kind` では分けない**——5種類の点滅を走行中に見分けることはできず、
+    # 増やすと3段階の区別まで一緒に潰れる。
+    warn_lights={
         1: LightPattern(lit=True, blink_hz=0.5),
         2: LightPattern(lit=True, blink_hz=2.0),
         3: LightPattern(lit=True, blink_hz=None),
+    },
+    # `link` ごとの状態の光。**LCD 下段の `OK` / `NOFIX` / `DOWN` をそのまま写す。**
+    #
+    # **`up` を消灯にしない。** 消灯は「壊れて光っていない」と区別できず、
+    # **LED が切れていることに誰も気づけない**（LCD 下段で `OK` を出し続けるのと同じ理由）。
+    # 常時点灯は背景化して気にならず、**点灯から点滅に変わった瞬間**が周辺視で一番よく拾える。
+    link_lights={
+        "up": LightPattern(lit=True, blink_hz=None),
+        "nofix": LightPattern(lit=True, blink_hz=0.5),
+        "down": LightPattern(lit=True, blink_hz=2.0),
     },
     # `kind` の記号。**4文字固定・英大文字。半角カタカナを混ぜない**——1つだけカナにすると
     # そこだけ「読む」動作が要る。5つとも同じ文字種・同じ4桁なら桁の形だけで見分けられる。
@@ -118,8 +123,6 @@ NOTIFY_CONFIG = NotifyConfig(
     # 同じ `lv` が並んだときの順（強い順）。**後ろは振り向かないと見えず、通信が死んでいても
     # 出る唯一のもの**なので `rear_object` が先頭。以下、猶予の短い順。
     priority=("rear_object", "approach", "brake", "corner", "stop"),
-    # 通信断のチャイム。**`lv 1` と同じ音を1回**。落ちた瞬間だけで、以後は鳴らさない。
-    link_down_tone=Tone(beeps=1, on_ms=100, gap_ms=0),
 )
 
 # --- 部品の接続（`../../../../docs/hardware.md` が正本） ---
@@ -142,15 +145,15 @@ NOTIFY_CONFIG = NotifyConfig(
 # （`../../../../docs/hardware.md`）。
 LCD_I2C_ADDRESS: int | None = 0x27
 
-# `light` チャンネルの LED。**抵抗を経由して GPIO へ直結してよい**のは LED 1個まで
+# `warn_light` チャンネルの LED（警告の `lv`）。**抵抗を経由して GPIO へ直結してよい**
+# ——LED 2個でも合計 20mA で、上限（1本 16mA / 全体 50mA）に当たらない
 # （`../../../../docs/adr/0003-hardware-wiring.md`）。
-LIGHT_GPIO: int | None = 22
+WARN_LIGHT_GPIO: int | None = 22
 
-# `tone` チャンネルのブザー。**GPIO から直接駆動しない**——トランジスタを挟む（同上）。
-#
-# **自励式（音程を作れない）ブザーを使う。** `NOTIFY_CONFIG` の `tones` は
-# 鳴らす回数と長さしか指定していないので、音程が無くても仕様どおりに鳴らせる。
-BUZZER_GPIO: int | None = 17
+# `link_light` チャンネルの LED（`link` の状態）。**警告とは別の色にする**
+# ——同じ色だと、どちらが光ったのか走行中の周辺視では分からない
+# （`../../../../docs/hardware.md`）。
+LINK_LIGHT_GPIO: int | None = 17
 
 # AE-NJR4265 J1 の検知(接近)出力（端子5）。**離反の出力は読まない**——遠ざかる物体は危険ではない。
 #

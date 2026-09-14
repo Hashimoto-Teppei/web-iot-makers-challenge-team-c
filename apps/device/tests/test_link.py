@@ -15,11 +15,11 @@ TIMEOUT_MS = 3 * SECOND
 WINDOW_MS = 5 * SECOND
 
 
-def make_watch(started_at_ms: int = 0) -> LinkWatch:
+def make_watch() -> LinkWatch:
     """テスト用のウォッチドッグ。**秒数は `config.py` から読まない**——
     既定値を実地で変えたときにテストが落ちると、値の調整が怖くなる。
     """
-    return LinkWatch(timeout_ms=TIMEOUT_MS, stall_window_ms=WINDOW_MS, started_at_ms=started_at_ms)
+    return LinkWatch(timeout_ms=TIMEOUT_MS, stall_window_ms=WINDOW_MS)
 
 
 def beat(t: int, st: str = "ok", mv: bool = True) -> Beat:
@@ -212,45 +212,6 @@ def test_beat_が続いている間は_up_のまま() -> None:
     assert status.moving is True
 
 
-def test_since_は変わったときだけ動く() -> None:
-    """**通信断のチャイムを1回だけ鳴らすための鍵**になる（`arbitration.md`）。
-
-    毎周期動くと鍵が毎回変わり、**`down` の間ずっと鳴り続ける。**
-    """
-    watch = make_watch(started_at_ms=0)
-
-    # 一度も受け取っていない `down` は、起動した時刻から続いている。
-    assert watch.evaluate(2 * SECOND).since_ms == 0
-
-    watch.record_beat(beat(t=1_000), now_ms=3 * SECOND)
-    up_at = watch.evaluate(3 * SECOND)
-    assert up_at.link == "up"
-    assert up_at.since_ms == 3 * SECOND
-
-    # 続いている間は動かない。
-    watch.record_beat(beat(t=2_000), now_ms=4 * SECOND)
-    assert watch.evaluate(4 * SECOND).since_ms == 3 * SECOND
-
-    # 落ちた周期で動く。
-    down = watch.evaluate(10 * SECOND)
-    assert down.link == "down"
-    assert down.since_ms == 10 * SECOND
-
-
-def test_up_に戻ってまた落ちると_since_が変わる() -> None:
-    """**次に落ちたときはまた鳴る**（`arbitration.md` の鍵の表）。"""
-    watch = make_watch()
-    watch.record_beat(beat(t=1_000), now_ms=1 * SECOND)
-    first_down = watch.evaluate(10 * SECOND).since_ms
-
-    watch.record_beat(beat(t=11_000), now_ms=11 * SECOND)
-    watch.evaluate(11 * SECOND)
-    second_down = watch.evaluate(20 * SECOND)
-
-    assert second_down.link == "down"
-    assert second_down.since_ms != first_down
-
-
 def test_評価を呼ばずに時間が過ぎても落ちる() -> None:
     """**周期で呼ばれない環境を前提にしない。**
 
@@ -265,7 +226,7 @@ def test_評価を呼ばずに時間が過ぎても落ちる() -> None:
 def test_タイムアウトを差し替えても控えた心拍は消えない() -> None:
     # `config` の `beat_to` を書いた瞬間に link が down へ落ちないこと（#124）。
     # 落ちると、設定を1つ書いただけで「スマホが落ちた」と表示することになる。
-    watch = LinkWatch(timeout_ms=3_000, stall_window_ms=5_000, started_at_ms=0)
+    watch = LinkWatch(timeout_ms=3_000, stall_window_ms=5_000)
     watch.record_beat(Beat(t=1_000, st="ok", mv=True), 1_000)
     watch.set_timeouts(timeout_ms=6_000, stall_window_ms=8_000)
 

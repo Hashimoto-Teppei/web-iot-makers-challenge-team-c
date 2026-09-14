@@ -19,7 +19,7 @@ const LAYERS: { value: StatsLayer; label: string; note: string }[] = [
   {
     value: "detection",
     label: "走行中の警告",
-    note: "走行中にデバイスがその場で鳴らした警告です。",
+    note: "走行中にデバイスがその場で知らせた警告です。",
   },
   {
     value: "violation",
