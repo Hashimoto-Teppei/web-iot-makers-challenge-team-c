@@ -402,3 +402,30 @@ describe("RideLoop と手元の標識の範囲（#72）", () => {
     expect(loop.status().outsideCoverage).toBeNull();
   });
 });
+
+describe("埋めた測位（#167）", () => {
+  // **中継と検知は本物と同じに扱う。**埋める理由は、止まっている自分が
+  // 周りから消えないようにすることである（`docs/adr/0011-stationary-fix-hold.md`）。
+  it("埋めた測位でも POST する", async () => {
+    const exchange = vi.fn(async () => []);
+    const { loop } = setup({ exchange });
+    await loop.onFix({ ...fix(START), spd: 0, crs: null }, true);
+    expect(exchange).toHaveBeenCalledTimes(1);
+    expect(loop.status().heldFixes).toBe(1);
+  });
+
+  // **埋めた点の `spd` は 0 に固定してある。**これで `mv` を決めると、
+  // **走っている最中に測位が死んだときに「止まっている」と出て、デバイスが走行中に
+  // 文章を出す**（`docs/notifications.md`「迷ったら走行中に倒す」）。
+  it("`mv` は直前の本物の速度で決める（埋めた 0 で上書きしない）", async () => {
+    const { loop, device, at } = setup();
+    await loop.onFix(fix(START, 5));
+
+    at(START + 1_000);
+    await loop.onFix({ ...fix(START + 1_000), spd: 0, crs: null }, true);
+    device.clear();
+    at(START + 2_000);
+    loop.beat();
+    expect(device.written[0]).toMatchObject({ st: "ok", mv: true });
+  });
+});

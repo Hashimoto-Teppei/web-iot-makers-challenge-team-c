@@ -25,6 +25,10 @@
  * なお **`ACCESS_BACKGROUND_LOCATION` に当たる「常に許可」は iOS でも要らない**——
  * 前面から始めた購読は「使用中のみ」のままで背景へ続き、青いインジケータが出る。
  *
+ * **1Hz を作り直すのもここ。**iOS は動いていない端末に測位を出さないので、
+ * **更新が来ない間は直近の測位を「いまの測位」として流す**（`./fix-hold.ts`。
+ * `docs/adr/0011-stationary-fix-hold.md`）。**下流はこれを本物と同じ形で受け取る。**
+ *
  * **`app.json` の `android.permissions` から `RECEIVE_BOOT_COMPLETED` を消さないこと。**
  * expo-task-manager は測位を届けるのに**永続化した JobScheduler のジョブ**を使い、
  * この権限が無いと `IllegalArgumentException` で**アプリが起動時に落ちる**
@@ -36,6 +40,7 @@ import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
 import { inPermissionQueue } from "../lib/permission-queue";
 import { CRS_MIN_SPD_MPS, roundForWire, type SelfMessage } from "../v2v/messages";
+import { startFixHold } from "./fix-hold";
 
 /** 測位の取り方。**しきい値をコードに直書きしない**（`CLAUDE.md`）。 */
 export type LocationConfig = {
@@ -105,26 +110,56 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
 /**
  * 測位を購読する。**返る関数を呼ぶと止まる。**
  *
- * @param onFix 測位1点ぶん。**そのまま `RideLoop.onFix()` に渡せる形**にしてある
+ * @param onFix 測位1点ぶん。**そのまま `RideLoop.onFix()` に渡せる形**にしてある。
+ *   第2引数は**埋めた測位か**（`./fix-hold.ts`）——値そのものは本物と同じ扱いでよく、
+ *   **「測っていない点である」ことが要る用途（走行ログ・`mv` の判定）だけが見る**
  * @throws 権限が下りなかったとき。**黙って測位なしで走り始めない**——
  *   `beat` は `st: "nofix"` を出し続けるので**デバイス側は正しく見える**が、
  *   人は原因（権限）を知りようがない。走行前の画面で伝える
  */
 export async function watchFixes(
-  onFix: (fix: SelfMessage) => void,
+  onFix: (fix: SelfMessage, held: boolean) => void,
   config: LocationConfig = locationDefaults,
 ): Promise<() => void> {
   const reason = await checkLocationPermission();
   if (reason !== null) throw new Error(reason);
 
-  deliverFix = onFix;
+  // **測位の更新が来ない間を埋める**（`./fix-hold.ts`）。**下流に分岐を入れないため、
+  // 埋めた点もここから同じ口へ流す。**
+  const hold = startFixHold((fix) => onFix(fix, true));
+  deliverFix = (fix) => {
+    hold.keep(fix);
+    onFix(fix, false);
+  };
   // **前回の走行が残っていたら先に止める。**二重に登録すると、止めたはずの走行の
   // 測位が新しい走行に混ざる。
   if (await Location.hasStartedLocationUpdatesAsync(RIDE_LOCATION_TASK)) {
     await Location.stopLocationUpdatesAsync(RIDE_LOCATION_TASK);
   }
 
-  await Location.startLocationUpdatesAsync(RIDE_LOCATION_TASK, {
+  // **始められなければ、埋めるタイマーごと畳んでから投げる。**ここは実際に投げる経路で
+  // （上の `UIBackgroundModes` の注記）、残すと**走行が始まっていないのに POST だけが
+  // 1Hz で飛び続ける。**
+  try {
+    await startUpdates(config);
+  } catch (reason: unknown) {
+    deliverFix = null;
+    hold.stop();
+    throw reason;
+  }
+
+  return () => {
+    deliverFix = null;
+    // **埋めるタイマーを止める。**残すと、走行を終えても POST が 1Hz で飛び続ける。
+    hold.stop();
+    // **待たない。**止める側は走行を閉じる流れの中にいる（`./use-ride-loop.ts`）。
+    void Location.stopLocationUpdatesAsync(RIDE_LOCATION_TASK).catch(() => undefined);
+  };
+}
+
+/** 常駐を立てて測位を流し始める。**渡している値の理由はここに書く。** */
+function startUpdates(config: LocationConfig): Promise<void> {
+  return Location.startLocationUpdatesAsync(RIDE_LOCATION_TASK, {
     // 走行中の測位なので最高精度を取りに行く。電池は消えるが、
     // **粗い測位は検知の前提そのものを壊す**（`docs/hardware.md`）。
     accuracy: Location.Accuracy.BestForNavigation,
@@ -133,17 +168,16 @@ export async function watchFixes(
     // **OS に間引かせない。**既定では止まっている間の更新が止まりうるが、
     // 止まっている自転車こそ急接近（#9）で一番見たい相手である。
     pausesUpdatesAutomatically: false,
+    // **iOS に「自転車で移動している」と伝える。**既定は `CLActivityTypeOther` で、
+    // これだけで止まっている間の 1Hz が出る見込みはわずかにあるが、**当てにしない**
+    // （`docs/adr/0011-stationary-fix-hold.md` 決定 7 / `docs/unverified.md` 102）。
+    // Android では読まれない。
+    activityType: Location.LocationActivityType.Fitness,
     // **これがあるから画面を消しても止まらない**（`ACCESS_BACKGROUND_LOCATION` は
     // 要らない——expo-location は前面から始めた常駐を背景の権限なしで認める。
     // `LocationModule.kt` の `startLocationUpdatesAsync` で確認済み）。
     foregroundService: FOREGROUND_NOTIFICATION,
   });
-
-  return () => {
-    deliverFix = null;
-    // **待たない。**止める側は走行を閉じる流れの中にいる（`./use-ride-loop.ts`）。
-    void Location.stopLocationUpdatesAsync(RIDE_LOCATION_TASK).catch(() => undefined);
-  };
 }
 
 /**

@@ -100,7 +100,8 @@ export function useRideLoop(
     setRiding(false);
     // **走行後に見せるものだけ、状態を消す前に移す**（#72）。**移す先は画面の外**
     // ——ここは画面を離れたときにも通るため（#143。`./last-ride.ts`）。
-    setLastRide({ outsideCoverage: session.loop.status().outsideCoverage });
+    const final = session.loop.status();
+    setLastRide({ outsideCoverage: final.outsideCoverage, heldFixes: final.heldFixes });
     // **古い状態を残さない。**残すと、走行を終えたあとも「測位: 取れている」や
     // 中継の失敗の赤字が出たままになり、**動いていないのに動いているように見える。**
     setStatus(null);
@@ -164,7 +165,7 @@ export function useRideLoop(
     setStatus(loop.status());
     setRiding(true);
 
-    watchFixes((fix) => {
+    watchFixes((fix, held) => {
       // **近傍の標識を先に差し替える。**同じセルにいる間は引き直さないので、
       // ここに SQL の往復は入らない（`../signs/nearby.ts`）。
       try {
@@ -180,9 +181,13 @@ export function useRideLoop(
       // **走行ログに残すのは、ここへ届いた測位すべて**である（走行ループが
       // 取り込まなかったものも含む）。**足切りは計算する側が、そのときのしきい値で行う**
       // （`docs/adr/0007-keep-raw-ride-logs.md`）。**捨てると二度と戻らない。**
-      record(() => recording.addPoint(fix));
+      // **埋めた点は走行ログに残さない**（`./fix-hold.ts`）。同じ位置を時刻だけ変えて
+      // 足すことになり、**測っていない点が生ログに混ざる**（`docs/adr/0007-keep-raw-ride-logs.md`
+      // が残すと決めているのは、届いた測位であって、こちらで作った点ではない）。
+      // **落ちるものは無い**——元になった測位は、届いたときに1点として残っている。
+      if (!held) record(() => recording.addPoint(fix));
       // **待たない。**測位のコールバックの中で往復を待つと、次の測位が詰まる。
-      void loop.onFix(fix);
+      void loop.onFix(fix, held);
     })
       .then((unwatch) => {
         // 権限のダイアログを出している間に止められることがある。**そのときは即座に外す**

@@ -100,6 +100,15 @@ export type RideStatus = {
    */
   outsideCoverage: OutsideCoverage | null;
   /**
+   * **直近の測位で埋めて送った回数**（`./fix-hold.ts`。#167）。
+   *
+   * **0 でないことに意味がある。**埋めている間は測位が本当に死んでいても画面もデバイスも
+   * 正常に見えるので、**これを出さないと「静かに黙る故障」が「動いているつもり」に化ける**
+   * （`docs/adr/0011-stationary-fix-hold.md` 決定 5）。
+   * **走行中には出さない**——走行後の画面で見せる（`./last-ride.ts`）。
+   */
+  heldFixes: number;
+  /**
    * 検知が例外を投げた回数（累計）。
    *
    * **0 でないことに意味がある。**1つの検知の不具合で走行ループ全体を止めないように
@@ -180,6 +189,7 @@ export class RideLoop {
   private postFailures = 0;
   private peerCount = 0;
   private detectorErrors = 0;
+  private heldFixes = 0;
   /**
    * POST が返ってくるのを待っている最中か。
    *
@@ -257,18 +267,29 @@ export class RideLoop {
   /**
    * 測位が1つ更新されたときの1周期。**中継 → 検知 → 出力**まで行う。
    *
-   * **測位が取れていない間は呼ばない**（`self` を作らない。前回の位置を送り直さない）。
+   * **測位が取れていない間は呼ばない**（`self` を作らない）。**ただし更新が来ないだけの間は、
+   * 直近の測位を「いまの測位」として呼ぶ**（`held` が `true`。`./fix-hold.ts`）。
    *
    * @param fix 自車の測位。**送る前の丸めは済ませてある**こと（`./location.ts`）
+   * @param held **測っていない点か**（直近の測位を使い回したもの）。
+   *   **中継と検知は本物と同じに扱う**——ここで分けるのは `mv` の判定と、人に見せる回数だけ
    */
-  async onFix(fix: SelfMessage): Promise<void> {
+  async onFix(fix: SelfMessage, held = false): Promise<void> {
     const accepted = this.store.acceptSelf(fix, this.now());
     // **取り込めた測位だけを見る**（#72）。`acceptSelf` は精度が粗い測位を落としており
     // （`../v2v/messages.ts` の `maxHaccM`）、**捨てたはずの1点で「範囲の外を走った」と
     // 言うことになる**——記録は消えない作りなので、**1点の濡れ衣が走行ごと汚す。**
     if (accepted) {
-      this.coverage.record(fix.lat, fix.lon, fix.t);
-      this.lastFix = fix;
+      // **埋めた点を「そこに居た点」として数えない**（走行ログと同じ理由。
+      // `./use-ride-loop.ts`）。信号待ちで2分止まれば同じ座標が 100 点を超え、
+      // **走行後の「範囲の外を走りました（… から N 点）」が、測っていない点で膨らむ。**
+      if (!held) this.coverage.record(fix.lat, fix.lon, fix.t);
+      // **`mv` の判定は本物の測位だけで行う。**埋めた点の `spd` は 0 に固定してあるので、
+      // **走っている最中に測位が死んだときに「止まっている」と出る**——
+      // デバイスはそれを見て走行中に文章を出す（`docs/notifications.md`
+      // 「迷ったら走行中に倒す」）。**直前の本物の速度を持ち越す方が安全側である。**
+      if (held) this.heldFixes += 1;
+      else this.lastFix = fix;
       this.lastFixAt = this.now();
     }
     // **測位からも心拍を出す。**画面を消すと `setInterval` が事実上止まるため
@@ -300,6 +321,7 @@ export class RideLoop {
       postFailures: this.postFailures,
       lastPostOkAt: this.lastPostOkAt,
       outsideCoverage: this.coverage.outside(),
+      heldFixes: this.heldFixes,
       detectorErrors: this.detectorErrors,
     };
   }
