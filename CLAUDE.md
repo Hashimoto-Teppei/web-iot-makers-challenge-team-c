@@ -59,7 +59,7 @@ Web×IoT メイカーズチャレンジ（ハッカソン）チームCのリポ�
 | --- | --- |
 | デバイス | Python 3.11 / uv / Ruff / basedpyright / pytest |
 | Web + API | React / Vite / Hono / Cloudflare Workers / D1 / Durable Objects / Drizzle / Wrangler |
-| モバイル | Expo (SDK 57, React Native) — Android 主 |
+| モバイル | Expo (SDK 57, React Native) — iOS 主 / Android 従 |
 | 共通 | pnpm workspaces / Turborepo / Biome / Vitest / Zod |
 | バージョン管理 | mise |
 
@@ -78,7 +78,7 @@ Web と API を1つの Worker にまとめる理由、`packages/` を作らな�
 apps/device/   Python + uv。後方物体検知・表示・BLE ペリフェラル（Raspberry Pi 上で動作）
 apps/web/      React + Hono。画面と API を1つの Worker で担う
                src/client/（React） src/worker/（Hono + D1 + DO） src/shared/（共有する型）
-apps/mobile/   Expo。測位・車車間の3検知・一時停止の事前通知・中継。Android 主
+apps/mobile/   Expo。測位・車車間の3検知・一時停止の事前通知・中継。iOS 主 / Android 従
 docs/          設計と手順。一覧は README.md
 ```
 
@@ -92,7 +92,7 @@ docs/          設計と手順。一覧は README.md
 - **検知アルゴリズムは `apps/mobile` に置く**（TypeScript）。`apps/device` に車車間の検知を書かない
   （`docs/adr/0006-decision-layer-on-mobile.md`）。
 - **`apps/mobile` は Expo Go では動かない**（BLE のネイティブモジュールが要る）。
-  `npx expo run:android` で Development Build を作る。
+  `npx expo run:ios` / `npx expo run:android` で Development Build を作る。
 - Biome / Turborepo / tsconfig のベース設定はルートに置き、各アプリは差分だけを持つ。
   Biome の対象から `apps/device` を除外する。
 
@@ -127,6 +127,10 @@ docs/          設計と手順。一覧は README.md
   `mise.toml` の `[env]` が自動適用されない（必要なら `mise run` 経由で実行する）。
 - `apps/device` の BLE（BlueZ）と GPIO は **Linux 専用**で、開発機では動かない
   （→「実機なしで開発する」）。
+- **`apps/mobile` の iOS ビルドと配布は macOS + Xcode 専用。** ここだけは「どちらでも同じ手順」に
+  できないので、**新しい例外を作らず、既にある例外の中に入れる**——`docs/setup.md`
+  「`apps/mobile` とデプロイは担当を固定している」がそれである（`docs/adr/0010-ios-primary-target.md`）。
+  **検知もシミュレータも Vitest で回る**ので、Windows でも実装そのものは進められる。
 
 ## 実機なしで開発する（重要）
 
@@ -230,8 +234,8 @@ docs/          設計と手順。一覧は README.md
   **例外は設計 PR** —— 実装の前に合意を取るためのものは、単独で出す。
 - **CI を通してからレビューを依頼する。** 整形漏れや型エラーの指摘に人の時間を使わない。
 - **PR は小さく保つ。** ただし「1つの関心事」を厳密に取りすぎない（→「深掘りしすぎない」）。
-- **3つの危険検知は担当を分けて並行開発する。** 共通インターフェースを先に決める（`docs/interfaces.md`）。
-  **実装先は `apps/mobile`（TypeScript）**であって `apps/device` ではない。
+- **危険検知を足すときの実装先は `apps/mobile`（TypeScript）**であって `apps/device` ではない。
+  共通インターフェースは `docs/interfaces.md`。**3つは実装済みなので、4つ目はそこに揃える。**
 - **タスク管理は GitHub Issues。** **半日以上かかる作業は Issue を立てる**（それ未満は直接 PR）。
   1 Issue = 1 PR = 半日〜1日の粒度。PR 本文に `Closes #12` で紐づける。
 
