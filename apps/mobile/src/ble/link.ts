@@ -268,15 +268,26 @@ export class BleLink {
 
     // 1. MTU を要求してから、サービス探索。**同時に走らせない。**
     const negotiated = await device.requestMTU(REQUESTED_MTU);
-    await negotiated.discoverAllServicesAndCharacteristics();
+    const discovered = await negotiated.discoverAllServicesAndCharacteristics();
     if (this.isStale(generation)) {
       await device.cancelConnection().catch(() => undefined);
       return;
     }
 
+    // **MTU は探索の戻り値から読む。`requestMTU()` の戻り値からではない。**
+    // iOS の `requestMTUForDevice` は**要求値を捨て、その場の値を即返すだけ**で、
+    // ATT の MTU 交換を待たない（`MultiplatformBleAdapter` の
+    // `iOS/classes/BleModule.swift`。`mtu` は `maximumWriteValueLength + 3`）。
+    // **交換の前に読むことになるので必ず既定の 23 になり、下の判定で必ず弾かれる。**
+    // 探索の完了時は改めてその場の値を返すので、そちらには交換後の値が乗る。
+    //
+    // **Android は影響を受けない**——`requestMtu()` が本当にネゴシエートして
+    // `device.setMtu()` で Device を書き換え、探索も同じ Device を返すため、
+    // どちらから読んでも同じ（`android/.../adapter/BleModule.java`）。
+    //
     // **足りなければここで止める。**進むと `alert` が黙って切れ、
     // 接続できているのに警告が出ない状態になる。
-    const mtu = negotiated.mtu;
+    const mtu = discovered.mtu;
     if (mtu < MIN_MTU) {
       await device.cancelConnection().catch(() => undefined);
       this.fail(shortMtuReason(mtu), { retry: true });
