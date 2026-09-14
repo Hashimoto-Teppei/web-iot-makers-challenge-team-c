@@ -16,6 +16,15 @@
  * expo-location が `LocationTaskService` を種別 `location` で同梱しており、
  * **ネイティブのモジュールを自分で書かずに済む**ため。**測位と BLE の両方がこの1本に乗る。**
  *
+ * **iOS では常駐の作り方が違う。**フォアグラウンドサービスは無く、`app.json` の
+ * `UIBackgroundModes` に `location`（と BLE の `bluetooth-central`）が入っていることで
+ * 背景でも動き続ける。**`isIosBackgroundLocationEnabled` を消さないこと**——
+ * `startLocationUpdatesAsync` が `hasBackgroundModeEnabled("location")` を見ており、
+ * **無いと走行開始でいきなり例外になる**（`expo-location` の `LocationModule.swift`。
+ * `docs/adr/0010-ios-primary-target.md`）。投げるので**静かには壊れず**、走行前の点検で止まる。
+ * なお **`ACCESS_BACKGROUND_LOCATION` に当たる「常に許可」は iOS でも要らない**——
+ * 前面から始めた購読は「使用中のみ」のままで背景へ続き、青いインジケータが出る。
+ *
  * **`app.json` の `android.permissions` から `RECEIVE_BOOT_COMPLETED` を消さないこと。**
  * expo-task-manager は測位を届けるのに**永続化した JobScheduler のジョブ**を使い、
  * この権限が無いと `IllegalArgumentException` で**アプリが起動時に落ちる**
@@ -174,6 +183,14 @@ export async function checkLocationPermission(): Promise<string | null> {
   // 人は知りようがない**ので、ここで分けて伝える。
   if (permission.android?.accuracy === "coarse") {
     return "位置情報が「おおよその位置」になっています。「正確な位置」を許可してください";
+  }
+  // **iOS にも同じ落とし穴がある**（iOS 14 以降。`docs/adr/0010-ios-primary-target.md`）。
+  // 「正確な位置」を切られると `accuracy` が `"reduced"` になり、やはり `granted` は true のまま。
+  // **見分ける手段がこれしかない**ので、Android と同じように分けて伝える。
+  // **文言を共通化しない**——設定アプリでの呼び名が OS ごとに違い、
+  // 「おおよその位置」と言われた iPhone の持ち主は、その名前の設定を探して見つけられない。
+  if (permission.ios?.accuracy === "reduced") {
+    return "位置情報の「正確な位置」がオフになっています。設定アプリのこのアプリの項目からオンにしてください";
   }
   return null;
 }
