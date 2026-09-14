@@ -148,9 +148,35 @@ uv sync --group device --python /usr/bin/python3
 ```sh
 uv run python -V              # Python 3.11.x
 uv run python -c "import bluezero; print('ok')"
+uv run python -c "import gpiozero, RPLCD; print('ok')"   # LED と LCD
 ```
 
-## 8. 動かす
+## 8. 部品をつないだなら、I2C を有効にする
+
+**LED だけなら要らない。** LCD1602A は I2C でつながるが、**Raspberry Pi OS は既定で I2C を切っている。**
+切ったままだと `/dev/i2c-1` が無く、**LCD だけが黙る**（起動はする。`apps/device/src/device/hw/lcd.py`
+がアドレスに見つからないことを journalctl に1行出して、光の側だけで走り続ける）。
+
+```sh
+sudo raspi-config nonint do_i2c 0    # 0 が「有効にする」
+sudo reboot
+```
+
+戻ってきたら、**アドレスを確定させる**:
+
+```sh
+sudo apt install -y i2c-tools
+i2cdetect -y 1
+```
+
+**`27` か `3f` のどちらかが出る。** 変換基板のチップで変わり、**見た目では分からない**
+（[`hardware.md`](./hardware.md)）。出た方を開発機で `apps/device/src/device/config.py` の
+`LCD_I2C_ADDRESS` に書いて、`git pull` で運ぶ。**どちらも出ないなら配線を見る。**
+
+**部品を持っていないなら、`config.py` の末尾を `None` にする。** その部品は無いものとして動く
+（[`adr/0002-development-lifecycle.md`](./adr/0002-development-lifecycle.md)）。
+
+## 9. 動かす
 
 ```sh
 uv run python -m device.main
@@ -171,7 +197,16 @@ uv run python -m device.main
 **`device_id` は初回起動時に作られ、`~/.local/share/bike-device/identity.json` に残る。**
 このファイルを消すと `device_id` が変わり、**取り込み済みのログと結び付かなくなる**ので消さないこと。
 
-## 9. 電源を入れたら勝手に走るようにする
+部品をつないでいるなら、**起動した瞬間に見えるものが2つある**
+（[`notifications/arbitration.md`](./notifications/arbitration.md)）。
+
+| 見るところ | 期待 |
+| --- | --- |
+| 警告の LED（GPIO22） | **1秒だけ光って消える。** 光らなければ**その LED は切れている**——警告が出ないのと区別がつかないので、ここで直す |
+| `link` の LED（GPIO17） | **2Hz で点滅し続ける。** スマホが繋がるまで `link` は `down` である。繋ぐと点灯に変わる |
+| LCD | 上段は空、下段に `DOWN  -` が出る。**何も出ないなら 8 に戻ってアドレスを確かめる** |
+
+## 10. 電源を入れたら勝手に走るようにする
 
 **自転車に載せると手で起動できない。** systemd に登録する。
 
@@ -210,11 +245,19 @@ systemctl status bike-device
 sudo usermod -aG bluetooth <ユーザー名>
 ```
 
+**部品をつないだなら `i2c` と `gpio` も同じ。** Raspberry Pi OS が最初から作るユーザーは入っているが、
+**自分で足したユーザーは入っていない**——手で動かせたのに systemd から動かすと LCD と LED だけ黙る、
+という形で出る:
+
+```sh
+sudo usermod -aG i2c,gpio <ユーザー名>
+```
+
 **それでも弾かれる場合は BlueZ の D-Bus ポリシーを足すことになる。**
 **まだ実機で通していない**（[`unverified.md`](./unverified.md) の 43）。
 `journalctl` に `org.freedesktop.DBus.Error.AccessDenied` が出ていたらこれ。
 
-## 10. ログを見る
+## 11. ログを見る
 
 **走行中は画面が無い。** 後から見る手段がこれしかない。
 
@@ -246,9 +289,10 @@ sudo systemctl restart bike-device
 | `uv sync` で `Building wheel for ...` が流れる | piwheels が効いていない。手順 5 の `~/.config/uv/uv.toml` を確認する |
 | `uv sync` が Python を落とそうとして失敗する | `--python /usr/bin/python3` を付け忘れている |
 | `import bluezero` が落ちる | 手順 3 の apt が済んでいない |
-| BLE の広告が出ない | `bluetooth` グループと D-Bus のポリシー（手順 9） |
+| BLE の広告が出ない | `bluetooth` グループと D-Bus のポリシー（手順 10） |
 | 広告は見えるが名前が `bg-` の途中で切れている | 広告が 31 バイトを超えている。**`Appearance` や `tx-power` を足していないか**（`interfaces/ble-gatt.md`） |
 | スキャンで見つからない | **他の人がつなぎっぱなしになっている可能性がある**（接続中はアドバタイズが止まる）。デバイスを再起動する |
+| LCD だけ出ない（LED は光る） | I2C が無効か、アドレスが違う（手順 8）。journalctl に `LCD が 0x27 に見つからない` が出ている |
 | SD カードが壊れた疑い | **書き直すのが一番速い。** 手順 1 からやり直す |
 
 **ここに無い症状に当たったら、この表に1行足すこと。** 次に同じ場所で止まる人を減らせる。

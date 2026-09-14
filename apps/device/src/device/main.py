@@ -6,13 +6,14 @@
 
 いまつなぐのは BLE ペリフェラルと心拍のウォッチドッグ（#36）、
 心拍の来ない接続を切る判定（#126）、警告の調停（#35。`notify.py`）、
-走行ごとのしきい値の上書き（#124。`tuning.py`）。
-センサーと表示は、それぞれの Issue でここに1行ずつ足していく。
+走行ごとのしきい値の上書き（#124。`tuning.py`）、
+調停の結果を LCD と LED ×2 に出すところ（#151。`hw/lcd.py` / `hw/led.py`）。
+センサーは、それぞれの Issue でここに1行ずつ足していく。
 
-**調停の結果を出す先はまだ無い。**`arbitrate()` は値を返すだけで、
-それを光らせる・表示する `hw/` 側が未実装である（**部品は #13 で決まった**。
-ピンとアドレスは `config.py` の末尾）。
-いまは journalctl に出しており、**繋がっていることはそこでしか確かめられない。**
+**部品が載っているかどうかは `config.py` の値で決まる。** ピンやアドレスが `None` なら
+その部品は無いものとして動くので、**実機も部品も持たない開発者でもここまで起動できる**
+（`../../../../docs/adr/0002-development-lifecycle.md`）。
+出したものは journalctl にも残す——**走行中に読めるのはそこだけ**である。
 """
 
 import logging
@@ -20,6 +21,8 @@ import time
 
 from device import config, identity, notify
 from device.alert import Beat, LinkStatus, LinkWatch, Warn
+from device.hw.lcd import open_lcd
+from device.hw.led import open_light
 from device.idle import IdleDisconnect
 from device.notify import ActiveWarning, LightPattern
 from device.state import DeviceState
@@ -56,6 +59,8 @@ def main() -> None:
 
     # **ここで import する。** `hw/ble.py` は BlueZ を読むため、開発機では import した時点で落ちる。
     # ファイルの先頭に置くと、このモジュールを開発機から読むだけで失敗する。
+    # （`hw/lcd.py` と `hw/led.py` は先頭で import している——あちらは gpiozero と RPLCD を
+    # 関数の中で読むので、**import しただけではハードウェアに触らない。**）
     from device.hw import ble as ble_hw
 
     # bluezero が自分で足したハンドラを外す（外さないと journalctl に同じ行が2つ残る）。
@@ -91,6 +96,18 @@ def main() -> None:
     # 直前に出した表示。**変わったときだけログに出す**ため（毎周期出すと journalctl が埋まる）。
     shown: tuple[str, str, LightPattern, LightPattern] | None = None
 
+    # 出力先（#151）。**`config.py` の値が `None` なら、その部品は載っていないものとして動く。**
+    # ピンとアドレスは `config.py` の末尾、配線の正本は `../../../../docs/hardware.md`。
+    lcd = open_lcd(config.LCD_I2C_ADDRESS)
+    warn_light = open_light(config.WARN_LIGHT_GPIO)
+    link_light = open_light(config.LINK_LIGHT_GPIO)
+
+    # **警告の LED が生きていることを見せる唯一の機会。** `link_light` は `link` が `down` から
+    # 始まるので勝手に点滅するが、こちらは警告が来るまで消灯のままで、
+    # **切れていても走り出すまで分からない**
+    # （`../../../../docs/notifications/arbitration.md`「起動直後に、光っていることを確かめる」）。
+    warn_light.selftest()
+
     def emit(now_ms: int, status: LinkStatus) -> None:
         """いま出すものを決めて、出す。**決めるのは `notify.py`** で、ここは渡すだけ。"""
         nonlocal shown
@@ -106,7 +123,7 @@ def main() -> None:
             config=tuning.notify_config,
         )
 
-        # **出力先が無いので journalctl に出す**（`hw/` が入るまでの唯一の確認手段）。
+        # **走行中に読めるのは journalctl だけ**なので、出したものはここにも残す。
         # **4つとも状態**なので、変わったときだけ1行出せばよい。
         current = (output.line1, output.line2, output.warn_light, output.link_light)
         if current != shown:
@@ -118,6 +135,14 @@ def main() -> None:
                 output.warn_light,
                 output.link_light,
             )
+
+        # **部品に出す。決めるのは `notify.py` で、ここは渡すだけ**
+        # （`../../../../docs/adr/0006-decision-layer-on-mobile.md`）。
+        # **光を先に出す。** LCD は I2C なので線が緩めば例外で止まるが、
+        # **走行中に届くのは光だけ**であり、それを画面の道連れにしない。
+        warn_light.apply(output.warn_light)
+        link_light.apply(output.link_light)
+        lcd.show(output.line1, output.line2)
 
     def on_alert(message: Warn | Beat) -> None:
         # **`warn` を `watch` に渡さない。** 警告の到着を生存の根拠にすると、
@@ -186,8 +211,8 @@ def main() -> None:
             state.link = status.link
             # 次の定期送信を待たずに知らせる。**落ちたことは早い方がよい。**
             ble.push_status()
-            # **人に見せるのはまだ journalctl と `status` だけ。**
-            # ディスプレイ・LED への出力は `notify.py`（`hw/` が未実装）。
+            # **人に見せるのは上の `emit()` の側。** `link_light` と LCD の下段は
+            # 毎周期そこから出ているので、ここで出し直さない。
 
         # **`link` が変わらなくてもここまで来ること。** 切る判定は「変わらないまま
         # 続いていること」を見るものなので、上の early return の中に置くと**永久に発火しない。**
