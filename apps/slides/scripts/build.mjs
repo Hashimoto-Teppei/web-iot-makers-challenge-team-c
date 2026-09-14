@@ -3,8 +3,8 @@
 // デッキの一覧はこのディレクトリの *.md を数えて決めている。
 // package.json にデッキ名を書くと二重管理になり、増やしたときに必ず片方が古くなるため。
 import { execFileSync } from "node:child_process";
-import { createRequire } from "node:module";
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
