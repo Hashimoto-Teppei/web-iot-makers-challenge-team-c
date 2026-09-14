@@ -19,7 +19,7 @@ describe("WarnGate", () => {
     const gate = new WarnGate();
     gate.admit([warn()], 1_000);
 
-    // 毎周期発火し続けても書き直さない（書くとブザーが鳴りっぱなしになる）。
+    // 毎周期発火し続けても書き直さない（書くと BLE の書き込みだけが増え続ける）。
     expect(gate.admit([warn()], 2_000)).toEqual([]);
     expect(gate.admit([warn()], 2_999)).toEqual([]);
   });

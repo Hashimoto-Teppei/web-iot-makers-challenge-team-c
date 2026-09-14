@@ -21,7 +21,7 @@ Web×IoT メイカーズチャレンジ **チームC** の開発リポジトリ�
 | 一時停止の事前通知 | スマホ | この先の一時停止標識が近いことを知らせる |
 | 後方の物体 | **デバイス** | センサーで後方を見る。**通信に依存しない** |
 
-検知した危険は、その場でデバイスのディスプレイや LED・ブザーで伝える。
+検知した危険は、その場でデバイスの LED とディスプレイで伝える。
 **走行中にスマホを見る行為は取り締まりの対象**であるため、走行中の通知はデバイス側で完結させている。
 
 ```
@@ -112,7 +112,7 @@ pnpm install
 | [docs/deploy-mobile.md](./docs/deploy-mobile.md) | **iPhone への配布手順。** 証明書とアプリの登録から TestFlight で配るまで。**アプリを配るときだけ読む** |
 | [docs/hardware.md](./docs/hardware.md) | **配線の正本。** 接続中の部品・ピン割り当て・I2C アドレス・消費電流。配線を変えたら必ず更新する |
 | [docs/notifications.md](./docs/notifications.md) | 検知結果をどう人に伝えるかの境界。走行中と停止中で出せるものが違う理由と、その境目 |
-| [docs/notifications/arbitration.md](./docs/notifications/arbitration.md) | **警告の出し分け。**出力のチャンネル・優先順位・出し続ける時間・鳴らし直す条件・16×2 の割り付け |
+| [docs/notifications/arbitration.md](./docs/notifications/arbitration.md) | **警告の出し分け。**出力のチャンネル・優先順位・出し続ける時間・通信断の見せ方・16×2 の割り付け |
 | [docs/unverified.md](./docs/unverified.md) | 実機で確認していない前提。確認できたら行を消す |
 | [Issues](../../issues) | **これからやること。** 誰が・何を・どこまでやれば終わりか |
 

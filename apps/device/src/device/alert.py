@@ -178,10 +178,6 @@ class LinkStatus:
     """いまスマホとどうつながっているか。`LinkWatch.evaluate()` が返す。"""
 
     link: Link
-    # いまの `link` になった時刻（`evaluate()` に渡した時刻の目盛り）。
-    # **通信断のチャイムを1回だけ鳴らすための鍵に使う**
-    # （`../../../../docs/notifications/arbitration.md`「鳴らしたことを鍵の集合で持つ」）。
-    since_ms: int
     # 走行中か。**`link` が `up` でない間は必ず True**（下の `_moving`）。
     moving: bool
 
@@ -210,15 +206,13 @@ class LinkWatch:
     スマホの壁時計なので、**経過時間の計測にどちらも使えない。**
     """
 
-    def __init__(self, *, timeout_ms: int, stall_window_ms: int, started_at_ms: int) -> None:
+    def __init__(self, *, timeout_ms: int, stall_window_ms: int) -> None:
         """
         Args:
             timeout_ms: 最後の `beat` からこれを超えて空いたら `down`。
                 **`beat` は毎秒1通**なので、何通ぶん落ちるまで待つかを決める値になる
             stall_window_ms: `t` が進んでいるかを見る窓の長さ。
                 **この窓いっぱい同じ `t` が続いたときだけ**「固まっている」と見なす
-            started_at_ms: 起動した時刻。**まだ一度も `beat` が来ていない `down` がいつからか**を
-                答えられるようにするために要る（`since_ms` の初期値）
         """
         self._timeout_ms = timeout_ms
         self._stall_window_ms = stall_window_ms
@@ -226,9 +220,6 @@ class LinkWatch:
         self._last_beat_at_ms: int | None = None
         # 窓の中の `(受け取った時刻, beat の t)`。**`t` が進んでいるかを見るためだけ**に持つ。
         self._recent: deque[tuple[int, int]] = deque()
-        # **`up` から始めない**（`v2v.md`）。一度も `beat` を受け取っていない状態を健全に見せない。
-        self._link: Link = "down"
-        self._since_ms = started_at_ms
 
     def set_timeouts(self, *, timeout_ms: int, stall_window_ms: int) -> None:
         """タイムアウトと窓を差し替える（`config` の `beat_to`。`../tuning.py`）。
@@ -273,10 +264,7 @@ class LinkWatch:
         """
         self._prune(now_ms)
         link = self._link_at(now_ms)
-        if link != self._link:
-            self._link = link
-            self._since_ms = now_ms
-        return LinkStatus(link=link, since_ms=self._since_ms, moving=self._moving(link))
+        return LinkStatus(link=link, moving=self._moving(link))
 
     def _link_at(self, now_ms: int) -> Link:
         """いまの `link`。**直近の `beat` から毎回引き直す**（旗を立てない）。"""

@@ -10,7 +10,7 @@
 センサーと表示は、それぞれの Issue でここに1行ずつ足していく。
 
 **調停の結果を出す先はまだ無い。**`arbitrate()` は値を返すだけで、
-それを鳴らす・光らせる `hw/` 側が未実装である（**部品は #13 で決まった**。
+それを光らせる・表示する `hw/` 側が未実装である（**部品は #13 で決まった**。
 ピンとアドレスは `config.py` の末尾）。
 いまは journalctl に出しており、**繋がっていることはそこでしか確かめられない。**
 """
@@ -78,7 +78,6 @@ def main() -> None:
         # ——`tuning` が既定と上書きのどちらかを返す（起動時は既定）。
         timeout_ms=tuning.beat_timeout_ms,
         stall_window_ms=tuning.stall_window_ms,
-        started_at_ms=_now_ms(),
     )
 
     # 心拍の来ない接続をこちらから切る（#126）。**判定は `idle.py` の中。**
@@ -86,39 +85,39 @@ def main() -> None:
     # 戻す方法がない（`../../../../docs/interfaces/ble-gatt.md`「前提」）。
     idle = IdleDisconnect(idle_ms=config.IDLE_DISCONNECT_S * 1000)
 
-    # 発火中の警告と、鳴らし終えた鍵の集合（`../../../../docs/notifications/arbitration.md`）。
-    # **どちらも `notify.py` が育てる値**で、ここは持ち回るだけ。**判定をここに書かない。**
+    # 発火中の警告（`../../../../docs/notifications/arbitration.md`）。
+    # **`notify.py` が育てる値**で、ここは持ち回るだけ。**判定をここに書かない。**
     warnings: list[ActiveWarning] = []
-    chimed: frozenset[str] = frozenset()
     # 直前に出した表示。**変わったときだけログに出す**ため（毎周期出すと journalctl が埋まる）。
-    shown: tuple[str, str, LightPattern] | None = None
+    shown: tuple[str, str, LightPattern, LightPattern] | None = None
 
     def emit(now_ms: int, status: LinkStatus) -> None:
         """いま出すものを決めて、出す。**決めるのは `notify.py`** で、ここは渡すだけ。"""
-        nonlocal chimed, shown
+        nonlocal shown
         output = notify.arbitrate(
             warnings,
             link=status.link,
-            link_since_ms=status.since_ms,
             moving=status.moving,
             # 停止中に出す情報はまだ無い（走行の要約は #40 以降）。
             info=None,
             now_ms=now_ms,
-            chimed=chimed,
             # **上書きの当たったものを渡す**（`tuning.py`）。`config.NOTIFY_CONFIG` を
             # 直に渡すと、`hold1`〜`hold3` を書いても保持時間が変わらない。
             config=tuning.notify_config,
         )
-        # **返ってきた集合をそのまま次に渡す。** 中身を足したり引いたりしない。
-        chimed = output.chimed
 
         # **出力先が無いので journalctl に出す**（`hw/` が入るまでの唯一の確認手段）。
-        # `tone` は1周期に1つしか返らないイベントなので、出るたびに1行でよい。
-        if output.tone is not None:
-            logger.info("鳴らす: %s", output.tone)
-        if (output.line1, output.line2, output.light) != shown:
-            shown = (output.line1, output.line2, output.light)
-            logger.info("表示: %r / %r / %s", output.line1, output.line2, output.light)
+        # **4つとも状態**なので、変わったときだけ1行出せばよい。
+        current = (output.line1, output.line2, output.warn_light, output.link_light)
+        if current != shown:
+            shown = current
+            logger.info(
+                "表示: %r / %r / 警告=%s / link=%s",
+                output.line1,
+                output.line2,
+                output.warn_light,
+                output.link_light,
+            )
 
     def on_alert(message: Warn | Beat) -> None:
         # **`warn` を `watch` に渡さない。** 警告の到着を生存の根拠にすると、
@@ -129,7 +128,7 @@ def main() -> None:
             watch.record_beat(message, now_ms)
         else:
             warnings = notify.merge_warning(warnings, message, now_ms, tuning.notify_config)
-            # **周期を待たずにここで出す。** 待つと、届いてから鳴るまで最大1周期ぶん遅れる
+            # **周期を待たずにここで出す。** 待つと、届いてから光るまで最大1周期ぶん遅れる
             # ——`lv 3` は「いま避ける」ための警告なので、その1秒が意味を持つ。
             # `arbitrate()` が毎回1件を選び直すので、**先に出したせいで順位が狂うことはない。**
             emit(now_ms, watch.evaluate(now_ms))
@@ -175,7 +174,7 @@ def main() -> None:
         now_ms = _now_ms()
         status = watch.evaluate(now_ms)
 
-        # **`push_status()` より先に出す。** 保持時間が切れたことも通信断のチャイムも
+        # **`push_status()` より先に出す。** 保持時間が切れたことも `link` が落ちたことも
         # `warn` の到着では起きないので、ここを通らない周期を作らない
         # ——後ろに置くと、`push_status()` が D-Bus で失敗した周期の警告ごと落ちる。
         emit(now_ms, status)
@@ -188,8 +187,7 @@ def main() -> None:
             # 次の定期送信を待たずに知らせる。**落ちたことは早い方がよい。**
             ble.push_status()
             # **人に見せるのはまだ journalctl と `status` だけ。**
-            # ディスプレイ・ブザー・LED への出力は `notify.py`（`hw/` が未実装）。
-            # `status.moving` と `status.since_ms` はそこで使う。
+            # ディスプレイ・LED への出力は `notify.py`（`hw/` が未実装）。
 
         # **`link` が変わらなくてもここまで来ること。** 切る判定は「変わらないまま
         # 続いていること」を見るものなので、上の early return の中に置くと**永久に発火しない。**

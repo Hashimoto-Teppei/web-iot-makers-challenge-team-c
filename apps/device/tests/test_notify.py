@@ -14,7 +14,6 @@ from device.notify import (
     LightPattern,
     NotifyConfig,
     Output,
-    Tone,
     arbitrate,
     merge_warning,
 )
@@ -25,15 +24,15 @@ SECOND = 1000
 # 値の調整が怖くなる（`test_link.py` と同じ理由）。守っているのは規則であって値ではない。
 CONFIG = NotifyConfig(
     hold_ms={1: 3 * SECOND, 2: 4 * SECOND, 3: 6 * SECOND},
-    tones={
-        1: Tone(beeps=1, on_ms=100, gap_ms=0),
-        2: Tone(beeps=2, on_ms=100, gap_ms=100),
-        3: Tone(beeps=2, on_ms=600, gap_ms=200),
-    },
-    lights={
+    warn_lights={
         1: LightPattern(lit=True, blink_hz=0.5),
         2: LightPattern(lit=True, blink_hz=2.0),
         3: LightPattern(lit=True, blink_hz=None),
+    },
+    link_lights={
+        "up": LightPattern(lit=True, blink_hz=None),
+        "nofix": LightPattern(lit=True, blink_hz=0.5),
+        "down": LightPattern(lit=True, blink_hz=2.0),
     },
     symbols={
         "rear_object": "REAR",
@@ -43,44 +42,31 @@ CONFIG = NotifyConfig(
         "stop": "STOP",
     },
     priority=("rear_object", "approach", "brake", "corner", "stop"),
-    link_down_tone=Tone(beeps=1, on_ms=100, gap_ms=0),
 )
 
 
-def warn(
-    kind: str,
-    lv: int,
-    expires_at_ms: int = 10 * SECOND,
-    peak_lv: int | None = None,
-    peak_at_ms: int = 0,
-) -> ActiveWarning:
-    """発火中の警告を1件作る。`peak_lv` を省いたら `lv` がそのまま最大値。"""
+def warn(kind: str, lv: int, expires_at_ms: int = 10 * SECOND) -> ActiveWarning:
+    """発火中の警告を1件作る。"""
     return ActiveWarning(
         kind=kind,
         lv=lv,  # pyright: ignore[reportArgumentType]
         expires_at_ms=expires_at_ms,
-        peak_lv=peak_lv if peak_lv is not None else lv,  # pyright: ignore[reportArgumentType]
-        peak_at_ms=peak_at_ms,
     )
 
 
 def run(
     warnings: list[ActiveWarning],
     link: str = "up",
-    link_since_ms: int = 0,
     moving: bool = True,
     info: str | None = None,
     now_ms: int = 0,
-    chimed: frozenset[str] = frozenset(),
 ) -> Output:
     return arbitrate(
         warnings=warnings,
         link=link,  # pyright: ignore[reportArgumentType]
-        link_since_ms=link_since_ms,
         moving=moving,
         info=info,
         now_ms=now_ms,
-        chimed=chimed,
         config=CONFIG,
     )
 
@@ -93,7 +79,7 @@ def test_保持時間の切れた警告は落ちる() -> None:
     out = run([warn("approach", 2, expires_at_ms=4 * SECOND)], now_ms=4 * SECOND)
 
     assert out.line1.strip() == ""
-    assert out.light == LIGHT_OFF
+    assert out.warn_light == LIGHT_OFF
 
 
 def test_保持時間が残っていれば出る() -> None:
@@ -134,166 +120,60 @@ def test_知らない_kind_でも黙らない() -> None:
     assert out.line1 == "!!  WOBB        "
 
 
-# --- 音（鳴らし直す条件） ---
-
-
-def test_新しく上位になった警告は鳴る() -> None:
-    out = run([warn("approach", 2)])
-
-    assert out.tone == CONFIG.tones[2]
-    assert out.chimed == frozenset({"approach:2:0"})
-
-
-def test_同じ_lv_のまま延長されても鳴らない() -> None:
-    """**数秒おきに鳴り続けると、人は音を無視するようになる。**"""
-    first = run([warn("approach", 2, expires_at_ms=4 * SECOND)])
-    later = run(
-        [warn("approach", 2, expires_at_ms=6 * SECOND)],
-        now_ms=2 * SECOND,
-        chimed=first.chimed,
-    )
-
-    assert later.tone is None
-    assert later.line1 == "!!  APPR        "
-
-
-def test_lv_が上がったら鳴る() -> None:
-    first = run([warn("approach", 2)])
-    raised = run(
-        [warn("approach", 3, peak_lv=3, peak_at_ms=2 * SECOND)],
-        now_ms=2 * SECOND,
-        chimed=first.chimed,
-    )
-
-    assert raised.tone == CONFIG.tones[3]
-
-
-def test_lv_が下がっても鳴らない() -> None:
-    """**下がったことを急いで伝える理由が無い。**`peak_lv` を鍵にしているので鍵が動かない。"""
-    first = run([warn("approach", 3)])
-    lowered = run(
-        [warn("approach", 1, peak_lv=3, peak_at_ms=0)],
-        now_ms=2 * SECOND,
-        chimed=first.chimed,
-    )
-
-    assert lowered.tone is None
-    assert lowered.line1 == "!   APPR        "
-
-
-def test_上位が消えて_すでに鳴った下位が戻っても鳴らない() -> None:
-    """**同じ警告を2度鳴らすことになる。**隠れている間も鍵を集合に残すことで防ぐ。"""
-    low = warn("stop", 1, expires_at_ms=9 * SECOND)
-    high = warn("approach", 3, expires_at_ms=4 * SECOND)
-
-    # 下位だけが出ている周期で鳴る。
-    first = run([low])
-    assert first.tone == CONFIG.tones[1]
-
-    # 上位が割り込んで鳴る。
-    second = run([low, high], now_ms=SECOND, chimed=first.chimed)
-    assert second.tone == CONFIG.tones[3]
-
-    # 上位が切れて下位が戻る。**ここで鳴ってはいけない。**
-    third = run([low, high], now_ms=5 * SECOND, chimed=second.chimed)
-    assert third.tone is None
-    assert third.line1 == "!   STOP        "
-
-
-def test_隠れている間に届いた警告は_表に出た周期で鳴る() -> None:
-    """**まだ発火中＝危険は続いている。**ここで黙ると一度も伝わらない。"""
-    high = warn("approach", 3, expires_at_ms=3 * SECOND)
-    low = warn("stop", 1, expires_at_ms=9 * SECOND, peak_at_ms=SECOND)
-
-    first = run([high])
-    # 隠れている間は鳴らない（鳴る候補になるのは選ばれた1件だけ）。
-    hidden = run([high, low], now_ms=SECOND, chimed=first.chimed)
-    assert hidden.tone is None
-    assert "stop:1:1000" not in hidden.chimed
-
-    surfaced = run([high, low], now_ms=4 * SECOND, chimed=hidden.chimed)
-    assert surfaced.tone == CONFIG.tones[1]
-
-
-def test_鳴らした鍵は生きているものだけに絞られる() -> None:
-    """**足すだけの作りにすると走行中ずっと増え続ける。**"""
-    expired = run([warn("approach", 2, expires_at_ms=SECOND)])
-    assert expired.chimed == frozenset({"approach:2:0"})
-
-    after = run(
-        [warn("approach", 2, expires_at_ms=SECOND)], now_ms=2 * SECOND, chimed=expired.chimed
-    )
-    assert after.chimed == frozenset()
-
-
 # --- 光 ---
 
 
-def test_light_は状態として毎周期そのまま出る() -> None:
+def test_警告の光は状態として毎周期そのまま出る() -> None:
     """**イベントにすると、再送されている `lv 3` で最初の数秒だけ光って以後は消える。**"""
     first = run([warn("approach", 3)])
-    later = run([warn("approach", 3)], now_ms=5 * SECOND, chimed=first.chimed)
+    later = run([warn("approach", 3)], now_ms=5 * SECOND)
 
-    assert first.light == CONFIG.lights[3]
-    assert later.tone is None
-    assert later.light == CONFIG.lights[3]
+    assert first.warn_light == CONFIG.warn_lights[3]
+    assert later.warn_light == CONFIG.warn_lights[3]
 
 
 def test_警告が無ければ消灯() -> None:
-    assert run([]).light == LIGHT_OFF
+    assert run([]).warn_light == LIGHT_OFF
 
 
 # --- 通信断 ---
 
 
-def test_down_に落ちた瞬間だけ鳴る() -> None:
-    first = run([], link="down", link_since_ms=SECOND, now_ms=SECOND)
-    assert first.tone == CONFIG.link_down_tone
+def test_link_の光は_up_でも消灯にしない() -> None:
+    """**消灯は「壊れて光っていない」と区別できない**（LCD 下段で `OK` を出すのと同じ理由）。
 
-    later = run([], link="down", link_since_ms=SECOND, now_ms=3 * SECOND, chimed=first.chimed)
-    assert later.tone is None
-
-
-def test_up_に戻ってまた落ちたら鳴り直す() -> None:
-    """`link_since_ms` が変わるので鍵も変わる。**復帰したときは鳴らさない。**"""
-    fell = run([], link="down", link_since_ms=SECOND, now_ms=SECOND)
-
-    recovered = run([], link="up", now_ms=3 * SECOND, chimed=fell.chimed)
-    assert recovered.tone is None
-    assert recovered.chimed == frozenset()
-
-    again = run(
-        [], link="down", link_since_ms=5 * SECOND, now_ms=5 * SECOND, chimed=recovered.chimed
-    )
-    assert again.tone == CONFIG.link_down_tone
+    ここが消灯だと、**LED が切れていることに誰も気づけない。**
+    """
+    assert run([]).link_light == CONFIG.link_lights["up"]
+    assert run([]).link_light != LIGHT_OFF
 
 
-def test_nofix_では鳴らない() -> None:
-    """**屋内では `nofix` が出続けるのが正常。**鳴らすとデモの間ずっと鳴る。"""
-    out = run([], link="nofix", link_since_ms=SECOND, now_ms=SECOND)
+def test_link_の光は3状態を出し分ける() -> None:
+    """LCD 下段の `OK` / `NOFIX` / `DOWN` をそのまま写す。"""
+    nofix = run([], link="nofix")
+    assert nofix.link_light == CONFIG.link_lights["nofix"]
+    assert nofix.line2 == "NOFIX >         "
 
-    assert out.tone is None
-    assert out.line2 == "NOFIX >         "
+    down = run([], link="down")
+    assert down.link_light == CONFIG.link_lights["down"]
+    assert down.line2 == "DOWN  >         "
 
 
-def test_通信断が先で_警告のチャイムは次の周期に回る() -> None:
-    """**後方物体の警告が出ている最中にスマホが落ちるのは、まさに起こりうる形。**"""
-    warning = warn("rear_object", 3, expires_at_ms=9 * SECOND)
+def test_link_の光は警告に譲らない() -> None:
+    """**警告とは別の LED なので場所を取り合わない。**
 
-    both = run([warning], link="down", link_since_ms=SECOND, now_ms=SECOND)
-    assert both.tone == CONFIG.link_down_tone
-    # **回した警告は鳴らしていないので集合に入らない。**
-    assert "rear_object:3:0" not in both.chimed
+    取り合わせると、消えるのはたいてい常時表示の方であり、
+    **それが一番消してはいけないもの**（`v2v.md`「心拍を必ず見せる」）。
+    """
+    out = run([warn("rear_object", 3)], link="down")
 
-    following = run(
-        [warning], link="down", link_since_ms=SECOND, now_ms=2 * SECOND, chimed=both.chimed
-    )
-    assert following.tone == CONFIG.tones[3]
+    assert out.link_light == CONFIG.link_lights["down"]
+    assert out.warn_light == CONFIG.warn_lights[3]
 
 
 def test_通信断でも警告の表示は止まらない() -> None:
     """**デバイスの後方物体検知は `link` に関係なく動き続ける。**上段も奪わない。"""
-    out = run([warn("rear_object", 2)], link="down", link_since_ms=0)
+    out = run([warn("rear_object", 2)], link="down")
 
     assert out.line1 == "!!  REAR        "
     assert out.line2 == "DOWN  >         "
@@ -396,67 +276,3 @@ def test_保持の切れた警告は取り込みのときに落ちる() -> None:
     active = merge(merge([], "brake", 1, now_ms=0), "approach", 1, now_ms=10 * SECOND)
 
     assert [w.kind for w in active] == ["approach"]
-
-
-# --- 取り込みと調停をつないだときの「鳴らし直し」 ---
-#
-# **`merge_warning()` と `arbitrate()` の間で鍵が食い違うと、鳴りすぎるか鳴らなくなる。**
-# どちらも `main.py` が持ち回るだけなので、ずれはここでしか見つからない。
-
-
-def test_同じ_lv_の再送では鳴らない() -> None:
-    """スマホは危険が続く間 2 秒ごとに送り直す（`arbitration.md`「鳴らし直す条件」）。"""
-    active = merge([], "approach", 2, now_ms=0)
-    chimed = run(active, now_ms=0).chimed
-    assert chimed  # 1通目では鳴っている
-
-    active = merge(active, "approach", 2, now_ms=2 * SECOND)
-    assert run(active, now_ms=2 * SECOND, chimed=chimed).tone is None
-
-
-def test_lv_が上がったら鳴らし直す() -> None:
-    active = merge([], "approach", 1, now_ms=0)
-    chimed = run(active, now_ms=0).chimed
-
-    active = merge(active, "approach", 3, now_ms=2 * SECOND)
-    out = run(active, now_ms=2 * SECOND, chimed=chimed)
-
-    assert out.tone == CONFIG.tones[3]
-
-
-def test_lv_が下がっても鳴らさない() -> None:
-    """**下がったことを急いで伝える理由が無い**（`arbitration.md`）。"""
-    active = merge([], "approach", 3, now_ms=0)
-    chimed = run(active, now_ms=0).chimed
-
-    active = merge(active, "approach", 1, now_ms=2 * SECOND)
-    assert run(active, now_ms=2 * SECOND, chimed=chimed).tone is None
-
-
-def test_一度消えてから来た同じ警告は鳴らし直す() -> None:
-    """**別の危険なので鳴らす。**取り込みで落としていないと、古い鍵のまま黙る。"""
-    active = merge([], "approach", 2, now_ms=0)
-    chimed = run(active, now_ms=0).chimed
-
-    later = 20 * SECOND
-    active = merge(active, "approach", 2, now_ms=later)
-    out = run(active, now_ms=later, chimed=chimed)
-
-    assert out.tone == CONFIG.tones[2]
-
-
-def test_一度達した_lv_に戻っても鳴らさない() -> None:
-    """`3 → 1 → 3`（`arbitration.md`「鳴らし直す条件」）。
-
-    **同じ危険の中の揺れ**なので鳴らさない。鳴らすと、揺れている間ずっと鳴り続ける。
-    危険が本当に去れば保持が切れて消え、次に来たものは別の警告として鳴る
-    （`test_一度消えてから来た同じ警告は鳴らし直す`）。
-    """
-    active = merge([], "approach", 3, now_ms=0)
-    chimed = run(active, now_ms=0).chimed
-
-    active = merge(active, "approach", 1, now_ms=2 * SECOND)
-    chimed = run(active, now_ms=2 * SECOND, chimed=chimed).chimed
-
-    active = merge(active, "approach", 3, now_ms=4 * SECOND)
-    assert run(active, now_ms=4 * SECOND, chimed=chimed).tone is None
