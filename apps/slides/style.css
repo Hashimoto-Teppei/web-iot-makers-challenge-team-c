@@ -1,0 +1,13 @@
+/* 色とフォントだけをここで決める。レイアウトには手を入れない。
+   独自レイアウトを作り込むほど、テーマ（headmatter の theme:）を差し替えられなくなるため。 */
+
+:root {
+  --slidev-theme-primary: #0d9488;
+}
+
+/* Google Fonts を読まない。発表当日にネットが無くても同じ見た目で出す必要があり、
+   Windows と macOS のどちらにも最初から入っている日本語フォントだけを並べる。 */
+html {
+  font-family:
+    -apple-system, "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", "Noto Sans JP", Meiryo, sans-serif;
+}

@@ -79,6 +79,7 @@ apps/device/   Python + uv。後方物体検知・表示・BLE ペリフェラ�
 apps/web/      React + Hono。画面と API を1つの Worker で担う
                src/client/（React） src/worker/（Hono + D1 + DO） src/shared/（共有する型）
 apps/mobile/   Expo。測位・車車間の3検知・一時停止の事前通知・中継。iOS 主 / Android 従
+apps/slides/   Slidev。メンバー向け（onboarding）と発表用（pitch）のスライド
 docs/          設計と手順。一覧は README.md
 ```
 

@@ -1,0 +1,19 @@
+{
+  "name": "slides",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "slidev onboarding.md",
+    "dev:pitch": "slidev pitch.md",
+    "build": "slidev build onboarding.md pitch.md --out dist --router-mode hash && node scripts/build-index.mjs",
+    "deploy:cf": "pnpm build && wrangler deploy"
+  },
+  "dependencies": {
+    "@slidev/cli": "^52.19.1",
+    "@slidev/theme-default": "^0.25.0",
+    "vue": "^3.5.42"
+  },
+  "devDependencies": {
+    "wrangler": "^4.125.0"
+  }
+}
