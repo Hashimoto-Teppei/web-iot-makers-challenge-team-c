@@ -148,7 +148,7 @@ Web×IoT メイカーズチャレンジ チームC
   <div v-for="(s, i) in [
     { layer: 'mobile', icon: 'i-tabler-current-location', title: '測る', what: '自分がいまどこにいるか' },
     { layer: 'cloud', icon: 'i-tabler-arrows-exchange', title: '配る', what: '同じあたりの自転車と交換する' },
-    { layer: 'mobile', icon: 'i-tabler-brain', title: '決める', what: '5つの検知にかけて、危ないかを判定' },
+    { layer: 'mobile', icon: 'i-tabler-brain', title: '決める', what: 'スマホの4つの検知にかけて判定' },
     { layer: 'mobile', icon: 'i-tabler-bluetooth', title: '伝える', what: '「どう光るか」だけを装置へ送る' },
     { layer: 'device', icon: 'i-tabler-bulb', title: '出す', what: 'LED とディスプレイに出る' },
   ]" :key="s.title" class="contents">
@@ -167,8 +167,59 @@ Web×IoT メイカーズチャレンジ チームC
 <div class="mt-10 text-sm opacity-70">
 <strong>装置に届くのは「どう光るか」だけで、位置は流れてこない。</strong>
 だから装置は、まわりに誰がいるかを知らない。<br/>
-この1秒が毎秒くり返される。<strong>ここが止まっていないかを、次のスライドで確かめる。</strong>
+この1秒が毎秒くり返される。<strong>後方の物体だけはこの流れに乗らず、装置の中だけで完結する。</strong>
 </div>
+
+---
+
+# 走行中、何が光って何が出るのか
+
+<div class="mt-6 grid grid-cols-[auto_1fr] items-start gap-8">
+  <div class="text-center">
+    <!-- LED の色はまだ決まっていない（docs/hardware.md）。決めていない色をここに描かない -->
+    <div class="flex items-center justify-center gap-6">
+      <div v-for="l in [
+        { name: '警告の LED', state: 'どれくらい危ないか' },
+        { name: 'link の LED', state: '仕組みが生きているか' },
+      ]" :key="l.name">
+        <div class="mx-auto h-5 w-5 rounded-full border-2 border-gray-400/60 bg-gray-300/40" />
+        <div class="mt-1.5 text-[0.65rem] font-bold">{{ l.name }}</div>
+        <div class="text-[0.6rem] opacity-50">{{ l.state }}</div>
+      </div>
+    </div>
+    <div class="mt-1.5 text-[0.6rem] opacity-50">色はまだ決めていない。<br/>決まっているのは<strong>「2つを違う色にする」</strong>ことだけ</div>
+    <div class="mt-4"><LcdScreen line1="!!! REAR" line2="OK    >" /></div>
+    <div class="mt-2 text-[0.6rem] opacity-50">「後ろから何か来ている・かなり危ない」<br/>「仕組みは生きている・走行中」</div>
+  </div>
+
+  <div class="space-y-2">
+    <div v-for="o in [
+      { name: '警告の LED', what: 'どれくらい危ないか、3段階だけ', how: 'ゆっくり点滅 → 速い点滅 → 点灯' },
+      { name: 'link の LED', what: '仕組みが生きているか', how: '正常なら点灯。おかしくなると点滅に変わる' },
+      { name: '画面の上段', what: 'いま何が起きているか。1件だけ', how: '危険の強さと、5種類の記号' },
+      { name: '画面の下段', what: '仕組みが生きているか', how: '警告に場所を譲らない。常に同じ桁' },
+    ]" :key="o.name" class="flex items-baseline gap-3 rounded-lg border border-gray-400/20 px-3 py-2">
+      <div class="w-24 shrink-0 text-xs font-bold">{{ o.name }}</div>
+      <div class="min-w-0 flex-1">
+        <div class="text-xs">{{ o.what }}</div>
+        <div class="text-[0.65rem] opacity-50">{{ o.how }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mt-6 text-sm opacity-70">
+<strong>光は「どれくらい危ないか」だけを伝え、「何の危険か」は伝えない。</strong>
+5種類の点滅を走りながら見分けることはできず、増やすとどれも「何か光った」になる。<br/>
+<strong>種類を知りたければ、止まって画面を見る。</strong><br/>
+2つの LED を違う色にするのは、<strong>走行中の視界の端では「どちらが光ったか」が色でしか分からない</strong>ため。
+</div>
+
+<!--
+ここは「何が出るか」より「なぜこれだけなのか」を話す。
+・光で種類を分けない → lv 3 に対して人がすることは種類によらず同じ（落とす・止まる）
+・LED が2個で色が違う → 同じ色だと、走行中の視界の端でどちらが光ったのか分からない
+-->
 
 ---
 
@@ -465,6 +516,60 @@ register("my", detectMy, myDefaults),
 
 <div class="mt-4 text-sm opacity-70">
 仕様の正本は <code>docs/interfaces/detectors.md</code>。<strong>実装先は <code>apps/mobile</code></strong> であって装置側ではない。
+</div>
+
+---
+
+# 画面と光の決まりごと
+
+<div class="mt-5 grid grid-cols-[auto_1fr] items-start gap-8">
+  <div>
+    <LcdScreen line1="!!! REAR" line2="OK    >" ruler />
+    <div class="mt-3 space-y-1 text-[0.65rem] leading-relaxed opacity-70">
+      <div><strong>上段</strong> 0〜2 危険の強さ（<code>!</code> の本数）／ 4〜7 種類の記号</div>
+      <div><strong>下段</strong> 0〜4 <code>link</code> ／ 6 走行中か（<code>&gt;</code> / <code>-</code>）</div>
+      <div><strong>停止中だけ</strong>、上段の全桁と下段の 8〜15 を情報に開放する</div>
+    </div>
+  </div>
+
+  <div class="space-y-4">
+    <div>
+      <div class="text-sm font-bold">種類は4文字の記号に揃える</div>
+      <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+        <div v-for="k in [
+          ['REAR', '後方の物体'], ['APPR', '急接近'], ['BRK', '前方の急ブレーキ'],
+          ['CRNR', '曲がり角の対向車'], ['STOP', '一時停止が近い'],
+        ]" :key="k[0]" class="flex items-baseline gap-1.5">
+          <code>{{ k[0] }}</code><span class="opacity-50">{{ k[1] }}</span>
+        </div>
+      </div>
+      <div class="mt-1.5 text-[0.65rem] leading-relaxed opacity-55">
+        <strong>この画面に漢字は出せない。</strong>内蔵フォントに無く、
+        「止まれ」と出す方法を探すと時間が溶ける
+      </div>
+    </div>
+    <div>
+      <div class="text-sm font-bold">光は状態であって、イベントではない</div>
+      <div class="mt-1.5 text-[0.65rem] leading-relaxed opacity-70">
+        <strong>選ばれている警告の強さを、毎周期そのまま出す。</strong>
+        一度光らせて終わりにすると、危険が続いている最中に消える
+      </div>
+    </div>
+    <div>
+      <div class="text-sm font-bold">正常なときも消さない</div>
+      <div class="mt-1.5 text-[0.65rem] leading-relaxed opacity-70">
+        <strong>消灯は「壊れて光っていない」と区別がつかない。</strong>
+        だから <code>link</code> が正常でも LED は点灯させ、下段にも <code>OK</code> を出し続ける。
+        警告の LED は光る機会が無いので、<strong>起動時に1秒だけ点灯</strong>して生存を見せる
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mt-5 text-sm opacity-70">
+正本は <code>docs/notifications/arbitration.md</code>。
+<strong>点滅の速さ・出し続ける秒数はすべて仮の値</strong>で、設定として外に出してある——
+<strong>この資料に数字を写さない。</strong>実地で変わる。
 </div>
 
 ---

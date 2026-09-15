@@ -29,7 +29,9 @@ const rows = [
     <!-- 1段目: 毎秒の心拍。途切れたあとは薄い点だけ -->
     <div class="text-right text-xs opacity-60">毎秒の心拍</div>
     <!-- 帯と同じ 45% / 残り で割る。ここだけ幅が違うと、心拍が途切れる位置と帯の境目がずれる -->
-    <div class="flex gap-3 border-b border-current/15 pb-1">
+    <!-- border-current/15 と書かないこと。UnoCSS は currentColor に不透明度を掛けられず、
+         ビルド後は border-color:currentColor だけが残って濃い線になる -->
+    <div class="flex gap-3 border-b border-black/15 pb-1">
       <div class="flex items-end justify-between" :style="`flex: 0 0 ${BEFORE}`">
         <div
           v-for="i in 12"
@@ -75,7 +77,7 @@ const rows = [
         :style="`left: calc(${BEFORE} + 0.375rem); height: 7.5rem`"
       />
       <div class="text-xs text-red-600" :style="`margin-left: calc(${BEFORE} + 1rem)`">
-        ここでスマホが落ちた / 圏外に入った
+        ここでスマホが落ちた / つながりが切れた
       </div>
     </div>
   </div>
