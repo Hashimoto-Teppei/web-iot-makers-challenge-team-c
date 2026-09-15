@@ -1,5 +1,6 @@
 ---
 theme: default
+colorSchema: light
 title: 自転車の危険をリアルタイムに知らせるデバイス
 info: ハッカソン発表用。持ち時間 7 分（仮）
 layout: cover
@@ -77,29 +78,25 @@ BLE でデバイスへ渡すのは<strong>表示指示と心拍だけ</strong>�
 
 # 検知するもの
 
-<div class="mt-8 grid grid-cols-2 gap-6">
-  <div class="rounded-xl border border-gray-400/30 p-5">
-    <div class="text-sm font-bold" style="color: var(--slidev-theme-primary)">
-      まわりの自転車が見えるから分かる（4つ）
-    </div>
-    <div class="mt-4 grid grid-cols-2 gap-2 text-center text-xs">
-      <div v-for="d in ['急接近', '前方の急ブレーキ', '曲がり角の対向車', '一時停止が近い']" :key="d"
-           class="rounded-lg bg-gray-100 px-2 py-3 dark:bg-gray-800">{{ d }}</div>
-    </div>
-    <div class="mt-4 text-xs opacity-60">通信が切れると止まる</div>
-  </div>
-  <div class="rounded-xl border border-gray-400/30 p-5">
-    <div class="text-sm font-bold">デバイスだけで分かる（1つ）</div>
-    <div class="mt-4 text-center text-xs">
-      <div class="rounded-lg bg-gray-100 px-2 py-3 dark:bg-gray-800">後方の物体</div>
-    </div>
-    <div class="mt-4 text-xs opacity-60">
-      <strong>通信に依存しない。</strong>これを土台として別に持っている
+<div class="mt-8 grid grid-cols-3 gap-5">
+  <div v-for="g in [
+    { head: 'まわりが見えるから分かる', need: '通信が要る',
+      items: ['急接近', '前方の急ブレーキ', '曲がり角の対向車'] },
+    { head: '自分の位置だけで分かる', need: '通信は要らない',
+      items: ['一時停止が近い'] },
+    { head: 'デバイスだけで分かる', need: 'スマホも要らない',
+      items: ['後方の物体'] },
+  ]" :key="g.head" class="rounded-xl border border-gray-400/30 p-5">
+    <div class="text-sm font-bold leading-tight">{{ g.head }}</div>
+    <div class="mt-1 text-xs font-bold" style="color: var(--slidev-theme-primary)">{{ g.need }}</div>
+    <div class="mt-4 space-y-2 text-center text-xs">
+      <div v-for="d in g.items" :key="d" class="rounded-lg bg-gray-100 px-2 py-3">{{ d }}</div>
     </div>
   </div>
 </div>
 
 <div class="mt-8 text-sm opacity-70">
+<strong>右へ行くほど、頼っているものが減る。</strong>
 通信が前提の機能だけで組むと、<strong>圏外に入った瞬間にただの飾りになる。</strong>
 </div>
 
@@ -114,8 +111,9 @@ BLE でデバイスへ渡すのは<strong>表示指示と心拍だけ</strong>�
       判断をスマホに寄せた
     </div>
     <div class="mt-2 text-sm opacity-75">
-      デバイスに GPS を載せず、測位はスマホがやる。<strong>BLE に位置を流すと、接続間隔ごとに1通という
-      天井を超えた瞬間に測位ごと止まる。</strong>デバイスは警告を出すことに徹する
+      デバイスに GPS を載せず、測位はスマホがやる。<strong>BLE で送れるのは、つながり1回につき1通だけ。</strong>
+      まわりの自転車を毎秒ぜんぶ流すとその1通を使い切り、肝心の警告が送れなくなる。
+      デバイスは警告を出すことに徹する
     </div>
   </div>
   <div class="rounded-xl border border-gray-400/30 p-5">
