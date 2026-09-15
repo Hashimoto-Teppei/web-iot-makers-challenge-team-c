@@ -1,69 +1,82 @@
 <script setup lang="ts">
-// 心拍が途切れたときに何が起きるかの図。時間の流れなので SVG で描いている。
+// 心拍が途切れたとき、何が止まって何が動き続けるかの図。
 //
-// viewBox はスライドに置いたときの実寸（幅 1100）に合わせてある。
-// 小さい viewBox にすると、文字だけが引き伸ばされて他の要素と重なる。
+// **SVG ではなく HTML + UnoCSS で組んでいる。** 中身が帯と文字だけで、SVG にする理由が無い。
+// SVG の <text> はスライド側の CSS（`font-size: 80px`）と噛み合わず、
+// font-size 属性でも <style> でも狙った大きさにならなかった（README「3. 手書き SVG」）。
 //
-// 文字の大きさは font-size 属性ではなく下の <style> で指定している。
-// スライド側の CSS（font-size: 80px）が属性に勝ってしまい、属性で書くと効かない。
-const total = 20;
-const dead = 9;
-const x = (i: number) => 60 + i * 50;
+// 途切れる位置は BEFORE 1つ。帯も破線も同じ値から引くので、ずれようがない。
+const BEFORE = "45%";
+
+const rows = [
+  {
+    name: "スマホがやる検知（4つ）",
+    layer: "mobile",
+    after: "止まる",
+    afterAlive: false,
+  },
+  {
+    name: "装置がやる検知（1つ）",
+    layer: "device",
+    after: "動く（通信にもスマホにも頼っていない）",
+    afterAlive: true,
+  },
+];
 </script>
 
 <template>
-  <svg viewBox="0 0 1100 250" class="w-full h-auto">
-    <line x1="40" y1="130" x2="1060" y2="130" stroke="currentColor" stroke-opacity="0.2" />
+  <div class="grid grid-cols-[11rem_1fr] items-center gap-x-4 gap-y-2">
+    <!-- 1段目: 毎秒の心拍。途切れたあとは薄い点だけ -->
+    <div class="text-right text-xs opacity-60">毎秒の心拍</div>
+    <!-- 帯と同じ 45% / 残り で割る。ここだけ幅が違うと、心拍が途切れる位置と帯の境目がずれる -->
+    <div class="flex gap-3 border-b border-current/15 pb-1">
+      <div class="flex items-end justify-between" :style="`flex: 0 0 ${BEFORE}`">
+        <div
+          v-for="i in 12"
+          :key="`beat-${i}`"
+          class="h-6 w-1 rounded-full"
+          style="background: var(--layer-mobile)"
+        />
+      </div>
+      <div class="flex flex-1 items-end justify-between">
+        <div v-for="i in 14" :key="`dot-${i}`" class="h-1 w-1 rounded-full bg-current opacity-20" />
+      </div>
+    </div>
 
-    <!-- 1秒ごとの心拍。途切れたあとは薄い点だけ -->
-    <template v-for="i in total" :key="i">
-      <line
-        v-if="i - 1 < dead"
-        :x1="x(i - 1)"
-        y1="130"
-        :x2="x(i - 1)"
-        y2="80"
-        stroke="var(--slidev-theme-primary)"
-        stroke-width="5"
-        stroke-linecap="round"
-      />
-      <circle v-else :cx="x(i - 1)" cy="130" r="3" fill="currentColor" fill-opacity="0.2" />
+    <!-- 2段目以降: 行ごとに「途切れる前 / 後」の帯 -->
+    <template v-for="row in rows" :key="row.name">
+      <div class="text-right text-xs font-bold opacity-75">{{ row.name }}</div>
+      <div class="flex gap-3">
+        <div
+          class="rounded-md px-3 py-2 text-xs font-bold"
+          :style="`flex: 0 0 ${BEFORE}; color: var(--layer-${row.layer}); background: color-mix(in srgb, var(--layer-${row.layer}) 14%, transparent)`"
+        >
+          動く
+        </div>
+        <div
+          class="flex-1 rounded-md px-3 py-2 text-xs"
+          :class="row.afterAlive ? 'font-bold' : 'opacity-40'"
+          :style="
+            row.afterAlive
+              ? `color: var(--layer-${row.layer}); background: color-mix(in srgb, var(--layer-${row.layer}) 14%, transparent)`
+              : 'background: rgba(0,0,0,0.05)'
+          "
+        >
+          {{ row.after }}
+        </div>
+      </div>
     </template>
 
-    <!-- 途切れた瞬間 -->
-    <line
-      :x1="x(dead) - 25"
-      y1="55"
-      :x2="x(dead) - 25"
-      y2="235"
-      stroke="#dc2626"
-      stroke-width="2"
-      stroke-dasharray="6 4"
-    />
-
-    <text x="40" y="40" fill="currentColor" fill-opacity="0.75">
-      毎秒の心拍が届いている
-    </text>
-    <text :x="x(dead) - 10" y="40" fill="#dc2626">スマホが落ちた / 圏外</text>
-
-    <text x="40" y="185" fill="currentColor" fill-opacity="0.75">
-      車車間の検知：動く
-    </text>
-    <text :x="x(dead) - 10" y="185" fill="currentColor" fill-opacity="0.75">
-      車車間の検知：止まる
-    </text>
-
-    <text x="40" y="225" fill="currentColor" fill-opacity="0.75">
-      後方物体検知：動く
-    </text>
-    <text :x="x(dead) - 10" y="225" fill="currentColor" fill-opacity="0.75">
-      後方物体検知：動く（通信に依存しない）
-    </text>
-  </svg>
+    <!-- 途切れた瞬間の目印。帯と同じ BEFORE から引くので位置が合う -->
+    <div />
+    <div class="relative">
+      <div
+        class="absolute -top-30 w-0 border-l-2 border-dashed border-red-600"
+        :style="`left: calc(${BEFORE} + 0.375rem); height: 7.5rem`"
+      />
+      <div class="text-xs text-red-600" :style="`margin-left: calc(${BEFORE} + 1rem)`">
+        ここでスマホが落ちた / 圏外に入った
+      </div>
+    </div>
+  </div>
 </template>
-
-<style scoped>
-text {
-  font-size: 20px;
-}
-</style>
