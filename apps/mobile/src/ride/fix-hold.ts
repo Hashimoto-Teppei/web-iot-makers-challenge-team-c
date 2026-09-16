@@ -22,7 +22,7 @@
 
 import type { SelfMessage } from "../v2v/messages";
 
-/** 保持の仕方。**しきい値をコードに直書きしない**（`CLAUDE.md`）。 */
+/** 保持の仕方。**しきい値をコードに直書きしない**（`AGENTS.md`）。 */
 export type FixHoldConfig = {
   /**
    * 直近の測位を使い続けてよい長さ（ミリ秒）。**これを過ぎたら黙る。**

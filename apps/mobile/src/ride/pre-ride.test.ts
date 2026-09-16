@@ -82,7 +82,7 @@ describe("preRideChecks", () => {
     expect(device.state).toBe("checking");
   });
 
-  // **直し方が違うものを同じ文にしない**（`CLAUDE.md`「開発が初めてのメンバーが多い」）。
+  // **直し方が違うものを同じ文にしない**（`AGENTS.md`「開発が初めてのメンバーが多い」）。
   it("つながらない理由が分かっていれば、その理由を出す", () => {
     const device = check(
       { ...ready, deviceId: null, deviceReason: "MTU が 64 しかありません" },

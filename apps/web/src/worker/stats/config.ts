@@ -1,5 +1,5 @@
 /**
- * 集計（`GET /api/stats/cells`）の設定値。**コードに直書きしない**（`CLAUDE.md`）。
+ * 集計（`GET /api/stats/cells`）の設定値。**コードに直書きしない**（`AGENTS.md`）。
  *
  * **数字の意味と既定値の根拠は `docs/interfaces/web-stats.md`「しきい値の既定値」が正本。**
  * ここに書くのは、**その値をどこで受け取り、なぜ上限が要るか**だけである。

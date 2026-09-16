@@ -1,7 +1,7 @@
 /**
  * 走行中の中継の設定。
  *
- * **しきい値をコードに直書きしない**（`CLAUDE.md`「実機なしで開発する」）。
+ * **しきい値をコードに直書きしない**（`AGENTS.md`「実機なしで開発する」）。
  * 既定値の根拠は `docs/interfaces/mobile-api.md`「Worker と Durable Object の約束」。
  * **どれも仮の値**で、実測して決め直す（`docs/unverified.md`）。
  */

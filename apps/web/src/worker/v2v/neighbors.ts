@@ -8,7 +8,7 @@ import type { PeerMessage, SelfMessage } from "./messages";
  *
  * **状態はメモリ上の `Map` だけ。永続化しない**（`docs/interfaces/mobile-api.md`）。
  * 飛んでも1秒で直る（全員が再 POST する）ので永続化する理由がなく、位置情報は
- * **消える方が既定であること自体が安全**である（`CLAUDE.md`）。
+ * **消える方が既定であること自体が安全**である（`AGENTS.md`）。
  */
 
 /** 1台ぶんの控え。 */

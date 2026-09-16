@@ -7,7 +7,7 @@ import { approachFromBehind, blindCorner, postFailureMidRide } from "../sim/scen
 import { type BlindCornerConfig, blindCornerDefaults, detectBlindCorner } from "./blind-corner";
 import type { DetectorInput, Fix, Track } from "./types";
 
-/** 岡山市付近の基準点（合成）。**実走行の GPS ログは使わない**（`CLAUDE.md`）。 */
+/** 岡山市付近の基準点（合成）。**実走行の GPS ログは使わない**（`AGENTS.md`）。 */
 const BASE = { lat: 34.6617, lon: 133.9344 };
 
 /** 自分の時計の「いま」。固定値にしておかないと、失敗したテストを再現できない。 */

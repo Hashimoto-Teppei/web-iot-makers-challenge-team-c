@@ -32,7 +32,7 @@ const DEFAULT_PREF = 33;
  * **手元の `pnpm dev` を既定にしない。** `apps/mobile` を触る人の多くは `apps/web` を
  * 動かしておらず、**最初の1コマンドが必ず失敗する**ことになる（`docs/adr/0002-development-lifecycle.md`）。
  *
- * **環境変数に依存しない**（Windows では mise の `[env]` が効かない。`CLAUDE.md`）ので、
+ * **環境変数に依存しない**（Windows では mise の `[env]` が効かない。`AGENTS.md`）ので、
  * 手元の dev サーバーから取るときは `--base http://localhost:5173` を渡す。
  */
 const DEFAULT_BASE = DEFAULT_API_BASE_URL;

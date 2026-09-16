@@ -11,7 +11,7 @@
 
 // **件数の上限は取り込み側が正本。**ここで数字を持たない——**手元の数字が大きい方へ
 // ずれると、送るたびに 400 になり、走行ログが永久に上がらない**
-// （`CLAUDE.md`「同じことを2箇所に書かない」）。
+// （`AGENTS.md`「同じことを2箇所に書かない」）。
 import { logLimitDefaults } from "web/src/worker/logs/config";
 import type { PostLogsFn } from "./api";
 import { type RideLogRetention, rideLogRetentionDefaults } from "./config";
@@ -82,7 +82,7 @@ export async function syncRideLogs(
 ): Promise<SyncOutcome> {
   // **送信が失敗しても掃除する。**消す対象は `sent_at` が立っている行だけで、
   // **今回の送信の成否とは関係が無い**——むしろ通信が死んでいる日ほど、
-  // 手元に残す量は減らしておきたい（走行ログは個人情報である。`CLAUDE.md`）。
+  // 手元に残す量は減らしておきたい（走行ログは個人情報である。`AGENTS.md`）。
   try {
     const outcome = await sendPending(store, post, options);
     return { ...outcome, ...purgeRideLogs(store, options) };

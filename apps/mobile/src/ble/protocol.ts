@@ -4,7 +4,7 @@
  * **正本は `docs/interfaces/ble-gatt.md`。**ここはその実装であって、決め直す場所ではない。
  * 受け取る側（デバイス）の実装は `apps/device/src/device/hw/ble.py` で、
  * **Python は TypeScript のスキーマを参照できない**ので、変えるときは両方とドキュメントを
- * 揃えること（`CLAUDE.md`）。
+ * 揃えること（`AGENTS.md`）。
  *
  * **react-native-ble-plx を知らない。**接続の手順は `./link.ts` にあり、ここは
  * 「何という UUID か」「読んだ文字列をどう解釈するか」だけを持つ。分けてあるので

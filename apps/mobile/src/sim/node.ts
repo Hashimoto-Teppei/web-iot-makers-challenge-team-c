@@ -5,7 +5,7 @@
  * 返り、ティックを飛ばしても結果が変わらない。
  *
  * **実走行の GPS ログは使わない。**位置情報は個人情報であり、自宅や行動パターンが
- * 特定できる（`CLAUDE.md`）。ここで組み立てるのは合成したデータだけ。
+ * 特定できる（`AGENTS.md`）。ここで組み立てるのは合成したデータだけ。
  */
 
 /** ある時刻のノードの状態。`docs/interfaces/v2v.md`「メッセージ」の位置ぶんと同じ形。 */
@@ -71,7 +71,7 @@ const toDegrees = (rad: number): number => (rad * 180) / Math.PI;
  *
  * **`../detect/geo.ts` に置かない。**あちらは4つの検知が共有するものだけを置く場所で、
  * 「それ以上を入れない」と決まっている（`docs/interfaces/detectors.md`）。
- * これを使うのはシミュレータだけなので、利用者の側に置く（`CLAUDE.md`）。
+ * これを使うのはシミュレータだけなので、利用者の側に置く（`AGENTS.md`）。
  */
 export function destination(
   lat: number,

@@ -32,7 +32,7 @@ cat /etc/os-release && python3 -V
 
 **`VERSION_CODENAME=bookworm` かつ Python が 3.11 なら、そのまま使ってよい**（下の 2 へ進む）。
 CHIRIMEN Lite も Raspberry Pi OS Lite (32-bit) が土台なので、条件を満たせば違いは無い。
-**CHIRIMEN の Node.js は使わないが、消す必要も無い**（`CLAUDE.md`）。
+**CHIRIMEN の Node.js は使わないが、消す必要も無い**（`AGENTS.md`）。
 
 **違っていたら、この節のとおり焼き直す。** バージョンを選べないのは
 **Zero W が ARMv6 で、`uv` が Python 3.11 を落としてこられない**ためである

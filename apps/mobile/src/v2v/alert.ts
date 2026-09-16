@@ -4,7 +4,7 @@
  * **形の正本は `docs/interfaces/v2v.md`「デバイスへ渡すもの」。**ここはその実装であって、
  * 決め直す場所ではない。受け取る側（デバイス）の実装は `apps/device/src/device/alert.py` で、
  * **Python は TypeScript のスキーマを参照できない**ので、変えるときは両方とドキュメントを
- * 揃えること（`CLAUDE.md`）。
+ * 揃えること（`AGENTS.md`）。
  *
  * **位置・周辺車両・標識をここに載せない。**載せた瞬間に
  * `docs/adr/0006-decision-layer-on-mobile.md` が消した帯域問題が戻る。

@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SelfMessage } from "../v2v/messages";
 import { fixHoldDefaults, heldFrom, startFixHold } from "./fix-hold";
 
-/** 岡山市付近の基準点（合成）。実走行の GPS ログは使わない（`CLAUDE.md`）。 */
+/** 岡山市付近の基準点（合成）。実走行の GPS ログは使わない（`AGENTS.md`）。 */
 const START = Date.UTC(2026, 8, 1, 0, 0, 0);
 
 const fix = (t: number): SelfMessage => ({

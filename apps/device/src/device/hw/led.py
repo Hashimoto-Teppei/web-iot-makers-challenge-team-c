@@ -79,7 +79,7 @@ class Light:
                 self._led.blink(on_time=half_s, off_time=half_s)
         # **出してから覚える。** 先に覚えると、例外で出せなかった状態を「出した」ことにしてしまい、
         # **その状態が続く限り二度と出し直さない**——`lv 3` が来ても光らないまま黙る
-        # （`../../../../../CLAUDE.md`「静かに黙る故障」）。
+        # （`../../../../../AGENTS.md`「静かに黙る故障」）。
         self._shown = pattern
 
 

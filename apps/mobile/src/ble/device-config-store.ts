@@ -32,7 +32,7 @@ import {
  */
 export type DeviceConfigOutcome = {
   state: "default" | "writing" | "applied" | "failed";
-  /** `failed` のときの理由。**何をすればよいかまで書く**（`CLAUDE.md`） */
+  /** `failed` のときの理由。**何をすればよいかまで書く**（`AGENTS.md`） */
   reason: string | null;
 };
 

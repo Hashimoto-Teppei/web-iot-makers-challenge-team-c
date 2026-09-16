@@ -16,7 +16,7 @@ import { useServerReach } from "@/ride/use-server-reach";
 import { useSignStore, useSignsMeta, useSignsUpdate } from "@/signs/expo";
 
 /**
- * 走行前後に見る画面。**走行中に見る前提の表示を足さないこと**（`CLAUDE.md`）。
+ * 走行前後に見る画面。**走行中に見る前提の表示を足さないこと**（`AGENTS.md`）。
  * 走行中の通知はデバイス側（LED / ディスプレイ）で完結させる。
  *
  * ここに出すのは「仕組みが動いているか」だけである。**警告そのものは出さない**
@@ -127,7 +127,7 @@ export default function HomeScreen() {
 
         {!canStart && !ride.running && (
           // **押せない理由は上の点検に出ている。**ここで理由を書き直さない
-          // （`CLAUDE.md`「同じことを2箇所に書かない」）。
+          // （`AGENTS.md`「同じことを2箇所に書かない」）。
           <Text style={styles.note}>
             {hasNg
               ? "× の項目があるため、走行を始められません。"
@@ -154,7 +154,7 @@ export default function HomeScreen() {
         {/*
           **走り出す前に、スマホの置き方を1回伝える。**走行中にスマホを見る行為は
           取り締まりの対象であり、**ポケットや鞄では測位の精度が落ちて検知の前提が崩れる**
-          （`CLAUDE.md` / `docs/hardware.md`）。
+          （`AGENTS.md` / `docs/hardware.md`）。
         */}
         {mounted && ride.running && (
           <Text style={styles.notice}>

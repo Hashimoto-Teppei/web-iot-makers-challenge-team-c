@@ -15,7 +15,7 @@ import { createDiscardingRideLogStore, type PendingLimits, type RideLogStore } f
 const DEVICE = "a1000001";
 const LIMITS: PendingLimits = { maxPoints: 5_000, maxDetections: 2_000 };
 
-/** 合成した測位（**実走行のログは使わない**。`CLAUDE.md`）。 */
+/** 合成した測位（**実走行のログは使わない**。`AGENTS.md`）。 */
 function fix(t: number, overrides: Partial<SelfMessage> = {}): SelfMessage {
   return { k: "self", t, lat: 34.6612, lon: 133.9345, spd: 4.2, crs: 90, hacc: 8, ...overrides };
 }

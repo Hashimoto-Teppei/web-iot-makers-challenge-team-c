@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { bearingDeg, distanceM, normalizeAngleDeg } from "./geo";
 
-// 岡山市付近。実走行のログは使わない（位置情報は個人情報。CLAUDE.md）ので、
+// 岡山市付近。実走行のログは使わない（位置情報は個人情報。AGENTS.md）ので、
 // 手で計算できる値を合成して確かめる。
 const LAT = 34.66;
 const LON = 133.92;

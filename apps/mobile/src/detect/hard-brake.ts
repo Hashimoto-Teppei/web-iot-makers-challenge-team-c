@@ -18,7 +18,7 @@ import type { Detector, DetectorInput, Fix, Track, Warning } from "./types";
  * 前方急ブレーキのしきい値。
  *
  * **既定値はすべて仮の値**で、実走行で調整する（`docs/unverified.md` 5 / 36）。
- * だからこそコードに直書きせず、第2引数で受け取る（`CLAUDE.md`）。
+ * だからこそコードに直書きせず、第2引数で受け取る（`AGENTS.md`）。
  *
  * **他の検知と共有しない。**同じ名前の値を共有すると、片方の調整がもう片方を壊す
  * （`docs/interfaces/detectors.md`）。

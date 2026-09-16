@@ -8,7 +8,7 @@
  * **画面が消えても動き続けるための常駐（フォアグラウンドサービス）はここが立てる**（#38）。
  * `watchPositionAsync` は**前面にいる間だけの購読**なので、それだけでは走行中ずっと
  * 測位も中継も止まりうる——**走行中はスマホを画面を消してハンドルに固定する前提**
- * （`CLAUDE.md`）なので、常駐が無いと**通常の使い方でだけ全部が黙る。**
+ * （`AGENTS.md`）なので、常駐が無いと**通常の使い方でだけ全部が黙る。**
  *
  * **サービスの種別は `connectedDevice` ではなく `location` にした**（`docs/interfaces/ble-gatt.md`
  * は `connectedDevice` と書いているが、Android が求めるのは「プロセスが生き続けること」で、
@@ -42,7 +42,7 @@ import { inPermissionQueue } from "../lib/permission-queue";
 import { CRS_MIN_SPD_MPS, roundForWire, type SelfMessage } from "../v2v/messages";
 import { startFixHold } from "./fix-hold";
 
-/** 測位の取り方。**しきい値をコードに直書きしない**（`CLAUDE.md`）。 */
+/** 測位の取り方。**しきい値をコードに直書きしない**（`AGENTS.md`）。 */
 export type LocationConfig = {
   /**
    * 測位の間隔（ミリ秒、Android）。
@@ -70,7 +70,7 @@ export const locationDefaults: LocationConfig = {
  * 常駐している間、通知領域に出す文言。
  *
  * **走行中に読ませるためのものではない**（走行中にスマホを見る行為は取り締まり対象。
- * `CLAUDE.md`）。**止め忘れに気づくため**のもので、走り終えたのに通知が残っていれば
+ * `AGENTS.md`）。**止め忘れに気づくため**のもので、走り終えたのに通知が残っていれば
  * 電池が減り続けている。
  */
 const FOREGROUND_NOTIFICATION = {

@@ -205,7 +205,7 @@ function keeping(reason: string, current: SignsMeta | null): string {
 /**
  * 画面を落とさずに素性を読む。**読めなければ `null`。**
  *
- * `./expo.ts` も使う。**2つ書かない**（`CLAUDE.md`「同じことを2箇所に書かない」）。
+ * `./expo.ts` も使う。**2つ書かない**（`AGENTS.md`「同じことを2箇所に書かない」）。
  */
 export function safeMeta(store: SignStore): SignsMeta | null {
   try {
