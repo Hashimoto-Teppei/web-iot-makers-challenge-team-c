@@ -3,7 +3,7 @@
  *
  * **`src/shared/` に置いてある**のは、**画面と API の両方が丸めるから**である——
  * API は集計のために（`src/worker/stats/`）、画面は円を置く点を出すために（`src/client/stats/`）
- * 同じ升目を使う。**`src/client/` から `src/worker/` は import できない**（`CLAUDE.md`）ので、
+ * 同じ升目を使う。**`src/client/` から `src/worker/` は import できない**（`AGENTS.md`）ので、
  * ここに無いと**半セルの足し方が画面側にもう1つ書かれる。**
  *
  * **`apps/mobile/src/signs/cell.ts` と同じ切り方を、こちらにも置いてある。**

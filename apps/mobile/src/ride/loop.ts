@@ -36,7 +36,7 @@ import { WarnGate, type WarnGateConfig, warnGateDefaults } from "./warn-gate";
  */
 export type ExchangeFn = (id: string, self: SelfMessage) => Promise<readonly unknown[]>;
 
-/** 走行ループの設定。**しきい値をコードに直書きしない**（`CLAUDE.md`）。 */
+/** 走行ループの設定。**しきい値をコードに直書きしない**（`AGENTS.md`）。 */
 export type RideConfig = {
   /** 近傍の保ち方（失効・履歴の長さ） */
   neighbors: NeighborsConfig;
@@ -68,7 +68,7 @@ export const rideDefaults: RideConfig = {
 };
 
 /**
- * 走行前後の画面に出すためのもの。**走行中に見る前提の画面を作らないこと**（`CLAUDE.md`）。
+ * 走行前後の画面に出すためのもの。**走行中に見る前提の画面を作らないこと**（`AGENTS.md`）。
  *
  * ここに出すのは「仕組みが動いているか」であって、警告そのものではない
  * （警告の出し先はデバイス）。

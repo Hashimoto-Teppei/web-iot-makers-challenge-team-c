@@ -165,7 +165,7 @@ const routes = app
    * 走行中の位置の中継。1Hz で自分の位置を受け取り、**同じレスポンスで半径内の
    * 周辺車両を返す**（`docs/adr/0005-realtime-transport.md`）。
    *
-   * **このリクエストの中で D1 に書かない**（`CLAUDE.md`）。蓄積が要るなら Durable Object の
+   * **このリクエストの中で D1 に書かない**（`AGENTS.md`）。蓄積が要るなら Durable Object の
    * アラームか `ctx.waitUntil()` で非同期に流す。リアルタイム経路の遅延に永続化を載せない。
    */
   .post(

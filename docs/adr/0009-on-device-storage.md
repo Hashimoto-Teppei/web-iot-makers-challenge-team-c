@@ -24,7 +24,7 @@
 
 **#63 の設計を始めた時点の案は「アプリ専用領域に JSON ファイル1つ」だった。**
 読み取り専用のデータを丸ごと持つだけなら SQLite は過剰で、
-`CLAUDE.md`「早すぎる抽象化を避ける」に触れると考えたためである。
+`AGENTS.md`「早すぎる抽象化を避ける」に触れると考えたためである。
 **この案は下の「4. 同梱する」を決めた時点で成立しなくなった**ので、覆した。
 
 ## 決定
@@ -151,14 +151,14 @@ D1 --(GET /api/stop-signs)--> 各自の signs.db  ← 誰でも、原本なし�
 | **地域（タイル）で分割して配る** | 「どのタイルが欠けているか」という状態が端末に生まれ、**欠けたまま静かに黙る。** 走り出す前に現在地をサーバーへ送ることにもなる（`stop-signs-delivery.md`） |
 | `app.db` に全部入れる | 標識の更新で走行ログが消える（上の「2」） |
 | **抽出結果から直接 `signs.db` を作る** | **原本を持つ人しか作れない。** チーム全員で原本を配り合う運用になる（上の「7」） |
-| **`packages/` を作って抽出を共有する** | **共有するのはコードではなく `signs.db` という成果物**なので、条件に触れない（`CLAUDE.md`）。スクリプトは `apps/web/scripts/` に置く |
+| **`packages/` を作って抽出を共有する** | **共有するのはコードではなく `signs.db` という成果物**なので、条件に触れない（`AGENTS.md`）。スクリプトは `apps/web/scripts/` に置く |
 | **端末と D1 で Drizzle のスキーマを共有する** | 列も目的も別物で、揃えにいくと片方の都合がもう片方に漏れる。**揃えるのは冪等キーの形だけ**（`mobile-api.md`「走行後の同期」） |
 
 ## 影響
 
 - **`apps/mobile` の依存が増える** — `expo-sqlite` / `drizzle-orm` / `drizzle-kit` /
   `babel-plugin-inline-import`、開発用に `better-sqlite3` と `drizzle-studio-expo`。
-  **`npx expo install` で入れる**（`CLAUDE.md`）。
+  **`npx expo install` で入れる**（`AGENTS.md`）。
   **`expo-file-system` と AsyncStorage 系は要らなくなった**
 - **`docs/setup.md` に1コマンド増える**（`signs.db` の生成）。**Development Build を作る人だけ**
 - **#19（D1 の作成）が、モバイル側の同梱物生成の前提になった。** 上の「7」の経路が

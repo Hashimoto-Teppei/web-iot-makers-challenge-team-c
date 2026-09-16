@@ -1,6 +1,6 @@
 /**
  * API のベース URL の既定値。**この定数がデプロイ先 URL の正本**で、
- * ドキュメントは URL を書き写さずここを指す（`CLAUDE.md`「同じことを2箇所に書かない」）。
+ * ドキュメントは URL を書き写さずここを指す（`AGENTS.md`「同じことを2箇所に書かない」）。
  *
  * **アプリ本体（`api.ts`）と `signs:build`（`scripts/build-signs-db.ts`）の2つが使う。**
  * **揃うのは既定値だけで、上書きの経路は別々**（前者は `EXPO_PUBLIC_API_BASE_URL`、
@@ -16,7 +16,7 @@
  * `apps/web` を動かしておらず、既定が localhost だと**最初の1コマンドが必ず失敗する**。
  * 逆向き（デプロイ先ではなく手元を見る）は、そうしたい人が明示的に選べばよい。
  *
- * **URL は秘密ではない**ので、public リポジトリに書いてよい（`CLAUDE.md`）。
+ * **URL は秘密ではない**ので、public リポジトリに書いてよい（`AGENTS.md`）。
  * 秘密にするのは Cloudflare の API トークンのほう。
  */
 export const DEFAULT_API_BASE_URL = "https://team-c-web.hashimoto-2f0.workers.dev";

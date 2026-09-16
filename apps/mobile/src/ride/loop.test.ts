@@ -5,7 +5,7 @@ import type { RegisteredDetector } from "./detectors";
 import { createMockDeviceLink } from "./device";
 import { type RideDeps, RideLoop } from "./loop";
 
-/** 岡山市付近の基準点（合成）。実走行の GPS ログは使わない（`CLAUDE.md`）。 */
+/** 岡山市付近の基準点（合成）。実走行の GPS ログは使わない（`AGENTS.md`）。 */
 const BASE = { lat: 34.6617, lon: 133.9344 };
 const START = Date.UTC(2026, 8, 1, 0, 0, 0);
 

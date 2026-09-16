@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { angleDiffDeg, bearingDeg, distanceM } from "./geo";
 
-/** 合成データ。**実走行の GPS ログを使わない**（`CLAUDE.md`）。岡山駅の周辺に置いてある。 */
+/** 合成データ。**実走行の GPS ログを使わない**（`AGENTS.md`）。岡山駅の周辺に置いてある。 */
 const LAT = 34.6651;
 const LON = 133.9183;
 

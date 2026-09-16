@@ -106,7 +106,8 @@ pnpm install
 | このファイル（`README.md`） | **外部向けの入口。** 何を作っているか、どう動かすか。審査員や他チームが最初に読む |
 | [docs/setup.md](./docs/setup.md) | **環境構築の手順。** 入れるツール・OS ごとのコマンド・つまずいたときの対処。**まずここから** |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | **チーム向けの手順。** Issue から PR・レビューまで。開発が初めての人が読む前提で書く |
-| [CLAUDE.md](./CLAUDE.md) | **守るべき制約。** AI エージェント向けだが、人が読んでも開発方針がわかる。理由は書かず ADR を参照する |
+| [AGENTS.md](./AGENTS.md) | **守るべき制約。** AI エージェント向けだが、人が読んでも開発方針がわかる。理由は書かず ADR を参照する |
+| [CLAUDE.md](./CLAUDE.md) | Claude Code の入口。内容は持たず `AGENTS.md` を参照するだけ |
 | [docs/adr/](./docs/adr/) | **なぜそう決めたか。** 決定を見直すときに読む |
 | [docs/interfaces.md](./docs/interfaces.md) | コンポーネント間の境界仕様。実装と同じ PR で更新する |
 | [docs/deploy-device.md](./docs/deploy-device.md) | **ラズパイへの投入手順。** OS の書き込みから 自動起動・ログの見方まで。**実機に載せるときだけ読む** |

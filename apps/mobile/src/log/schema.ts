@@ -122,7 +122,7 @@ export const detections = sqliteTable(
  * 走行後の画面はそれを見て**送れていないと表示する**（`./use-ride-log-sync.ts`）。
  *
  * **値は整数だけ。**いま要るのが時刻だけなので、**文字列も入る形にしない**
- * （`CLAUDE.md`「早すぎる抽象化を避ける」）。要るものが出たら列を足す。
+ * （`AGENTS.md`「早すぎる抽象化を避ける」）。要るものが出たら列を足す。
  */
 export const appMeta = sqliteTable("app_meta", {
   /** いまは `"last_sent_at"` だけ */

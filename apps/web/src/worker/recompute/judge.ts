@@ -3,7 +3,7 @@ import { MIN_BEARING_SPAN_M } from "./config";
 
 /**
  * 不停止の判定。**D1 にも Hono にも触らない純粋な関数**にしてある
- * （`CLAUDE.md`「検知ロジックを入出力から分離する」）。合成した点列だけで Vitest を回せる。
+ * （`AGENTS.md`「検知ロジックを入出力から分離する」）。合成した点列だけで Vitest を回せる。
  *
  * **仕様の正本は `docs/interfaces/web-stats.md`「不停止の判定」。**
  * ここはその実装であって、決め直す場所ではない。

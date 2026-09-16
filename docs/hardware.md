@@ -13,7 +13,7 @@
 | 項目 | 内容 |
 | --- | --- |
 | SBC | Raspberry Pi Zero W（**ARMv6**） |
-| OS | **Raspberry Pi OS Lite (32-bit) Bookworm**。**システム Python が 3.11 であることが条件**で、**版を選べない**（`adr/0008-device-dependencies.md` / `unverified.md` 40）。**手元の SD には CHIRIMEN Lite が入っている**——これも Raspberry Pi OS Lite (32-bit) ベースだが**版は焼いた時期で変わる**ので、`cat /etc/os-release` を1回見て、Bookworm でなければ焼き直す。**CHIRIMEN の Node.js は使わない**（`CLAUDE.md`） |
+| OS | **Raspberry Pi OS Lite (32-bit) Bookworm**。**システム Python が 3.11 であることが条件**で、**版を選べない**（`adr/0008-device-dependencies.md` / `unverified.md` 40）。**手元の SD には CHIRIMEN Lite が入っている**——これも Raspberry Pi OS Lite (32-bit) ベースだが**版は焼いた時期で変わる**ので、`cat /etc/os-release` を1回見て、Bookworm でなければ焼き直す。**CHIRIMEN の Node.js は使わない**（`AGENTS.md`） |
 | ロジック電圧 | **3.3V**（5V の信号を GPIO に入れると壊れる → `adr/0003`） |
 | **確保台数** | **1台で進める。**後日、複数台を用意できる見込みはある。**ローカル検知（後方物体検知）は1台で成立し**（`adr/0004-v2v-transport.md`）、**車車間の3検知はスマホで動くのでラズパイが要らない**（`adr/0006-decision-layer-on-mobile.md`）。2台目が要るのは実走行の確認だけで、それまではシミュレータで進む |
 | **測位** | **モジュールを載せない。**測位はスマホが行い、**位置はデバイスに届かない**（`adr/0004-v2v-transport.md` / `adr/0006-decision-layer-on-mobile.md`） |

@@ -16,7 +16,7 @@ import type { DetectorInput, Fix, StopSign, Track } from "../detect/types";
 import { type MessageLimits, messageLimitDefaults, parsePeer, parseSelf } from "./messages";
 
 /**
- * 近傍の保ち方。**しきい値をコードに直書きしない**（`CLAUDE.md`）。
+ * 近傍の保ち方。**しきい値をコードに直書きしない**（`AGENTS.md`）。
  *
  * **既定値はすべて仮の値**で、実走行で測って決め直す（`docs/unverified.md` 29 / 36）。
  */

@@ -4,7 +4,7 @@ import type { StatsCellDetailResponse, StatsResponse } from "../../shared/api";
 import app from "../index";
 
 /**
- * 合成データ。**実走行の GPS ログを使わない**（`CLAUDE.md`）。岡山駅の周辺に置いてある。
+ * 合成データ。**実走行の GPS ログを使わない**（`AGENTS.md`）。岡山駅の周辺に置いてある。
  */
 const DEVICE_ID = "0a1b2c3d";
 const LAT = 34.6651;

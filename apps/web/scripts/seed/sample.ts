@@ -9,7 +9,7 @@
  * 「サンプルデータは列で見分ける」）。`POST /api/logs` は `sample` の列を受け取らない
  * ——受け取る形にすると**誰でもサンプルを名乗れ、除いたつもりで除けていない集計**ができる。
  *
- * **実走行の GPS ログは使わない**（`CLAUDE.md`）。実在する一時停止の標識の位置を軸に、
+ * **実走行の GPS ログは使わない**（`AGENTS.md`）。実在する一時停止の標識の位置を軸に、
  * **合成した走行**を並べている。
  *
  * **対象は岡山駅から岡山大学津島キャンパスまでの区間**（下の `ROUTE_FROM` / `ROUTE_TO`）。
@@ -72,7 +72,7 @@ const RIDES_PER_SIGN = [48, 12, 34, 8, 26, 40, 20, 16, 30, 11, 44, 6];
  * 岡山駅と大学を結ぶ通学路は、**この題材（自転車の事故と違反）でいちばん通行の多い区間**であり、
  * **地図を初めて見る人でも、円がどこに並んでいるのかが一目で分かる。**
  *
- * **実走行の GPS ログではない**（`CLAUDE.md`）。実在する標識の位置と進入方向だけを軸にして、
+ * **実走行の GPS ログではない**（`AGENTS.md`）。実在する標識の位置と進入方向だけを軸にして、
  * **走行そのものは合成している。**
  */
 const ROUTE_FROM = { lat: 34.6648, lon: 133.9185 }; // 岡山駅
@@ -133,7 +133,7 @@ function onRoute(lat: number, lon: number): { along: number; offset: number } {
  *
  * **`wrangler` を子プロセスで起動しない。****Windows では `pnpm` が `pnpm.cmd` に解決され、
  * Node は `.cmd` を直接起動できない**——**チームの半分でこのスクリプトが動かなくなる**
- * （`CLAUDE.md`「Windows / macOS の混在」）。**自分たちの API を使えば `fetch` だけで済む。**
+ * （`AGENTS.md`「Windows / macOS の混在」）。**自分たちの API を使えば `fetch` だけで済む。**
  */
 async function readSigns(apiBase: string, pref: number): Promise<Sign[]> {
   const url = `${apiBase.replace(/\/$/, "")}/api/stop-signs?pref=${pref}`;

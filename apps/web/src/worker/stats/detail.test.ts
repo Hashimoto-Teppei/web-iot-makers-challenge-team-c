@@ -3,7 +3,7 @@ import type { DetectionRow, LocatedDetection, LocatedEvent, RidePoint } from "./
 import { aggregateCellDetail, type CellDetailInput, hourOfDay } from "./detail";
 
 /**
- * 合成データだけで回す（`CLAUDE.md`「実機なしで開発する」）。
+ * 合成データだけで回す（`AGENTS.md`「実機なしで開発する」）。
  * 岡山駅の周辺に置いてあるが、**実走行の GPS ログではない。**
  */
 const LAT = 34.6651;

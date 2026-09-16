@@ -19,7 +19,7 @@ export function PreRideChecklist({ checks }: { checks: readonly PreRideCheck[] }
           <View style={styles.body}>
             <Text style={[styles.label, styles[check.state]]}>{check.label}</Text>
             {/* **赤の理由を必ず書く。**「デバイス: ×」だけだと、初めての人は
-                何をすればよいか分からない（`CLAUDE.md`）。 */}
+                何をすればよいか分からない（`AGENTS.md`）。 */}
             <Text style={styles.detail}>{check.detail}</Text>
           </View>
         </View>

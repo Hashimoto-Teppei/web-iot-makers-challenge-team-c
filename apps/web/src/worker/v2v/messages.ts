@@ -19,7 +19,7 @@ const deviceIdSchema = z.string().regex(/^[0-9a-f]{8}$/);
 /**
  * 測位1点ぶんの検証を組み立てる。
  *
- * 範囲を引数で受け取るのは、**上限を設定として外に出す**ため（`CLAUDE.md`）。
+ * 範囲を引数で受け取るのは、**上限を設定として外に出す**ため（`AGENTS.md`）。
  * `z.number()` は zod v4 では `NaN` と `Infinity` を通さないので、有限かの確認は要らない。
  */
 function fixSchema(limits: MessageLimits) {

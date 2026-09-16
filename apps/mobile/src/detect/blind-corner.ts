@@ -23,7 +23,7 @@ import type { Detector, DetectorInput, Fix, Track, Warning } from "./types";
  * 見えない曲がり角のしきい値。
  *
  * **既定値はすべて仮の値**で、実走行で調整する（`docs/unverified.md` 5 / 21 / 57）。
- * だからこそコードに直書きせず、第2引数で受け取る（`CLAUDE.md`）。
+ * だからこそコードに直書きせず、第2引数で受け取る（`AGENTS.md`）。
  *
  * **他の検知と共有しない。**同じ名前の値を共有すると、片方の調整がもう片方を壊す
  * （`docs/interfaces/detectors.md`）。
@@ -120,7 +120,7 @@ type Candidate = { warning: Warning; distanceM: number };
  *
  * **数百メートルの範囲なので平面で差し支えない。**緯度経度のまま交点を解くと式が
  * 読めなくなるので、`geo.ts` の距離と方位で一度メートルに直してから解く。
- * **`geo.ts` に足さない**——ここでしか使わないものは利用者の側に置く（`CLAUDE.md`）。
+ * **`geo.ts` に足さない**——ここでしか使わないものは利用者の側に置く（`AGENTS.md`）。
  */
 type Vec = {
   /** 東向き（メートル） */

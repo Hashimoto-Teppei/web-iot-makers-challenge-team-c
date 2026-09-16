@@ -1,5 +1,5 @@
 # ローカル開発用の秘密値のひな形。
-# **`.dev.vars` にコピーして使う**（`.dev.vars` はコミットされない。CLAUDE.md「機密情報の扱い」）。
+# **`.dev.vars` にコピーして使う**（`.dev.vars` はコミットされない。AGENTS.md「機密情報の扱い」）。
 # デプロイ先には `wrangler secret put <名前>` で登録する。**wrangler.jsonc に書かない。**
 # **値は標準入力から渡すこと**（渡し方と理由は apps/web/README.md「不停止の再計算」）。
 

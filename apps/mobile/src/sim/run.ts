@@ -88,7 +88,7 @@ export type Scenario = {
   signs?: readonly StopSign[];
 };
 
-/** 回し方。**しきい値をコードに直書きしない**（`CLAUDE.md`）。 */
+/** 回し方。**しきい値をコードに直書きしない**（`AGENTS.md`）。 */
 export type RunConfig = {
   /**
    * ティックの間隔（ミリ秒）。

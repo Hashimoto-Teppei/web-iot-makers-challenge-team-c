@@ -6,7 +6,7 @@
  * （`../ride/device.ts`）ので、既定のデプロイ先へ投げると2つのことが起きる。
  *
  * - **実際の緯度経度が共有の Cloudflare に出ていく。**位置情報は個人情報であり、
- *   自宅や行動パターンが特定できる（`CLAUDE.md`）
+ *   自宅や行動パターンが特定できる（`AGENTS.md`）
  * - 同じ ID なので、**開発者どうしのデータが混ざる**
  *
  * **走行ログ（`POST /api/logs`）の方が重い。**中継（`POST /api/v2v/exchange`）が
@@ -35,7 +35,7 @@ import { DEFAULT_API_BASE_URL } from "./api-base";
  *
  * **正本はここ。**Python 側（`mock_peripheral.py` の `MOCK_PERIPHERAL_DEVICE_ID`）は
  * この値を書き写している。**Python から TypeScript は参照できない**ため
- * （`CLAUDE.md`）、GATT の UUID と同じ扱いにする。
+ * （`AGENTS.md`）、GATT の UUID と同じ扱いにする。
  */
 export const MOCK_PERIPHERAL_DEVICE_ID = "a1000002";
 

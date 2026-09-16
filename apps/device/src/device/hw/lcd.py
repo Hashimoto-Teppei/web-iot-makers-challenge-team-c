@@ -68,7 +68,7 @@ class Lcd:
                 # **`main.py` の周期処理ごと止まり、`link` の更新も接続の切断も道連れになる**
                 # （`../main.py` の `on_tick`）。**走行中に届くのは光で、画面ではない。**
                 if not self._failing:
-                    # **黙って続けない**（`../../../../../CLAUDE.md`「静かに黙る故障」）。
+                    # **黙って続けない**（`../../../../../AGENTS.md`「静かに黙る故障」）。
                     # ただし毎秒は出さない——同じ行が SD カードを埋める。
                     self._failing = True
                     logger.warning("LCD に書けない（配線か I2C アドレスを見る）: %s", error)

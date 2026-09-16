@@ -8,7 +8,7 @@
  * **それだけで D1 の読み取りを使い切れる。**
  *
  * トークンは `wrangler secret put ADMIN_TOKEN` で登録する。**`wrangler.jsonc` に書かない**
- * （`CLAUDE.md`「機密情報の扱い」）。ローカルは `.dev.vars`。
+ * （`AGENTS.md`「機密情報の扱い」）。ローカルは `.dev.vars`。
  */
 
 /**

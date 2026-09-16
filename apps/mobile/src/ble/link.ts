@@ -58,7 +58,7 @@ export type BleLinkState = {
   searching: boolean;
 };
 
-/** 切れてからつなぎ直すまでの待ち（ミリ秒）。**しきい値を直書きしない**（`CLAUDE.md`）。 */
+/** 切れてからつなぎ直すまでの待ち（ミリ秒）。**しきい値を直書きしない**（`AGENTS.md`）。 */
 export type BleLinkConfig = {
   /** スキャンをこの時間見つからなければ、一度やり直す */
   scanTimeoutMs: number;

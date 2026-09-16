@@ -26,7 +26,7 @@ const { values } = parseArgs({
   args: process.argv.slice(2).filter((a) => a !== "--"),
   options: {
     api: { type: "string", default: "http://localhost:5173" },
-    /** `ADMIN_TOKEN`。**環境変数でも渡せる**——Windows では `FOO=bar cmd` が書けない（`CLAUDE.md`）。 */
+    /** `ADMIN_TOKEN`。**環境変数でも渡せる**——Windows では `FOO=bar cmd` が書けない（`AGENTS.md`）。 */
     token: { type: "string" },
     "stop-speed": { type: "string", default: "1.5" },
     radius: { type: "string", default: "20" },

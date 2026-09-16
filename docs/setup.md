@@ -312,7 +312,7 @@ pnpm --filter web db:migrate:local   # 手元の D1（SQLite）にマイグレ�
   > **走行ループを手元で試すときは、必ず手元に向けてください。**
   > 既定のままだと `POST /api/v2v/exchange` が**共有の Durable Object に実際の位置を毎秒送り**、
   > 半径 300m 以内の他の人に周辺車両として見えます（`docs/interfaces/mobile-api.md`）。
-  > **位置情報は個人情報**です（`CLAUDE.md`）。
+  > **位置情報は個人情報**です（`AGENTS.md`）。
   >
   > **BLE のネイティブモジュールが無い環境では、走行ループは全員がモックの
   > `a1000001` を名乗ります**（実機につながれば、デバイスから読んだ `device_id` に変わります）。
