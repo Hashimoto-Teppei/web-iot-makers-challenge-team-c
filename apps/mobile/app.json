@@ -11,7 +11,17 @@
       "bundleIdentifier": "jp.teamc.bikealert",
       "buildNumber": "3",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIApplicationSceneManifest": {
+          "UIApplicationSupportsMultipleScenes": false,
+          "UISceneConfigurations": {
+            "UIWindowSceneSessionRoleApplication": [
+              {
+                "UISceneConfigurationName": "Default Configuration"
+              }
+            ]
+          }
+        }
       }
     },
     "android": {
@@ -57,7 +67,8 @@
           "modes": ["central"],
           "bluetoothAlwaysPermission": "自転車に付けたデバイスへ、警告の指示を送るために使います。"
         }
-      ]
+      ],
+      "./plugins/with-scene-delegate"
     ],
     "experiments": {
       "typedRoutes": true,

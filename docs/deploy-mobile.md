@@ -18,7 +18,7 @@
 
 | もの | 備考 |
 | --- | --- |
-| macOS + Xcode | 通したのは **Xcode 26.6** / CocoaPods 1.16.2 |
+| macOS + Xcode | 通したのは **Xcode 27.0** / CocoaPods 1.16.2。**26.6 から上げた回に、入れたアプリが起動しなくなった**（→「6. 入ったのに起動しないとき」） |
 | Apple Developer Program の有償アカウント | **App Manager 以上の権限**が要る（アプリの登録と証明書の発行に使う） |
 | iPhone 実機 | 内部テスターとして受け取る端末 |
 
@@ -310,3 +310,44 @@ otool -L "$APP/Frameworks/ExpoLocation.framework/ExpoLocation" | grep -i coremot
 ```
 
 **上げ直す前に 2-1 のビルド番号を必ず上げる。**
+
+## 6. 入ったのに起動しないとき
+
+### 起動した瞬間に落ちる / 起動するが画面が真っ暗
+
+**Xcode を上げた回に出る。** iOS 26 SDK 以降でリンクしたアプリは
+**UIScene ライフサイクルの採用が必須**で、採用していないと UIKit が起動時にトラップする。
+**こちらのコードは何も変わっていないのに、ある日から落ちるようになる**のはこれである
+（2026-09-20 に Xcode 26.6 → 27.0 で踏んだ）。
+
+**原因はクラッシュレポートの1行目で分かる。**
+
+```sh
+xcrun devicectl device copy from --device <UDID> --domain-type systemCrashLogs \
+  --source . --destination ./crash
+```
+
+```
+EXC_BREAKPOINT (SIGTRAP)
+UIKitCore  ___UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption_block_invoke
+```
+
+**直してある。** `app.json` の `ios.infoPlist.UIApplicationSceneManifest` と、
+`apps/mobile/plugins/with-scene-delegate.js` が `SceneDelegate` を足す。
+**`ios/` は生成物で gitignore 済み**（[`adr/0010`](./adr/0010-ios-primary-target.md)）なので、
+**`AppDelegate.swift` を手で直すと次の `prebuild` で消える。**config plugin にしてあるのはそのため。
+
+**2つで1組であり、片方だけでは直らない。**
+
+| 足すもの | 足さないと |
+| --- | --- |
+| `Info.plist` の `UIApplicationSceneManifest` | **起動した瞬間に落ちる**（上のトラップ） |
+| `SceneDelegate` の実体 | **落ちないが真っ暗になる** ——宣言するとシーン方式に入るため、`AppDelegate` が `UIScreen.main.bounds` から作ったウィンドウは**どのシーンにも繋がらない** |
+
+**expo のバージョンを上げても直らない**（2026-09-20 時点）。
+`expo-template-bare-minimum@57.0.26` にも `node_modules` にも `UIWindowSceneDelegate` は無い。
+**SDK を上げたときは、まずこのプラグインが要らなくなったかを見る。**
+
+**シーン方式では URL と Universal Link がシーン側へ来る。**
+`AppDelegate` の `application(_:open:options:)` は呼ばれないので、
+プラグインが `scene(_:openURLContexts:)` で `RCTLinkingManager` へ渡し直している。
