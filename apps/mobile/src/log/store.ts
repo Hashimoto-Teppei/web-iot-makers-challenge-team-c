@@ -541,9 +541,9 @@ export function createRideLogStore(
       // （`better-sqlite3` と `expo-sqlite`）、**Vitest で通ったものが実機で通る保証が無い**
       // ——この保存層が SQL を1つにしている意味が消える。
       // **走行後に1回しか通らない**経路なので、1文増えても釣り合う。
-      // **出どころ（`source`）で絞らない。**印が付いているかどうかだけを見るので、
-      // **#40 がデバイス発の検知を足しても、ここは広げなくてよい**
+      // **出どころ（`source`）で絞らない。**印が付いているかどうかだけを見る
       // （まだ送っていない行は `sent_at` が `null` なので触れない）。
+      // **表が増えたら、ここには1行足りる**——デバイス発は別の表なので、下で同じ条件を書く。
       const sentPoints = and(isNotNull(points.sentAt), lte(points.sentAt, before));
       const sentDetections = and(isNotNull(detections.sentAt), lte(detections.sentAt, before));
       // **デバイス発も同じ期限で消す**（#40）。**既読位置は `app_meta` に残る**ので、
@@ -736,8 +736,10 @@ function lastSeqOf(rows: readonly { logId: string; seq: number }[], logId: strin
  *
  * **`pending()` が取り出す条件とそろえる。**片方だけ広いと、**取り出すものが無いのに
  * 「送るものがある」と言い続ける走行**ができ、空のリクエストを上限まで投げて終わる。
- * **#40 がデバイス発（`source = "device"`）を足すときは、ここと `pending()` と
- * `markSent()` の3つを一緒に広げること。**
+ *
+ * **デバイス発（`device_detections`）はここに入らない。**あちらは走行に結びついておらず、
+ * `pending()` も走行ぶんを送り切ってから別に取り出す（{@link pendingDeviceBatch}）。
+ * **走行ごとに送るものを増やすときだけ、ここと `pending()` と `markSent()` を一緒に広げる。**
  */
 function hasUnsent(deviceId: unknown, logId: unknown) {
   return sql`(

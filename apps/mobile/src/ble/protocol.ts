@@ -40,7 +40,7 @@ export type DeviceInfo = {
   proto: number;
   /** 端末ID（16進の小文字8文字） */
   deviceId: string;
-  /** ログの世代。**これが前回と違えば既読位置は無効**（#40 で使う） */
+  /** ログの世代。**これが前回と違えば既読位置は無効**（`../log/collect.ts`） */
   logId: string;
   /** デバイスが今も持っているレコード番号の範囲。1件も無ければ両方 0 */
   oldestSeq: number;
