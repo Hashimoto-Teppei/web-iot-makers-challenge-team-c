@@ -89,8 +89,24 @@ BLE のライブラリ（`PyGObject`）が動くのに必要なもの。**pip �
 
 ```sh
 sudo apt update
-sudo apt install -y git libgirepository-1.0-1 libcairo2
+sudo apt install -y git \
+  libcairo2-dev libgirepository1.0-dev libdbus-1-dev libglib2.0-dev \
+  pkg-config python3-dev build-essential
 ```
+
+**`-dev` が要るのは、`PyGObject` / `pycairo` / `dbus-python` を実機でビルドするから**である。
+**aarch64 でもこの2つはホイールが降ってこない**（2026-09-19 に確認。`unverified.md` の 41）。
+**ランタイムのライブラリだけ入れても足りない** ——入れずに `uv sync` すると
+`Building pycairo==1.29.1` で止まる。
+
+**`libgirepository1.0-dev`（2.0 ではない）。** Debian 13 には `libgirepository-2.0-dev` も有るが、
+**`PyGObject` 3.50 が pkg-config で探すのは `gobject-introspection-1.0`** である
+（2.0 を見るのは 3.52 以降）。**2.0 だけを入れると
+`Dependency 'gobject-introspection-1.0' is required but not found` でビルドが落ちる**
+——名前が似ていて紛らわしいので、**`PyGObject` の版を上げるときはここを一緒に見ること。**
+
+**ビルドには数分かかる。** Zero 2 W は4コアなので現実的な範囲に収まる
+（**Zero W の ARMv6 では事実上終わらず、piwheels に頼っていた。** `adr/0008-device-dependencies.md`）。
 
 ## 4. uv を入れる
 

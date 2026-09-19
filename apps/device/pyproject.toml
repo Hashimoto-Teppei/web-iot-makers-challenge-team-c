@@ -18,6 +18,12 @@ dev = [
 # ここへ足すものが増えても dependencies へは移さないこと。
 device = [
   "bluezero>=0.9",
+  # **`bluezero` の依存に入っていないが、無いと `bluezero.adapter` が import で落ちる**
+  # （`ModuleNotFoundError: No module named 'dbus'`。2026-09-19 に実機で踏んだ）。
+  # **`import bluezero` は通ってしまう**——あちらの `__init__.py` が空なので、
+  # **確かめるには `python -m device.main` まで動かすこと**（`../../docs/unverified.md` 42）。
+  # ビルドに `libdbus-1-dev` と `libglib2.0-dev` が要る（`../../docs/deploy-device.md` の 3）。
+  "dbus-python>=1.3",
   # GPIO（LED ×2 と、あとで足すセンサーの入力）。純 Python で、点滅を裏のスレッドで回せる
   # （→ `src/device/hw/led.py`。周期処理を止めずに点滅させるため）。
   "gpiozero>=2.0",
