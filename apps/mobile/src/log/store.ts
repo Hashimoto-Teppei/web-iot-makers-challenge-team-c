@@ -147,6 +147,26 @@ export type PendingLimits = {
 };
 
 /**
+ * 「デバイスを使わない」で走るとき、**新しい走行だけを記録しない**（#185）。
+ *
+ * **中継（Durable Object）は数秒で消えるが、走行ログは D1 に永続する行**で、しかも
+ * **取り込みは上書きも削除もできない**（`../lib/mock-guard.ts`）。
+ * **実在しないデバイスの行を、誰にも消せない場所に残さない。**
+ *
+ * **塞ぐのは書く側（`startRide`）だけ。** 丸ごと差し替えると、
+ * **すでに溜まっている走行が「送っていないもの: なし」に見え**（`./use-ride-log-sync.ts`
+ * が `summary()` を読む）、**保持期限の掃除まで止まる**（同じファイルの `purgeRideLogs`）
+ * ——設定を1つ入れただけで、**別の走行のログが黙って消えないまま残り続ける。**
+ *
+ * **オフなら、渡されたものをそのまま返す**（包まない）。
+ */
+export function rideLogStoreFor(standalone: boolean, store: RideLogStore): RideLogStore {
+  if (!standalone) return store;
+  // **`this` を使っていない**ので、展開して1つだけ差し替えてよい（`createRideLogStore`）。
+  return { ...store, startRide: createDiscardingRideLogStore().startRide };
+}
+
+/**
  * 何も残さない保存層。**`app.db` を開けなかったときだけ使う**（`./expo.ts`）。
  *
  * **黙って成功にしない。**使う側は必ず開けなかった旨を画面に出すこと
@@ -155,20 +175,6 @@ export type PendingLimits = {
  * **走行そのものは止めない。**記録できないことより、**検知が動かないことの方が危険**である
  * （警告の出し先はデバイスで、そちらは `app.db` と関係なく動く）。
  */
-/**
- * この走行を記録する保存層を選ぶ（#185）。
- *
- * **「デバイスを使わない」で走る端末は記録しない。** 中継（Durable Object）は数秒で
- * 消えるが、**走行ログは D1 に永続する行**で、しかも**取り込みは上書きも削除もできない**
- * （`../lib/mock-guard.ts`）。**実在しないデバイスの行を、誰にも消せない場所に残さない。**
- *
- * **ここで選ぶのは、選んだ結果を Vitest で確かめられるようにするため。**画面の中で
- * 三項演算子1つにすると、**送らないつもりで送っていた**ことに誰も気づけない。
- */
-export function rideLogStoreFor(standalone: boolean, store: RideLogStore): RideLogStore {
-  return standalone ? createDiscardingRideLogStore() : store;
-}
-
 export function createDiscardingRideLogStore(): RideLogStore {
   return {
     startRide: (deviceId) => ({

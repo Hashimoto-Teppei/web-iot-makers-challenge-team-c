@@ -166,7 +166,11 @@ export default function SettingsScreen() {
           </Text>
         )}
         {riding && (
-          <Text style={styles.note}>走行中は変えられません。止まってから変えてください。</Text>
+          // **下のしきい値と理由が違う**ので、同じ文にしない。こちらは
+          // **走行の途中で名乗る `id` が変わる**ことが問題である。
+          <Text style={styles.note}>
+            走行中は切り替えられません（走行の途中で名乗る ID が変わってしまいます）。
+          </Text>
         )}
 
         <Text style={styles.title}>デバイスのしきい値</Text>

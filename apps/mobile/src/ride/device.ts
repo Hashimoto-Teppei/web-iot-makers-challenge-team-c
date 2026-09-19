@@ -108,7 +108,7 @@ export const MOCK_DEVICE_ID = "a1000001";
  *
  * **{@link MOCK_DEVICE_ID} とは別の値にする。**あちらは `../lib/mock-guard.ts` が
  * 共有のデプロイ先に対して塞ぐので、名乗ると中継が止まり、**この設定の目的そのものが
- * 果たせない。**同じ理由で **`MOCK_DEVICE_IDS` に足さない**（`./standalone.test.ts`）。
+ * 果たせない。**同じ理由で **`MOCK_DEVICE_IDS` に足さない**（`../lib/mock-guard.test.ts` が見張っている）。
  *
  * **固定値である。**毎回作ると、**近傍に毎回別の自転車が現れる。**
  * 裏を返すと、**同時に2台がこのモードで走ると同じ ID を名乗る**ので、

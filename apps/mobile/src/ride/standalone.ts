@@ -3,7 +3,7 @@
  *
  * **デモはラズパイ1台・スマホ2台**で、2台目は**相手役の自転車**として走る。
  * 位置の中継だけを担い、BLE には一切触らない（`docs/interfaces/mobile-api.md`
- * 「`id`」の例外）。**オンにした端末には警告が出ない**——出す先が無いので、
+ * 「`id`」に置いた例外。#183 で合意したもの）。**オンにした端末には警告が出ない**——出す先が無いので、
  * **そのことを設定画面と走行前の点検に必ず出す**（隠すと「動いているつもり」を作る）。
  *
  * **端末に保存する。**デモの途中でアプリが落ちるたびに入れ直すのは現実的でない
@@ -33,11 +33,6 @@ function readStored(): boolean {
 }
 
 const store = createStore<boolean>(readStored());
-
-/** いまの設定。**React の外から見る用。** */
-export function getStandalone(): boolean {
-  return store.get();
-}
 
 /** 画面から見る。 */
 export function useStandalone(): boolean {

@@ -118,7 +118,6 @@ describe("preRideChecks", () => {
     expect(device.detail).toContain("モック");
   });
 
-  // **「持っていない」と「0 件」で直し方が違う**ので、同じ文にしない。
   it("デバイスを使わない設定なら、つながっていなくても走り出せる", () => {
     // **デモの2台目のスマホ**（#185）。中継だけを担うので、デバイスが無いのが正しい。
     const input: PreRideInput = { ...ready, deviceId: null, deviceLink: null, standalone: true };
@@ -129,6 +128,7 @@ describe("preRideChecks", () => {
     expect(canStartRide(preRideChecks(input))).toBe(true);
   });
 
+  // **「持っていない」と「0 件」で直し方が違う**ので、同じ文にしない。
   it("標識を持っていないときと 0 件のときで、赤の理由が違う", () => {
     const none = check({ ...ready, signsMeta: null }, "signs");
     const empty = check({ ...ready, signsMeta: { ...meta, count: 0 } }, "signs");
