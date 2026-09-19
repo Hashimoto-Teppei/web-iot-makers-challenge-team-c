@@ -7,7 +7,7 @@
 **ここで仕様を決め直さない。**
 """
 
-from device.idle import IdleDisconnect
+from device.idle import IdleDisconnect, SingleCentral
 
 SECOND = 1000
 IDLE_MS = 30 * SECOND
@@ -132,3 +132,69 @@ def test_切れたら次につながるまで数えない() -> None:
     idle.on_connect(60 * SECOND)
     assert ask(idle, 80 * SECOND) is False
     assert ask(idle, 91 * SECOND) is True
+
+
+# 以下は `SingleCentral`（つながってよいセントラルを1台に限る。先着優先）。
+# **アドレスは BlueZ が返す形**（大文字）を使う。正本は
+# `../../../docs/interfaces/ble-gatt.md`「前提」。
+
+OWNER = "AA:BB:CC:DD:EE:01"
+OTHER = "AA:BB:CC:DD:EE:02"
+
+
+def test_最初の1台は受け入れる() -> None:
+    central = SingleCentral()
+
+    assert central.accept(OWNER) is True
+    assert central.owner == OWNER
+
+
+def test_2台目は断る() -> None:
+    """**これがこの仕組みの目的。** 2台つながると、2台目が切れただけで主の転送が止まる。"""
+    central = SingleCentral()
+    central.accept(OWNER)
+
+    assert central.accept(OTHER) is False
+    # **主は替わらない。** 先着優先なので、後から来た方に奪わせない。
+    assert central.owner == OWNER
+
+
+def test_同じ相手が2回来ても受け入れる() -> None:
+    """bluezero は1つの接続で `on_connect` を2回呼びうる
+    （`InterfacesAdded` と `PropertiesChanged` の両方）。**断ると自分で主を切る。**
+    """
+    central = SingleCentral()
+    central.accept(OWNER)
+
+    assert central.accept(OWNER) is True
+    assert central.owner == OWNER
+
+
+def test_主が切れたら次の1台が入れる() -> None:
+    central = SingleCentral()
+    central.accept(OWNER)
+
+    assert central.release(OWNER) is True
+    assert central.owner is None
+    assert central.accept(OTHER) is True
+
+
+def test_主を知らないまま切断が来たら片付けを通す() -> None:
+    """**bluezero は接続を取り逃すことがある**（`publish()` の時点で既につながっていた相手）。
+
+    そのとき `accept()` は一度も呼ばれない。**ここで断ると、転送が `sending` のまま残り、
+    以後つないだ誰もが `read` を断られる。**
+    """
+    central = SingleCentral()
+
+    assert central.release(OWNER) is True
+
+
+def test_主でない相手の切断では何もしない() -> None:
+    """**2台目が切れただけで、主の転送を止めたり設定を戻したりしない。**"""
+    central = SingleCentral()
+    central.accept(OWNER)
+    central.accept(OTHER)  # 断られている
+
+    assert central.release(OTHER) is False
+    assert central.owner == OWNER
