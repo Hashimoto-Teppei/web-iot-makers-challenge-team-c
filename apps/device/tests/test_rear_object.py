@@ -94,3 +94,41 @@ def test_クールダウンが保持時間より短い() -> None:
 
     hold_ms = config.NOTIFY_CONFIG.hold_ms[config.REAR_CONFIG.level]
     assert config.REAR_CONFIG.cooldown_ms < hold_ms
+
+
+def test_gpiozero_の_InputDevice_を使う() -> None:
+    """**`DigitalInputDevice` を使わない。**
+
+    あれは `when_activated` のために**エッジ検出を有効にし、その実装が sysfs の
+    `/sys/class/gpio/export` を叩く**が、**いまのカーネルに sysfs GPIO は無い。**
+    `OSError: [Errno 22]` で **`main.py` の起動ごと止まる**（実機で2回踏んだ）。
+
+    **`REAR_SENSOR_GPIO = None` のテストでは捕まらない**——あちらは gpiozero を
+    import しないため。**偽の gpiozero を差し込んで、何を呼ぶかだけを見る。**
+    """
+    import sys
+    import types
+
+    calls: list[tuple[int, bool]] = []
+
+    class FakeInputDevice:
+        def __init__(self, pin: int, pull_up: bool = False) -> None:
+            calls.append((pin, pull_up))
+            self.is_active = False
+
+    class FakeDigitalInputDevice:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            raise AssertionError("DigitalInputDevice を使ってはいけない（sysfs GPIO を叩く）")
+
+    fake = types.ModuleType("gpiozero")
+    fake.InputDevice = FakeInputDevice  # pyright: ignore[reportAttributeAccessIssue]
+    fake.DigitalInputDevice = FakeDigitalInputDevice  # pyright: ignore[reportAttributeAccessIssue]
+    sys.modules["gpiozero"] = fake
+    try:
+        sensor = open_rear_sensor(27)
+    finally:
+        del sys.modules["gpiozero"]
+
+    # **内部プルダウン**（`pull_up=False`）。線が外れたら L へ落ちる。
+    assert calls == [(27, False)]
+    assert sensor.is_high() is False
