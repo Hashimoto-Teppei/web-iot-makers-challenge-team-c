@@ -22,6 +22,38 @@ from device.notify import LightPattern, NotifyConfig
 # import できる必要がある。ここは BLE を知らないので pytest から読まれる）。
 IDENTITY_PATH = Path.home() / ".local" / "share" / "bike-device" / "identity.json"
 
+# 検知ログの置き場所（#40。`log.py` が `state.json` と `records.jsonl` を作る）。
+#
+# **識別子とは別のファイルにする。** 一緒に消えると device_id が変わり、
+# 取り込みの一意キーが総入れ替えになる（上の `IDENTITY_PATH`）。
+# ここが消えたときに変わるのは `log_id` だけで、**それは正しい振る舞い**である
+# （`../../../../docs/interfaces/ble-log-transfer.md`「転送済みログの扱い」）。
+LOG_DIR = Path.home() / ".local" / "share" / "bike-device" / "log"
+
+# 持ち続ける検知ログの件数。**超えたら古いものから捨てる**（`log.py` はリングバッファ）。
+#
+# **デバイスはログを消さない。**既読位置を持つのはスマホ側なので、ここが溢れない限り
+# 何度でも取り直せる（同ファイル）。1回の走行で数百件なので、**数回ぶんの走行**が残る。
+# 1件 60 バイト程度なので、1,000 件でも 60KB ほどにしかならない。
+LOG_CAPACITY = 1_000
+
+# `log` に1塊ずつ流す間隔（ミリ秒）。
+#
+# **まとめて送らない。**`set_value()` は D-Bus のシグナルを出すだけなので、詰め込むと
+# BlueZ が送り出す前に次が重なりうる。**`alert` と周期処理を止めない**ためでもある
+# （同じイベントループの上にあり、**転送の間も警告を出し続ける**必要がある。
+# `../../../../docs/interfaces/ble-gatt.md`「前提」）。
+# 1塊 244 バイトなら、20ms 間隔で 12KB/秒 ——数百件は数秒で流れる。
+# **仮の値**（`../../../../docs/unverified.md` 107）。
+LOG_CHUNK_INTERVAL_MS = 20
+
+# MTU が分からないときに使う1塊のバイト数。
+#
+# **既定の ATT_MTU 23 から 3 を引いた値。****小さい方に倒す**——大きく見積もると
+# BlueZ が黙って切り詰め、**壊れた JSON が届く**（`ble-log-transfer.md` の 6）。
+# 遅くなるだけで、正しさは失われない。
+LOG_FALLBACK_CHUNK = 20
+
 # 使う Bluetooth アダプタのアドレス。None なら最初に見つかったものを使う。
 # ラズパイに載っているのは1つだけなので、通常は None のままでよい。
 BLE_ADAPTER_ADDRESS: str | None = None

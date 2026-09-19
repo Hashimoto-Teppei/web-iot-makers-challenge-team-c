@@ -1,21 +1,21 @@
-"""デバイスの識別子（`device_id` / `log_id`）の生成と保存。
+"""デバイスの識別子（`device_id`）の生成と保存。
 
 **BLE を知らないので、開発機でも pytest から呼べる。**
 `device_id` は `device-info` とアドバタイズの Local Name の両方に出る
 （`../../../../docs/interfaces/ble-gatt.md`）。
 
 - `device_id` — デバイスごとに固定。**16進の小文字8文字。**
-- `log_id` — ログの世代。ログを消した・失った・`seq` を振り直したときだけ変わる。
 
-**`log_id` を今はここに置いている。** ログの保存が実装される（#40）まで、置き場所が他に無いため。
-ログストアができたら**そちら側へ移す**こと——ログを消したときに `log_id` が変わらないと、
-セントラルは無効になった既読位置を使い続ける。
+**`log_id`（ログの世代）はここに無い。`log.py` が持つ**（#40 で移した）——
+ログを消したときに `log_id` が変わらないと、**セントラルは無効になった既読位置を
+使い続ける**（以後の検知が1件も取り込まれない）。**持ち主と所有者を揃える。**
 """
 
 import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TypeGuard
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,6 @@ class Identity:
     """このデバイスの識別子。"""
 
     device_id: str
-    log_id: str
 
 
 def new_id() -> str:
@@ -48,7 +47,8 @@ def advertised_name(device_id: str) -> str:
     return f"{NAME_PREFIX}{device_id[-4:]}"
 
 
-def _is_valid_id(value: object) -> bool:
+def is_valid_id(value: object) -> TypeGuard[str]:
+    """16進の小文字8文字か。**`log_id` も同じ形**なので、`log.py` からも呼ぶ。"""
     if not isinstance(value, str) or len(value) != 8:
         return False
     return all(c in "0123456789abcdef" for c in value)
@@ -80,12 +80,10 @@ def load_or_create(path: Path) -> Identity:
     if path.exists():
         try:
             saved = json.loads(path.read_text(encoding="utf-8"))
-            if (
-                isinstance(saved, dict)
-                and _is_valid_id(saved.get("device_id"))
-                and _is_valid_id(saved.get("log_id"))
-            ):
-                return Identity(device_id=saved["device_id"], log_id=saved["log_id"])
+            # **知らないキーは読み飛ばす。**#40 より前に作られたファイルには
+            # `log_id` が入っているが、**持ち主は `log.py` へ移った**ので見ない。
+            if isinstance(saved, dict) and is_valid_id(saved.get("device_id")):
+                return Identity(device_id=saved["device_id"])
             logger.error("%s の中身が識別子として読めない。作り直す", path)
         except ValueError as err:
             logger.error("%s が JSON として読めない（%s）。作り直す", path, err)
@@ -93,17 +91,17 @@ def load_or_create(path: Path) -> Identity:
             logger.error("%s を読めなかった（%s）。今回だけの識別子で動かす", path, err)
             save = False
 
-    identity = Identity(device_id=new_id(), log_id=new_id())
+    identity = Identity(device_id=new_id())
     if save:
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(
-                json.dumps({"device_id": identity.device_id, "log_id": identity.log_id}),
+                json.dumps({"device_id": identity.device_id}),
                 encoding="utf-8",
             )
         except OSError as err:
             # 書けなくても起動は続ける。次に電源を入れると別の device_id になるが、
             # **起動しないよりはよい**（走行中に警告が出ないことの方が重い）。
             logger.error("%s に保存できなかった（%s）。次の起動で別の ID になる", path, err)
-    logger.info("識別子を作った: device_id=%s log_id=%s", identity.device_id, identity.log_id)
+    logger.info("識別子を作った: device_id=%s", identity.device_id)
     return identity

@@ -234,3 +234,37 @@ def test_タイムアウトを差し替えても控えた心拍は消えない()
     # 新しいタイムアウトで測る（古い 3 秒なら down になっている頃）。
     assert watch.evaluate(5_000).link == "up"
     assert watch.evaluate(7_500).link == "down"
+
+
+def test_一度も心拍が来ていなければ時刻を作らない() -> None:
+    """**足す先が無い。** 記録は諦めて、警告だけ出す（#40）。"""
+    watch = make_watch()
+
+    assert watch.stamp(now_ms=1 * SECOND) is None
+
+
+def test_心拍のtに経過を足して時刻を作る() -> None:
+    # デバイスに RTC は無い。時刻はスマホから来るものだけを使う
+    # （docs/interfaces/ble-log-transfer.md「検知ログの `body`」）。
+    watch = make_watch()
+    watch.record_beat(beat(t=1_756_123_456_789), now_ms=10 * SECOND)
+
+    stamp = watch.stamp(now_ms=10 * SECOND + 400)
+
+    assert stamp is not None
+    assert stamp.t == 1_756_123_456_789 + 400
+    # 心拍が届いている間は推定と呼ばない（毎秒1通なので、ほぼ全部が推定になってしまう）。
+    assert stamp.t_est is False
+
+
+def test_心拍が途切れている間はt_estが立つ() -> None:
+    # BLE が切れている間に起きた検知も残す。捨てると、通信が死んでも黙らない
+    # 土台の検知結果だけが丸ごと欠ける（同ファイル）。
+    watch = make_watch()
+    watch.record_beat(beat(t=1_000), now_ms=1 * SECOND)
+
+    stamp = watch.stamp(now_ms=30 * SECOND)
+
+    assert stamp is not None
+    assert stamp.t == 1_000 + 29 * SECOND
+    assert stamp.t_est is True

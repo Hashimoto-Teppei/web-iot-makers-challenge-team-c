@@ -9,11 +9,12 @@
  * （`docs/adr/0002-development-lifecycle.md`）。**このファイルにテストを置かない**
  * ——実機の BLE が要るものは実機で確かめる。
  *
- * **`log`（検知ログの転送）はまだ扱わない**（#40）。ここで作るのは接続と `alert` の出口だけ。
+ * **検知ログの回収（#40）もここが回す**が、**バイト列の切り出しは `./log-transfer.ts`**
+ * にある（あちらは Vitest で回せる）。ここは「購読する」「`control` に書く」「待つ」だけ。
  */
 
 import { BleManager, type Device, type Subscription } from "react-native-ble-plx";
-import type { DeviceLink } from "../ride/device";
+import type { CollectOutcome, DeviceLink } from "../ride/device";
 import type { AlertMessage } from "../v2v/alert";
 import { base64ToUtf8, utf8ToBase64 } from "./base64";
 import {
@@ -29,14 +30,24 @@ import {
   setDeviceConfigOutcome,
   subscribeDeviceConfig,
 } from "./device-config-store";
+import {
+  type DeviceDetection,
+  LogStreamReader,
+  readCommand,
+  skippedRecordsReason,
+  stopCommand,
+  transferTimeoutReason,
+} from "./log-transfer";
 import { requestBlePermissions } from "./permissions";
 import {
   ALERT_UUID,
   CONFIG_UUID,
+  CONTROL_UUID,
   DEVICE_INFO_UUID,
   type DeviceStatus,
   incompatibleReason,
   isCompatible,
+  LOG_UUID,
   MIN_MTU,
   parseDeviceInfo,
   parseStatus,
@@ -74,6 +85,14 @@ export type BleLinkConfig = {
    */
   permissionRetryDelayMs: number;
   /**
+   * `control` に `read` を書いてから、EOT を待つ上限（#40）。
+   *
+   * **待ち続けない。**デバイスが黙った（落ちた・切れかけている）とき、
+   * **転送が終わらないまま走行後の同期ごと止まる。**打ち切っても取り込んだぶんは残り、
+   * **次につないだときに続きから取り直せる**（`docs/interfaces/ble-log-transfer.md`）。
+   */
+  collectTimeoutMs: number;
+  /**
    * 設定を変えてから `config` を書くまでの待ち（#124）。
    *
    * **押すたびに書かない。**GATT の操作は一度に1つしか出せず（このファイルの冒頭）、
@@ -94,6 +113,14 @@ export const bleLinkDefaults: BleLinkConfig = {
   permissionRetryDelayMs: 5_000,
   // **人が ± を押し終えるのを待つ長さ。**長くすると、変えたのに効いていない時間が延びる。
   configWriteDelayMs: 500,
+  // **1回の走行ぶん（数百件）を流し切れる長さ。**1件 80 バイト程度で、実機は 20ms ごとに
+  // 1 塊（`apps/device/src/device/config.py` の `LOG_CHUNK_INTERVAL_MS`）。
+  // MTU が取れていれば 1 塊 244 バイトなので、**満杯（1,000 件 ≒ 77KB）でも 7 秒**。
+  // **MTU が取れないと 1 塊 20 バイトに落ち、満杯なら 77 秒かかって必ず打ち切りに当たる**
+  // （`docs/unverified.md` 108）。**延ばさない**——走行後の画面がその間ずっと止まる。
+  // 打ち切っても既読位置は進んでいるので、**走行を終えるたびに続きから吸い上がる。**
+  // **仮の値**（`docs/unverified.md` 107 / 108）。
+  collectTimeoutMs: 30_000,
 };
 
 /**
@@ -117,6 +144,17 @@ export class BleLink {
   /** 接続中の相手。`writeAlert` はこれに書く */
   private connected: Device | null = null;
   private statusSubscription: Subscription | null = null;
+  private logSubscription: Subscription | null = null;
+  /** 受け取ったバイトを組み立てる側（`./log-transfer.ts`）。**接続をまたいで使い回す** */
+  private readonly logReader = new LogStreamReader();
+  /** 回収の最中だけ立つ。**2本同時に走らせない**（`control` の `read` は断られる） */
+  private collecting: {
+    onRecords: (records: readonly DeviceDetection[]) => void;
+    received: number;
+    /** 読めずに捨てた行の数。**既読位置はそれを飛ばして進む**ので、必ず人に見せる */
+    skipped: number;
+    finish: (outcome: CollectOutcome) => void;
+  } | null = null;
   private disconnectSubscription: Subscription | null = null;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   /** しきい値の上書きの購読を外すもの。**接続していない間も張っておく** */
@@ -206,6 +244,120 @@ export class BleLink {
       // **握りつぶす。**書けなかった1通は捨てる——古い警告は無価値で、
       // **遅れて出る警告は出ないより悪い。**心拍は次の1秒後に作り直される。
       .catch(() => undefined);
+  }
+
+  /**
+   * 検知ログを回収する（#40）。**走行を終えたあとに呼ぶ。**
+   *
+   * 手順は `docs/interfaces/ble-gatt.md`「接続してから転送するまで」の 6 ——
+   * **受信バッファを空にしてから `control` に `read` を書く。**
+   * 前の転送が途中で切れていると `\n` で終わっていない断片が残り、
+   * **そのままだと先頭の1レコードが壊れた JSON になる。**
+   *
+   * **例外を投げない。**走行後の同期から呼ばれるので、**投げると送信ごと止まる。**
+   * うまくいかなかったことは `reason` で返す（黙って0件にしない）。
+   */
+  private collectLogs(
+    since: number,
+    onRecords: (records: readonly DeviceDetection[]) => void,
+  ): Promise<CollectOutcome> {
+    const device = this.connected;
+    if (device === null) {
+      return Promise.resolve({
+        received: 0,
+        done: false,
+        reason: "デバイスにつながっていないので、検知ログを取り込めませんでした。",
+      });
+    }
+    if (this.collecting !== null) {
+      // **2本目を始めない。**デバイス側は `sending` 中の `read` を断るので
+      // （`docs/interfaces/ble-gatt.md`「`control`」）、待たせるより素直に返す。
+      return Promise.resolve({ received: 0, done: false, reason: null });
+    }
+
+    return new Promise<CollectOutcome>((resolve) => {
+      const generation = this.generation;
+      let settled = false;
+      const timer = setTimeout(() => {
+        // **打ち切る。**取り込んだぶんは残り、既読位置もそこまで進んでいるので、
+        // 次につないだときに続きから取り直せる。
+        const received = this.collecting?.received ?? 0;
+        // **`stop` を書いてから諦める。**書かないとデバイスは `sending` のままで、
+        // **次の `read` を断られる**（切断まで戻らない）。
+        this.connected
+          ?.writeCharacteristicWithResponseForService(
+            SERVICE_UUID,
+            CONTROL_UUID,
+            utf8ToBase64(stopCommand()),
+          )
+          .catch(() => undefined);
+        const skipped = this.collecting?.skipped ?? 0;
+        finish({
+          received,
+          done: false,
+          reason:
+            skipped > 0
+              ? `${transferTimeoutReason(received)}${skippedRecordsReason(skipped)}`
+              : transferTimeoutReason(received),
+        });
+      }, this.config.collectTimeoutMs);
+
+      const finish = (outcome: CollectOutcome): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        this.collecting = null;
+        resolve(outcome);
+      };
+
+      this.collecting = { onRecords, received: 0, skipped: 0, finish };
+      // **書くたびに捨てる**（前の転送の断片を先頭に付けない）。
+      this.logReader.reset();
+      device
+        .writeCharacteristicWithResponseForService(
+          SERVICE_UUID,
+          CONTROL_UUID,
+          utf8ToBase64(readCommand(since)),
+        )
+        .catch((error: unknown) => {
+          if (this.isStale(generation)) {
+            finish({ received: 0, done: false, reason: null });
+            return;
+          }
+          finish({
+            received: 0,
+            done: false,
+            reason: `検知ログを頼めませんでした（${String(error)}）。`,
+          });
+        });
+    });
+  }
+
+  /** `log` の Notify を1塊受け取った。**切り出しは `./log-transfer.ts`。** */
+  private onLogChunk(value: string): void {
+    const collecting = this.collecting;
+    const { records, done, skipped } = this.logReader.push(value);
+    // **自分が `read` を書いたときだけ EOT を信じる**（`docs/interfaces/ble-gatt.md`「前提」）。
+    // 書いていないのに届いたものは、他人の転送——**既読位置を進めない。**
+    if (collecting === null) return;
+
+    // **捨てた行を数える。**既読位置は**読めた行の `seq`** まで進むので、
+    // **壊れた1行はデバイスから二度と送られてこない**——黙って減らさない
+    // （`./log-transfer.ts` の `skippedRecordsReason`）。
+    collecting.skipped += skipped;
+    if (records.length > 0) {
+      collecting.received += records.length;
+      // **届いた端から取り込む。**途中で切れても、そこまでは残る
+      // （進めてよいのは取り込みを終えたところまで。`ble-log-transfer.md`）。
+      collecting.onRecords(records);
+    }
+    if (done) {
+      collecting.finish({
+        received: collecting.received,
+        done: true,
+        reason: collecting.skipped > 0 ? skippedRecordsReason(collecting.skipped) : null,
+      });
+    }
   }
 
   /** 1回ぶんの接続の試み。**失敗したら自分で次を予約する。** */
@@ -326,6 +478,19 @@ export class BleLink {
       },
     );
 
+    // 4. `log` も購読する（#40）。**`status` と同じく、`read` を書くより十分前に張る**
+    //    ——購読していない Characteristic の Notify は捨てられ、**1件も届かないまま
+    //    転送が終わる**（`docs/interfaces/ble-gatt.md`「購読より先に `read` を書かない」）。
+    //    走行後にしか使わないので、ここで張っておけば時間は十分にある。
+    this.logSubscription = device.monitorCharacteristicForService(
+      SERVICE_UUID,
+      LOG_UUID,
+      (error, characteristic) => {
+        if (error !== null || characteristic?.value == null) return;
+        this.onLogChunk(characteristic.value);
+      },
+    );
+
     this.disconnectSubscription = device.onDisconnected(() => {
       if (this.isStale(generation)) return;
       // **自動でつなぎ直す**（#38）。走行中に切れるのは普通に起きる。
@@ -344,7 +509,9 @@ export class BleLink {
         // **デバイスから読んだ `device_id` を名乗る。**スマホ側で作った ID にすると、
         // 中継とログの突き合わせが割れる（`../ride/device.ts`）。
         deviceId: info.deviceId,
+        logId: info.logId,
         writeAlert: (message) => this.writeAlert(message),
+        collectLogs: (since, onRecords) => this.collectLogs(since, onRecords),
       },
       status: null,
       reason: null,
@@ -528,8 +695,17 @@ export class BleLink {
     // （`docs/interfaces/ble-gatt.md`「`config`」）、緑のまま残すと
     // **効いていない上書きを効いていると見せる。**
     setDeviceConfigOutcome({ state: "default", reason: null });
+    // **回収の最中に切れたら、待っている側を返す。**返さないと、走行後の同期が
+    // **タイムアウトまで止まったまま**になる（取り込んだぶんはもう残っている）。
+    this.collecting?.finish({
+      received: this.collecting.received,
+      done: false,
+      reason: "転送の途中でデバイスとの接続が切れました。つなぎ直すと続きから取り直します。",
+    });
     this.statusSubscription?.remove();
     this.statusSubscription = null;
+    this.logSubscription?.remove();
+    this.logSubscription = null;
     this.disconnectSubscription?.remove();
     this.disconnectSubscription = null;
     device?.cancelConnection().catch(() => undefined);

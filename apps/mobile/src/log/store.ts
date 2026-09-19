@@ -18,10 +18,19 @@ import { and, asc, eq, isNotNull, isNull, lte, notExists, sql } from "drizzle-or
 // **リクエストの形を手で書き写さない**（`docs/interfaces/mobile-api.md`）。
 // 型だけを借りるので、Worker のコードはモバイルのバンドルに入らない。
 import type { DetectionRecord, PointRecord, RideRecord } from "web/src/worker/logs/request";
+import type { DeviceDetection } from "../ble/log-transfer";
 import type { Warning } from "../detect/types";
 import type { SyncSqliteDatabase } from "../signs/store";
 import type { SelfMessage } from "../v2v/messages";
-import { appMeta, detections, LAST_SENT_AT_KEY, points, rides } from "./schema";
+import {
+  appMeta,
+  detections,
+  deviceDetections,
+  deviceLogSeqKey,
+  LAST_SENT_AT_KEY,
+  points,
+  rides,
+} from "./schema";
 
 /** スマホ発の検知の種別。**`rear_object` はデバイスの中でしか発生しない**（#40） */
 export type PhoneWarnKind = Extract<DetectionRecord, { source: "phone" }>["kind"];
@@ -74,6 +83,24 @@ export type RideLogStore = {
    * （`docs/interfaces/mobile-api.md`。つながっていない走行は始めない）。
    */
   startRide(deviceId: string, startedAt: number): RideRecording;
+  /**
+   * デバイスから回収した検知を取り込む（#40）。**同じものが再び届いても増やさない。**
+   *
+   * **既読位置（`since` に使う `seq`）もここで進める。**取り込みと同じ呼び出しで進めるのは、
+   * **進めてよいのは取り込みを終えたところまで**だからである
+   * （`docs/interfaces/ble-log-transfer.md`「転送済みログの扱い」）。
+   *
+   * @param logId **デバイスの `log_id`**（走行の `log_id` ではない）
+   * @returns 新しく積まれた件数（**既にあったぶんは数えない**）
+   */
+  addDeviceDetections(deviceId: string, logId: string, records: readonly DeviceDetection[]): number;
+  /**
+   * デバイスのログをどこまで取り込んだか。**`control` の `since` に渡す。**
+   *
+   * **`log_id` が前回と違えば 0 を返す**（鍵に世代が入っているため）——
+   * そのまま全件を取り直すのが正しい（同ファイル）。
+   */
+  deviceLogSince(deviceId: string, logId: string): number;
   /**
    * 次に送るぶんを1回ぶん取り出す。**送るものが無ければ `null`。**
    *
@@ -137,6 +164,10 @@ export function createDiscardingRideLogStore(): RideLogStore {
       addWarning: () => {},
       end: () => {},
     }),
+    // **回収したことにしない。**取り込めないので、既読位置も進めない（0 を返す）
+    // ——次につないだときに、同じぶんをもう一度取りに行ける。
+    addDeviceDetections: () => 0,
+    deviceLogSince: () => 0,
     pending: () => null,
     markSent: () => {},
     purgeSent: () => ({ rides: 0, points: 0, detections: 0 }),
@@ -281,6 +312,69 @@ export function createRideLogStore(
       };
     },
 
+    addDeviceDetections(deviceId, logId, records) {
+      if (records.length === 0) return 0;
+      const before = countOf(
+        db
+          .select({ n: sql<number>`count(*)` })
+          .from(deviceDetections)
+          .where(and(eq(deviceDetections.deviceId, deviceId), eq(deviceDetections.logId, logId)))
+          .all(),
+      );
+
+      let last = 0;
+      for (const record of records) {
+        // **同じキーが再び届くのは正常。**途中で切れて `since` から取り直せば、
+        // 同じ区間がもう一度流れてくる（`docs/interfaces/ble-log-transfer.md`）。
+        // **上書きしない**——送信済みの印（`sent_at`）を消してしまう。
+        db.insert(deviceDetections)
+          .values({
+            deviceId,
+            logId,
+            seq: record.seq,
+            t: record.t,
+            tEst: record.tEst ? 1 : 0,
+            kind: record.kind,
+            lv: record.lv,
+          })
+          .onConflictDoNothing()
+          .run();
+        if (record.seq > last) last = record.seq;
+      }
+
+      // **既読位置は前に進めるだけ。**戻すと、**一度でも溢れた端末と二度と同期できなくなる**
+      // （飛びの手前で止め続けると、毎回同じ位置で飛ぶ。
+      // `docs/interfaces/ble-log-transfer.md`「転送の約束」の 5）。
+      db.insert(appMeta)
+        .values({ key: deviceLogSeqKey(deviceId, logId), value: last })
+        .onConflictDoUpdate({
+          target: appMeta.key,
+          set: { value: sql`max(${appMeta.value}, excluded.value)` },
+        })
+        .run();
+
+      // **件数は数え直す。**`run()` が返すものはドライバごとに違い、
+      // **Vitest で通ったものが実機で通る保証が無い**（{@link RideLogStore.purgeSent}）。
+      return (
+        countOf(
+          db
+            .select({ n: sql<number>`count(*)` })
+            .from(deviceDetections)
+            .where(and(eq(deviceDetections.deviceId, deviceId), eq(deviceDetections.logId, logId)))
+            .all(),
+        ) - before
+      );
+    },
+
+    deviceLogSince(deviceId, logId) {
+      const [row] = db
+        .select({ value: appMeta.value })
+        .from(appMeta)
+        .where(eq(appMeta.key, deviceLogSeqKey(deviceId, logId)))
+        .all();
+      return row?.value ?? 0;
+    },
+
     pending(limits) {
       const [ride] = db
         .select({
@@ -298,7 +392,10 @@ export function createRideLogStore(
         .limit(1)
         .all();
 
-      if (ride === undefined || ride.endedAt === null) return null;
+      // **走行ぶんを先に送る。**デバイス発は走行に結びついていないので、
+      // **どちらを先にしても取り込みの結果は変わらない**が、**古いものから送る**という
+      // 順序（`rides` の `order by`）をこちらにも及ぼすため、走行を先に出し切る。
+      if (ride === undefined || ride.endedAt === null) return pendingDeviceBatch(db, limits);
 
       const batchPoints = db
         .select({
@@ -379,6 +476,29 @@ export function createRideLogStore(
         })
         .run();
 
+      // **デバイス発は走行の行を持たない**ので、`batch.rides` の輪では塗れない（#40）。
+      // **`log_id` ごとに、送った `seq` の上限まで塗る**（走行ぶんと同じ形）。
+      for (const logId of new Set(
+        batch.detections.filter((row) => row.source === "device").map((row) => row.logId),
+      )) {
+        const lastSeq = lastSeqOf(
+          batch.detections.filter((row) => row.source === "device"),
+          logId,
+        );
+        if (lastSeq === null) continue;
+        db.update(deviceDetections)
+          .set({ sentAt: at })
+          .where(
+            and(
+              eq(deviceDetections.deviceId, batch.deviceId),
+              eq(deviceDetections.logId, logId),
+              isNull(deviceDetections.sentAt),
+              lte(deviceDetections.seq, lastSeq),
+            ),
+          )
+          .run();
+      }
+
       for (const ride of batch.rides) {
         const lastPointSeq = lastSeqOf(batch.points, ride.logId);
         if (lastPointSeq !== null) {
@@ -426,16 +546,31 @@ export function createRideLogStore(
       // （まだ送っていない行は `sent_at` が `null` なので触れない）。
       const sentPoints = and(isNotNull(points.sentAt), lte(points.sentAt, before));
       const sentDetections = and(isNotNull(detections.sentAt), lte(detections.sentAt, before));
+      // **デバイス発も同じ期限で消す**（#40）。**既読位置は `app_meta` に残る**ので、
+      // 消しても取り直しにはならない（`./schema.ts` の `deviceLogSeqKey`）。
+      const sentDeviceDetections = and(
+        isNotNull(deviceDetections.sentAt),
+        lte(deviceDetections.sentAt, before),
+      );
 
       const purgedPoints = countOf(
         db.select({ n: sql<number>`count(*)` }).from(points).where(sentPoints).all(),
       );
-      const purgedDetections = countOf(
-        db.select({ n: sql<number>`count(*)` }).from(detections).where(sentDetections).all(),
-      );
+      const purgedDetections =
+        countOf(
+          db.select({ n: sql<number>`count(*)` }).from(detections).where(sentDetections).all(),
+        ) +
+        countOf(
+          db
+            .select({ n: sql<number>`count(*)` })
+            .from(deviceDetections)
+            .where(sentDeviceDetections)
+            .all(),
+        );
 
       db.delete(points).where(sentPoints).run();
       db.delete(detections).where(sentDetections).run();
+      db.delete(deviceDetections).where(sentDeviceDetections).run();
 
       // **行が1つも残っていない走行だけを消す。**残すと「送るものが無い走行」が増え続け、
       // `pending()` の探索が伸びる。
@@ -499,6 +634,14 @@ export function createRideLogStore(
         .from(detections)
         .where(and(eq(detections.source, "phone"), isNull(detections.sentAt)))
         .all();
+      // **デバイス発も数える**（#40）。数えないと、**回収したのに送れていないぶんが
+      // 画面のどこにも出ない**——走行後の同期は1日に1回しか走らないので、
+      // 気づくのがデモの直前になる（`docs/interfaces/mobile-api.md`）。
+      const [unsentDeviceDetections] = db
+        .select({ n: sql<number>`count(*)` })
+        .from(deviceDetections)
+        .where(isNull(deviceDetections.sentAt))
+        .all();
       // **行から `max(sent_at)` を出さない。**送信済みの行は保持期間を過ぎたら消えるので、
       // **掃除のあとに「一度も送っていない」に戻る**（`./schema.ts` の `appMeta`）。
       const [lastSentAt] = db
@@ -510,10 +653,72 @@ export function createRideLogStore(
       return {
         pendingRides: rideCounts?.n ?? 0,
         pendingPoints: unsentPoints?.n ?? 0,
-        pendingDetections: unsentDetections?.n ?? 0,
+        pendingDetections: (unsentDetections?.n ?? 0) + (unsentDeviceDetections?.n ?? 0),
         lastSentAt: lastSentAt?.value ?? null,
       };
     },
+  };
+}
+
+/**
+ * デバイスから回収した検知を1回ぶん取り出す（#40）。**走行の行を載せない。**
+ *
+ * **取り込み側は「検知だけを送る回」を受け付ける**（`web/src/worker/logs/request.ts`
+ * ——3つとも省略できる）。デバイス発の検知は走行に結びついておらず、
+ * **どこで起きたかは Worker が `t` で突き合わせる**ので、走行の行を作る必要が無い。
+ *
+ * **1回に1つの `(device_id, log_id)` だけ**を載せる。`device_id` は1リクエストに1つと
+ * 決まっており（`docs/interfaces/mobile-api.md`）、混ぜても速くならない。
+ */
+function pendingDeviceBatch(db: SyncSqliteDatabase, limits: PendingLimits): PendingBatch | null {
+  const [head] = db
+    .select({ deviceId: deviceDetections.deviceId, logId: deviceDetections.logId })
+    .from(deviceDetections)
+    .where(isNull(deviceDetections.sentAt))
+    // **古いものから送る**（走行ぶんと同じ理由。通信が細い日に古いものだけが残らないように）。
+    .orderBy(asc(deviceDetections.t))
+    .limit(1)
+    .all();
+  if (head === undefined) return null;
+
+  const rows = db
+    .select({
+      logId: deviceDetections.logId,
+      seq: deviceDetections.seq,
+      t: deviceDetections.t,
+      tEst: deviceDetections.tEst,
+      kind: deviceDetections.kind,
+      lv: deviceDetections.lv,
+    })
+    .from(deviceDetections)
+    .where(
+      and(
+        eq(deviceDetections.deviceId, head.deviceId),
+        eq(deviceDetections.logId, head.logId),
+        isNull(deviceDetections.sentAt),
+      ),
+    )
+    // **`seq` の順に送る。**印を付けるときに「ここまで」で切れる形にしておく。
+    .orderBy(asc(deviceDetections.seq))
+    .limit(limits.maxDetections)
+    .all();
+  if (rows.length === 0) return null;
+
+  return {
+    deviceId: head.deviceId,
+    rides: [],
+    points: [],
+    detections: rows.map((row) => ({
+      source: "device",
+      logId: row.logId,
+      seq: row.seq,
+      t: row.t,
+      // **`false` を送らない。**無ければ実測、が約束である
+      // （`docs/interfaces/ble-log-transfer.md`）。
+      ...(row.tEst === 1 ? { tEst: true } : {}),
+      kind: "rear_object",
+      lv: row.lv as 1 | 2 | 3,
+    })),
   };
 }
 

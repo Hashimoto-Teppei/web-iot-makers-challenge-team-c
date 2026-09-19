@@ -27,7 +27,7 @@ def test_初回は作って保存する(tmp_path: Path) -> None:
 
     assert path.exists()  # 親ディレクトリごと作る
     saved = json.loads(path.read_text(encoding="utf-8"))
-    assert saved == {"device_id": identity.device_id, "log_id": identity.log_id}
+    assert saved == {"device_id": identity.device_id}
 
 
 def test_2回目は同じ識別子を返す(tmp_path: Path) -> None:
@@ -55,7 +55,7 @@ def test_形の違う識別子が入っていたら作り直す(tmp_path: Path) 
     # ハイフン付きの UUID が入ると、名前の長さもキーの長さも変わる。
     path = tmp_path / "identity.json"
     path.write_text(
-        json.dumps({"device_id": "c3f1a20b-0000-4000-8000-000000000000", "log_id": "9a1c2b3d"}),
+        json.dumps({"device_id": "c3f1a20b-0000-4000-8000-000000000000"}),
         encoding="utf-8",
     )
 

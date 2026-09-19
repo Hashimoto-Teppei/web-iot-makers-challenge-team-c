@@ -182,6 +182,20 @@ class LinkStatus:
     moving: bool
 
 
+@dataclass(frozen=True)
+class Stamp:
+    """検知ログに打つ時刻（`../../../../docs/interfaces/ble-log-transfer.md`）。
+
+    **デバイスのシステムクロックを使わない。** ラズパイに RTC はなく、電源を入れた直後の
+    時計は正しくない。**時刻はスマホから来るものだけ**である。
+    """
+
+    # UTC のミリ秒。**最後に受け取った `beat` の `t` に、単調時計で測った経過を足したもの。**
+    t: int
+    # 実測ではなく推定か。**取り込み側は実測と同じ確からしさで扱わない。**
+    t_est: bool
+
+
 class LinkWatch:
     """心拍のウォッチドッグ。**`beat` が届いているかだけを見て `link` を決める。**
 
@@ -255,6 +269,30 @@ class LinkWatch:
         self._last_beat_at_ms = now_ms
         self._recent.append((now_ms, beat.t))
         self._prune(now_ms)
+
+    def stamp(self, now_ms: int) -> Stamp | None:
+        """検知ログに打つ時刻を作る。**一度も `beat` が来ていなければ `None`。**
+
+        **控えた `beat` の `t` に、単調時計で測った経過を足す**
+        （`../../../../docs/interfaces/ble-log-transfer.md`「検知ログの `body`」）。
+
+        **`link` が `down` や `nofix` でも控えを捨てない**ので、ここは BLE が切れている間も
+        答えを返す。**捨てると足す先が無くなり、通信が死んでも黙らない土台の検知結果だけが、
+        振り返りからも Worker からも丸ごと欠ける。**
+
+        **一度も `beat` を受け取っていない間は `None` を返す**（足す先が無い）。
+        呼ぶ側は**記録を諦めて、警告だけを出すこと**——人に伝えることは時刻を必要としない。
+
+        **`t_est` は「タイムアウトを超えて空いたか」で決める。** 心拍が届いている間の
+        1秒未満の足し算まで推定と呼ぶと、**実測と推定の区別が「ほぼ全部が推定」になって
+        意味を失う**（`beat` は毎秒1通なので、検知はほぼ必ず2通の間で起きる）。
+        """
+        beat = self._last_beat
+        at_ms = self._last_beat_at_ms
+        if beat is None or at_ms is None:
+            return None
+        elapsed = now_ms - at_ms
+        return Stamp(t=beat.t + elapsed, t_est=elapsed > self._timeout_ms)
 
     def evaluate(self, now_ms: int) -> LinkStatus:
         """いまの `link` を出す。**呼ぶたびに引き直す。**

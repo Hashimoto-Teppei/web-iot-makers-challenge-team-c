@@ -11,8 +11,13 @@
 ## 何を確かめられて、何を確かめられないか
 
 **確かめられる**——スキャンで見つかること、接続、MTU の要求、サービス探索、`device-info` の Read、
-`status` の購読、`alert` への書き込み、`link` が `up` に上がること、そして
+`status` の購読、`alert` への書き込み、`link` が `up` に上がること、
+**検知ログの回収（`control` / `log`。#40）**、そして
 **心拍が止まったあとにアプリが自力で戻れること**（`docs/interfaces/ble-gatt.md`「前提」）。
+
+**後方物体センサーは無いので、検知はここが作る**（下の `MOCK_DETECT_INTERVAL_S`）。
+**流す中身は本物のコード**（`log.py` / `transfer.py`）が組み立てるので、
+レコードの形と EOT の位置は実機と同じものが届く。
 
 **確かめられない**——**BlueZ の挙動**。相手が CoreBluetooth（macOS）や別の実装だからで、
 `../../../docs/unverified.md` の 88（実機の BlueZ 相手に手順が通る）と
@@ -32,7 +37,8 @@
 
 そこで**プロセスごと入れ替える**（`os.execv` で自分を起動し直す）。プロセスが終われば
 CoreBluetooth の後始末でリンクが落ちる。**これが macOS でリンクを手放す唯一の道。**
-`log_id` は `mock-identity.json` に残るので、入れ替わっても同じデバイスとして戻る。
+`device_id` は固定、`log_id` と `seq` は `mock-log/` に残るので、
+入れ替わっても同じデバイス・同じログの世代として戻る（既読位置が無効にならない）。
 
 ## なぜ `device_id` を固定しているか
 
@@ -66,8 +72,11 @@ from bless import (  # pyright: ignore[reportMissingImports]
 
 from device import config, identity
 from device.alert import Beat, LinkWatch, Warn, parse_alert
+from device.detect.rear_object import REAR_OBJECT_KIND
 from device.idle import IdleDisconnect
+from device.log import LogStore
 from device.state import DeviceState
+from device.transfer import LogTransfer
 from device.tuning import Tuning
 
 logger = logging.getLogger("mock")
@@ -76,6 +85,8 @@ logger = logging.getLogger("mock")
 # `hw/ble.py` からは import しない —— あちらは BlueZ を読むので開発機では import できない。
 SERVICE_UUID = "68666e00-58cc-4540-90ad-18bfae31615f"
 DEVICE_INFO_UUID = "68666e01-58cc-4540-90ad-18bfae31615f"
+CONTROL_UUID = "68666e02-58cc-4540-90ad-18bfae31615f"
+LOG_UUID = "68666e03-58cc-4540-90ad-18bfae31615f"
 STATUS_UUID = "68666e04-58cc-4540-90ad-18bfae31615f"
 ALERT_UUID = "68666e06-58cc-4540-90ad-18bfae31615f"
 CONFIG_UUID = "68666e05-58cc-4540-90ad-18bfae31615f"
@@ -83,6 +94,14 @@ CONFIG_UUID = "68666e05-58cc-4540-90ad-18bfae31615f"
 # **本物の識別子と別のファイルに置く。** 同じにすると、開発機で模擬を動かしただけで
 # 実機の `log_id` を上書きしうる。
 MOCK_IDENTITY_PATH = Path.home() / ".local" / "share" / "bike-device" / "mock-identity.json"
+
+# 模擬の検知ログの置き場所（**本物と別**。同じにすると実機の `seq` を進めてしまう）。
+MOCK_LOG_DIR = Path.home() / ".local" / "share" / "bike-device" / "mock-log"
+
+# 模擬の検知を作る間隔（秒）。**後方物体センサーが無いので、ここが代わりに作る。**
+# **短くしない** —— 実機の `cooldown_ms`（3 秒）より詰めると、アプリ側が受け取る量だけが
+# 実機と違うものになる。
+MOCK_DETECT_INTERVAL_S = 15
 
 # **模擬が名乗る `device_id`。正本は `../../mobile/src/lib/mock-guard.ts` の
 # `MOCK_PERIPHERAL_DEVICE_ID`。ここで決め直さない**（UUID と同じ扱い。
@@ -105,8 +124,15 @@ class MockDevice:
     def __init__(self) -> None:
         # **`device_id` はファイルから読まない。**歯止めに掛かる値を必ず名乗る
         # （上の「なぜ `device_id` を固定しているか」）。読むのは `log_id` だけ。
-        ident = identity.load_or_create(MOCK_IDENTITY_PATH)
-        self.state = DeviceState(device_id=MOCK_PERIPHERAL_DEVICE_ID, log_id=ident.log_id)
+        identity.load_or_create(MOCK_IDENTITY_PATH)
+        # **`log_id` と `seq` は本物の `LogStore` が持つ**（#40。`../src/device/log.py`）。
+        self.store = LogStore(MOCK_LOG_DIR, config.LOG_CAPACITY)
+        self.state = DeviceState(
+            device_id=MOCK_PERIPHERAL_DEVICE_ID,
+            log_id=self.store.log_id,
+            oldest_seq=self.store.oldest_seq,
+            latest_seq=self.store.latest_seq,
+        )
         self.local_name = identity.advertised_name(MOCK_PERIPHERAL_DEVICE_ID)
         # 走行ごとのしきい値の上書き（#124）。**判定は `tuning.py`**（実機と同じ道）。
         self.tuning = Tuning(
@@ -117,10 +143,14 @@ class MockDevice:
         self.watch = LinkWatch(
             timeout_ms=self.tuning.beat_timeout_ms,
             stall_window_ms=self.tuning.stall_window_ms,
-            started_at_ms=_now_ms(),
         )
         self.idle = IdleDisconnect(idle_ms=config.IDLE_DISCONNECT_S * 1000)
+        # 検知ログの転送（#40）。**判断は本物のコード**（`../src/device/transfer.py`）。
+        self.transfer = LogTransfer(
+            self.state, self.store, fallback_chunk=config.LOG_FALLBACK_CHUNK
+        )
         self._connected = False
+        self._last_detect_ms: int | None = None
 
     def on_read(self, characteristic: BlessGATTCharacteristic, **_: Any) -> bytearray:
         """Read されたら今の値を返す。**`hw/ble.py` の読み出しと同じ中身。**"""
@@ -135,6 +165,11 @@ class MockDevice:
         uuid = characteristic.uuid.lower()
         if uuid == CONFIG_UUID:
             self.apply_config(bytes(value))
+            return
+        if uuid == CONTROL_UUID:
+            # **MTU を渡さない。** bless は書き込みの MTU を教えてくれないので、
+            # 小さい方（既定の ATT_MTU）に倒れる——**遅いだけで、形は実機と同じ。**
+            self.transfer.handle_control(bytes(value), mtu=None, can_notify=True)
             return
         if uuid != ALERT_UUID:
             return
@@ -165,9 +200,32 @@ class MockDevice:
             timeout_ms=self.tuning.beat_timeout_ms, stall_window_ms=self.tuning.stall_window_ms
         )
 
+    def make_detection(self) -> None:
+        """模擬の検知を1件作る。**実機では後方物体センサーがここに当たる。**
+
+        **時刻の作り方は本物と同じ**（`LinkWatch.stamp()`）。一度も `beat` を
+        受け取っていなければ作らない——足す先の `t` が無い
+        （`docs/interfaces/ble-log-transfer.md`「検知ログの `body`」）。
+        """
+        now_ms = _now_ms()
+        recent = self._last_detect_ms is not None and (
+            now_ms - self._last_detect_ms < MOCK_DETECT_INTERVAL_S * 1000
+        )
+        if recent:
+            return
+        stamp = self.watch.stamp(now_ms)
+        if stamp is None:
+            return
+        self._last_detect_ms = now_ms
+        record = self.store.append(kind=REAR_OBJECT_KIND, lv=2, t=stamp.t, t_est=stamp.t_est)
+        self.state.oldest_seq = self.store.oldest_seq
+        self.state.latest_seq = self.store.latest_seq
+        logger.info("模擬の検知を積んだ（seq=%d / t_est=%s）", record.seq, stamp.t_est)
+
     def tick(self) -> bool:
         """毎秒の見張り。**切るべきなら True を返す**（切るのは呼んだ側）。"""
         now_ms = _now_ms()
+        self.make_detection()
         status = self.watch.evaluate(now_ms)
         if status.link != self.state.link:
             logger.warning("link が %s → %s に変わった", self.state.link, status.link)
@@ -193,6 +251,8 @@ class MockDevice:
         else:
             logger.info("切断された")
             self.idle.on_disconnect()
+            # **切断で転送を中止する**（`docs/interfaces/ble-gatt.md`「`control`」）。
+            self.transfer.abort()
             # **切れたら既定へ戻す**（`../../../docs/interfaces/ble-gatt.md`「`config`」）。
             self.tuning.reset()
             self.state.last_error = None
@@ -242,6 +302,24 @@ async def _build_server(device: MockDevice, loop: asyncio.AbstractEventLoop) -> 
         None,  # 上と同じ理由
         GATTAttributePermissions.writeable,
     )
+    # `control`（#40）。**同じく `write` だけ**——応答なしだと `stop` が届いたかを
+    # セントラルが知れず、落ちればデバイスは送り続ける。
+    await server.add_new_characteristic(
+        SERVICE_UUID,
+        CONTROL_UUID,
+        GATTCharacteristicProperties.write,
+        None,  # 上と同じ理由
+        GATTAttributePermissions.writeable,
+    )
+    # `log`（#40）。**Notify だけ**——値は「最後に流した塊」でしかなく、
+    # レコードの区切りは `\n` であってパケットの境目ではない。
+    await server.add_new_characteristic(
+        SERVICE_UUID,
+        LOG_UUID,
+        GATTCharacteristicProperties.notify,
+        None,  # 上と同じ理由
+        GATTAttributePermissions.readable,
+    )
     await server.start()
     logger.info("アドバタイズを開始した（名前 %s）", device.local_name)
     return server
@@ -263,6 +341,16 @@ async def _serve_once(device: MockDevice, loop: asyncio.AbstractEventLoop) -> No
             if characteristic is not None:
                 characteristic.value = bytearray(device.state.status_bytes())
                 server.update_value(SERVICE_UUID, STATUS_UUID)
+
+            # 検知ログを流す（#40）。**1回の周期で送り切る**——実機は 20ms ごとに
+            # 1塊だが、ここは毎秒の周期しか持っていない。**形（区切りと EOT）は同じ。**
+            while (chunk := device.transfer.next_chunk()) is not None:
+                log_characteristic = server.get_characteristic(LOG_UUID)
+                if log_characteristic is None:
+                    device.transfer.abort()
+                    break
+                log_characteristic.value = bytearray(chunk)
+                server.update_value(SERVICE_UUID, LOG_UUID)
 
             if should_disconnect:
                 logger.warning(

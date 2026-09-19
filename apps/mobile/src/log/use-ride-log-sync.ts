@@ -6,6 +6,9 @@
  *
  * **自分から定期的に送らない。**走行中に送ると 1Hz の中継と同じ回線を奪う
  * （`docs/interfaces/mobile-api.md`「走行後の同期」）ので、**呼ぶのは画面（走行を終えたとき）**である。
+ *
+ * **送る前にデバイスから検知ログを回収する**（#40。`./collect.ts`）。
+ * **順番を逆にしない**——先に送ると、回収したぶんが**次の同期（1日に1回）まで上がらない。**
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -34,7 +37,14 @@ export type RideLogSync = {
   refresh: () => void;
 };
 
-export function useRideLogSync(store: RideLogStore): RideLogSync {
+/**
+ * @param collect 送る前に呼ぶ回収（#40）。**うまくいかなければ理由を返す**（`./collect.ts`）。
+ *   省くと回収しない（デバイスを持たない画面のため）
+ */
+export function useRideLogSync(
+  store: RideLogStore,
+  collect?: () => Promise<string | null>,
+): RideLogSync {
   const [summary, setSummary] = useState<RideLogSummary | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,9 +67,14 @@ export function useRideLogSync(store: RideLogStore): RideLogSync {
     setSyncing(true);
     setError(null);
 
-    syncRideLogs(store, postLogsViaApi)
-      .then((outcome) => {
-        setError(outcome.error);
+    // **回収してから送る。**回収の失敗で送信を止めない——**別々のこと**であり、
+    // スマホ発の走行ログは回収できなくても送れる。理由は両方とも画面に出す。
+    (collect === undefined ? Promise.resolve(null) : collect())
+      .then((collectReason) =>
+        syncRideLogs(store, postLogsViaApi).then((outcome) => ({ outcome, collectReason })),
+      )
+      .then(({ outcome, collectReason }) => {
+        setError(outcome.error ?? collectReason);
         setPurgeError(outcome.purgeError);
       })
       // **ここに来るのは組み立て側の不具合だけ**（送信の失敗は `outcome.error` に入る）。
@@ -70,7 +85,7 @@ export function useRideLogSync(store: RideLogStore): RideLogSync {
         setSyncing(false);
         refresh();
       });
-  }, [store, refresh]);
+  }, [store, refresh, collect]);
 
   // 画面を開いたときに1回読む。**送りはしない**（走行中に開いていることがある）。
   useEffect(refresh, [refresh]);

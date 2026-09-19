@@ -1,10 +1,11 @@
 import { Link } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PreRideChecklist } from "@/components/pre-ride-checklist";
 import { apiBaseUrl } from "@/lib/api";
 import { blocksMockDevice } from "@/lib/mock-guard";
+import { collectDeviceLogs } from "@/log/collect";
 import { getRideLogStore } from "@/log/expo";
 import { useRideLogSync } from "@/log/use-ride-log-sync";
 import { stopStaleRideLocationUpdates } from "@/ride/location";
@@ -36,7 +37,10 @@ export default function HomeScreen() {
   const deviceLink = useDeviceLink();
   const device = deviceLink.device;
   const ride = useRideLoop(signs, logs, device);
-  const sync = useRideLogSync(logs);
+  // **走行を終えたら、送る前にデバイスの検知ログを回収する**（#40。`@/log/collect`）。
+  // **判定をこの画面に書かない**——ここがするのは「いつ呼ぶか」を決めることだけである。
+  const collect = useCallback(() => collectDeviceLogs(device, logs), [device, logs]);
+  const sync = useRideLogSync(logs, collect);
   const status = ride.status;
   // **起動時に1回だけ標識の更新を取りに行く**（`docs/interfaces/stop-signs-delivery.md`）。
   // **走行中かを渡すのはこの画面だけが知っているから**——設定画面は見るだけである。
@@ -228,12 +232,18 @@ export default function HomeScreen() {
         */}
         {sync.summary !== null && (
           <View style={styles.rows}>
+            {/*
+              **走行の件数が 0 でも、検知だけが残ることがある**（#40）——デバイスから
+              回収した検知は走行に結びついていないので、**走行ぶんを送り切ったあとに
+              こちらだけ失敗すると、件数も下の送信ボタンも消える。**
+              **残っているのに「なし」と出す**のが一番悪い（気づくのはデモの直前になる）。
+            */}
             <Row
-              label="送っていない走行"
+              label="送っていないもの"
               value={
-                sync.summary.pendingRides === 0
+                sync.summary.pendingRides === 0 && sync.summary.pendingDetections === 0
                   ? "なし"
-                  : `${sync.summary.pendingRides} 件（測位 ${sync.summary.pendingPoints} 点 / 検知 ${sync.summary.pendingDetections} 件）`
+                  : `走行 ${sync.summary.pendingRides} 件（測位 ${sync.summary.pendingPoints} 点 / 検知 ${sync.summary.pendingDetections} 件）`
               }
             />
             <Row
@@ -257,19 +267,25 @@ export default function HomeScreen() {
         */}
         {sync.purgeError !== null && <Text style={styles.alert}>{sync.purgeError}</Text>}
 
-        {/* **走行中は押せないようにする。**数千点の送信が 1Hz の中継と同じ回線を奪う。 */}
-        {!ride.running && sync.summary !== null && sync.summary.pendingRides > 0 && (
-          <Pressable
-            style={[styles.button, sync.syncing && styles.buttonDisabled]}
-            onPress={sync.sync}
-            disabled={sync.syncing}
-            accessibilityRole="button"
-          >
-            <Text style={styles.buttonLabel}>
-              {sync.syncing ? "送っています…" : "走行ログを送る"}
-            </Text>
-          </Pressable>
-        )}
+        {/*
+         **走行中は押せないようにする。**数千点の送信が 1Hz の中継と同じ回線を奪う。
+         **検知だけが残っているときも出す**（上の件数と同じ条件。#40）——
+         **押す手段が無いと、次の走行を終えるまで送り直せない。**
+         */}
+        {!ride.running &&
+          sync.summary !== null &&
+          (sync.summary.pendingRides > 0 || sync.summary.pendingDetections > 0) && (
+            <Pressable
+              style={[styles.button, sync.syncing && styles.buttonDisabled]}
+              onPress={sync.sync}
+              disabled={sync.syncing}
+              accessibilityRole="button"
+            >
+              <Text style={styles.buttonLabel}>
+                {sync.syncing ? "送っています…" : "走行ログを送る"}
+              </Text>
+            </Pressable>
+          )}
 
         <Link href="/settings" style={styles.link}>
           設定と標識の状態

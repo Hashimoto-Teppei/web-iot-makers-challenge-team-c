@@ -27,8 +27,10 @@ from device.hw.lcd import open_lcd
 from device.hw.led import open_light
 from device.hw.rear_sensor import open_rear_sensor
 from device.idle import IdleDisconnect
+from device.log import LogStore
 from device.notify import ActiveWarning, LightPattern
 from device.state import DeviceState
+from device.transfer import LogTransfer
 from device.tuning import Tuning
 
 logger = logging.getLogger(__name__)
@@ -56,7 +58,15 @@ def main() -> None:
     )
 
     ident = identity.load_or_create(config.IDENTITY_PATH)
-    state = DeviceState(device_id=ident.device_id, log_id=ident.log_id)
+    # 検知ログ（#40）。**`log_id` を持つのはこちら**で、ログを失えば世代が変わる
+    # （`log.py`）。**`identity.py` には無い。**
+    store = LogStore(config.LOG_DIR, config.LOG_CAPACITY)
+    state = DeviceState(
+        device_id=ident.device_id,
+        log_id=store.log_id,
+        oldest_seq=store.oldest_seq,
+        latest_seq=store.latest_seq,
+    )
     local_name = identity.advertised_name(ident.device_id)
     logger.info("device_id=%s / 名前=%s で起動する", ident.device_id, local_name)
 
@@ -92,6 +102,11 @@ def main() -> None:
     # 他人がつなぎっぱなしにすると持ち主のスマホが接続できず、いまは電源を切るしか
     # 戻す方法がない（`../../../../docs/interfaces/ble-gatt.md`「前提」）。
     idle = IdleDisconnect(idle_ms=config.IDLE_DISCONNECT_S * 1000)
+
+    # 検知ログの転送（#40）。**判断は `transfer.py` の中**で、`hw/ble.py` は
+    # 切り出された塊を Notify に載せるだけ。**`state` の `sent` / `remaining` /
+    # `last_error` を書くのはあちら**である。
+    transfer = LogTransfer(state, store, fallback_chunk=config.LOG_FALLBACK_CHUNK)
 
     # 発火中の警告（`../../../../docs/notifications/arbitration.md`）。
     # **`notify.py` が育てる値**で、ここは持ち回るだけ。**判定をここに書かない。**
@@ -169,6 +184,25 @@ def main() -> None:
             # `arbitrate()` が毎回1件を選び直すので、**先に出したせいで順位が狂うことはない。**
             emit(now_ms, watch.evaluate(now_ms))
 
+    def record_detection(warn: Warn, now_ms: int) -> None:
+        """検知を1件、ログに積む（#40）。**警告を出すことと混ぜない。**
+
+        **時刻はスマホから来たものだけ**を使う（`../../../../docs/interfaces/ble-log-transfer.md`）。
+        **一度も `beat` を受け取っていなければ、記録しないで警告だけ出す**
+        ——足す先の `t` が無いためで、**人に伝えることは時刻を必要としない。**
+        """
+        stamp = watch.stamp(now_ms)
+        if stamp is None:
+            # **警告は既に出ている**（呼び出し元が `warnings` に混ぜる）。残らないだけ。
+            logger.info("まだ `beat` を受け取っていないので、この検知は記録しない")
+            return
+        record = store.append(kind=warn.kind, lv=warn.lv, t=stamp.t, t_est=stamp.t_est)
+        # **`device-info` に出る範囲を追いかける。**古い値のままだと、セントラルは
+        # **持っていないはずの番号を取りに来る**（`../../../../docs/interfaces/ble-gatt.md`）。
+        state.oldest_seq = store.oldest_seq
+        state.latest_seq = store.latest_seq
+        logger.info("検知ログに積んだ（seq=%d / t_est=%s）", record.seq, stamp.t_est)
+
     def apply_tuning() -> None:
         """上書きが変わったことを、値を持っている先へ配る。
 
@@ -244,6 +278,7 @@ def main() -> None:
         rear_warn = rear.update(rear_sensor.is_high(), now_ms)
         if rear_warn is not None:
             logger.info("後方に接近する物体を検知した（lv=%d）", rear_warn.lv)
+            record_detection(rear_warn, now_ms)
             warnings = notify.merge_warning(warnings, rear_warn, now_ms, tuning.notify_config)
             # **周期を待たずにここで出す**（`on_alert` と同じ）。待つと、検知してから
             # 光るまで1周期ぶん遅れる。
@@ -257,6 +292,8 @@ def main() -> None:
         alert_drop_log_every=config.ALERT_DROP_LOG_EVERY,
         on_alert=on_alert,
         on_config=on_config,
+        transfer=transfer,
+        log_chunk_interval_ms=config.LOG_CHUNK_INTERVAL_MS,
         on_tick=on_tick,
         tick_interval_s=config.LINK_TICK_INTERVAL_S,
         tick_error_log_every=config.TICK_ERROR_LOG_EVERY,

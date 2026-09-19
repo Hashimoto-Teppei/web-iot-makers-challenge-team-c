@@ -7,8 +7,9 @@
 **このファイルは判断しない。** 何を返すかは `../state.py` が決め、
 ここは読まれたときにそれを渡すだけ（BLE の管に徹する）。
 
-UUID とプロパティの正本は `../../../../../docs/interfaces/ble-gatt.md`。
-いまあるのは `device-info` / `status` / `alert` で、`control` / `log` は #40 でここに足す。
+UUID とプロパティの正本は `../../../../../docs/interfaces/ble-gatt.md`、
+検知ログの流し方は `../../../../../docs/interfaces/ble-log-transfer.md`。
+**転送の判断は `../transfer.py`** で、ここは切り出された塊を Notify に載せるだけである。
 """
 
 import logging
@@ -19,11 +20,14 @@ from bluezero import adapter, async_tools, peripheral
 
 from device.alert import AlertResult, Beat, Warn, parse_alert
 from device.state import DeviceState
+from device.transfer import LogTransfer
 
 logger = logging.getLogger(__name__)
 
 SERVICE_UUID = "68666e00-58cc-4540-90ad-18bfae31615f"
 DEVICE_INFO_UUID = "68666e01-58cc-4540-90ad-18bfae31615f"
+CONTROL_UUID = "68666e02-58cc-4540-90ad-18bfae31615f"
+LOG_UUID = "68666e03-58cc-4540-90ad-18bfae31615f"
 STATUS_UUID = "68666e04-58cc-4540-90ad-18bfae31615f"
 CONFIG_UUID = "68666e05-58cc-4540-90ad-18bfae31615f"
 ALERT_UUID = "68666e06-58cc-4540-90ad-18bfae31615f"
@@ -34,6 +38,8 @@ _CHR_DEVICE_INFO = 1
 _CHR_STATUS = 2
 _CHR_ALERT = 3
 _CHR_CONFIG = 4
+_CHR_CONTROL = 5
+_CHR_LOG = 6
 
 
 def _first_adapter_address() -> str:
@@ -80,6 +86,8 @@ class BlePeripheral:
         alert_drop_log_every: int = 100,
         on_alert: Callable[[Warn | Beat], None] | None = None,
         on_config: Callable[[bytes], None] | None = None,
+        transfer: LogTransfer | None = None,
+        log_chunk_interval_ms: int = 20,
         on_tick: Callable[[], None] | None = None,
         tick_interval_s: int = 1,
         tick_error_log_every: int = 60,
@@ -98,6 +106,12 @@ class BlePeripheral:
                 None なら数えるだけで捨てる
             on_config: `config` に書かれたバイト列を渡す先（#124）。
                 **中身の解釈はここでしない**（`../tuning.py`）。None なら捨てる
+            transfer: 検知ログの転送（#40）。**判断はあちら**で、ここは
+                切り出された塊を Notify に載せるだけ。None なら `control` を断る
+            log_chunk_interval_ms: `log` に1塊ずつ流す間隔（ミリ秒）。
+                **まとめて送らずに間隔を空ける**——`set_value()` は D-Bus のシグナルを
+                出すだけなので、**詰め込むと BlueZ が送り出す前に次が重なりうる**。
+                **`alert` と周期処理を止めない**ためでもある（同じイベントループの上）
             on_tick: 一定間隔で呼ぶ先。**何も届かなくても呼ばれる**ので、
                 心拍が途切れたことに気づけるのはここだけ（`../alert.py` の `LinkWatch`）。
                 None なら呼ばない
@@ -113,6 +127,8 @@ class BlePeripheral:
         self._drop_log_every = alert_drop_log_every
         self._on_alert = on_alert
         self._on_config = on_config
+        self._transfer = transfer
+        self._log_chunk_interval_ms = log_chunk_interval_ms
         self._on_tick = on_tick
         self._tick_interval_s = tick_interval_s
         self._tick_error_log_every = tick_error_log_every
@@ -135,6 +151,11 @@ class BlePeripheral:
         # status を送るタイマーが動いているか。**購読し直すたびに足すと重なる** ——
         # 走行中に接続が切れて戻るのは普通に起きるので、そのたびに毎秒の送信が1本増える。
         self._status_timer_running = False
+        # `log` の Characteristic（購読されたときに bluezero から渡される）。
+        # **`status` と同じく、一度受け取ったら捨てない**（上の注記）。
+        self._log_chrc: Any | None = None
+        # 流すタイマーが動いているか。**`read` のたびに足すと重なる**（`status` と同じ）。
+        self._log_timer_running = False
 
         address = adapter_address or _first_adapter_address()
         logger.info("アダプタ %s でペリフェラルを作る（名前 %s）", address, local_name)
@@ -196,6 +217,34 @@ class BlePeripheral:
             read_callback=None,
             write_callback=self._on_config_write,
             notify_callback=None,
+        )
+        # **`control` も `write` だけ。** 応答なしだと `stop` が届いたかをセントラルが
+        # 知れず、**落ちればデバイスは送り続ける**
+        # （`../../../../../docs/interfaces/ble-gatt.md`「`control`（Write）」）。
+        self._peripheral.add_characteristic(
+            srv_id=_SRV_ID,
+            chr_id=_CHR_CONTROL,
+            uuid=CONTROL_UUID,
+            value=[],
+            notifying=False,
+            flags=["write"],
+            read_callback=None,
+            write_callback=self._on_control_write,
+            notify_callback=None,
+        )
+        # **`log` は Notify だけ。** Read を足さない——値は「最後に流した塊」でしかなく、
+        # **読めると、読んだ側が途中の1塊をレコードとして扱いうる**
+        # （レコードの区切りは `\n` であって、パケットの境目ではない）。
+        self._peripheral.add_characteristic(
+            srv_id=_SRV_ID,
+            chr_id=_CHR_LOG,
+            uuid=LOG_UUID,
+            value=[],
+            notifying=False,
+            flags=["notify"],
+            read_callback=None,
+            write_callback=None,
+            notify_callback=self._on_log_subscribed,
         )
         # **暗号化のフラグ（encrypt-*）を付けない。** ペアリングしない決定
         # （`../../../../../docs/interfaces/ble-security.md`「ペアリング・認証」）。
@@ -361,6 +410,91 @@ class BlePeripheral:
         except Exception:
             logger.exception("config の処理で例外が出た（この1通は捨てる）")
 
+    def _on_control_write(self, value: bytearray, options: dict[str, Any]) -> None:
+        """セントラルが `control` に1通書いたときに呼ばれる（#40）。
+
+        **中身の解釈はここでしない** —— `../transfer.py` に渡し、ここは管に徹する
+        （`_on_alert_write` と同じ）。**ここから例外を出さない**のも同じ理由で、
+        送出すると**同じ接続の `alert` まで巻き込む**（警告が止まる）。
+
+        **MTU はここで拾う。** BlueZ 5.62 以降は書き込みの `options` に `mtu` を入れて
+        渡してくるので、**D-Bus へ別途聞きに行かなくてよい**（実機は 5.82。
+        `../../../../../docs/unverified.md` 15）。**取れなければ小さい方に倒す**
+        ——大きく見積もると BlueZ が黙って切り詰め、**壊れた JSON が届く。**
+        """
+        try:
+            offset = options.get("offset", 0)
+            if offset:
+                # **分割された Write を1通として読まない**（`_on_alert_write` と同じ理由）。
+                logger.warning("control が分割されて届いた（offset=%d）。この1通は捨てる", offset)
+                return
+            if self._transfer is None:
+                return
+
+            mtu = options.get("mtu")
+            outcome = self._transfer.handle_control(
+                bytes(value),
+                mtu=mtu if isinstance(mtu, int) else None,
+                can_notify=self._log_chrc is not None and self._log_chrc.is_notifying,
+            )
+            # **断った理由も、始まったことも `status` に出す。**次の定期送信を待つと、
+            # **人は「書いたのに何も起きない」時間を見ることになる。**
+            self.push_status()
+            if outcome.started:
+                self._start_log_timer()
+        except Exception:
+            logger.exception("control の処理で例外が出た（この1通は捨てる）")
+
+    def _on_log_subscribed(self, notifying: bool, characteristic: Any) -> None:
+        """セントラルが `log` の Notify を購読した / やめたときに呼ばれる。"""
+        # **外れても参照は持ったままにする**（`_status_chrc` と同じ）。
+        self._log_chrc = characteristic
+        logger.info("log の購読が%s", "始まった" if notifying else "外れた")
+
+    def _start_log_timer(self) -> None:
+        """流すタイマーを回し始める。**既に回っていれば足さない。**"""
+        if self._log_timer_running:
+            return
+        self._log_timer_running = True
+        async_tools.add_timer_ms(self._log_chunk_interval_ms, self._pump_log)
+
+    def _pump_log(self) -> bool:
+        """`log` に1塊だけ流す。**False を返すとタイマーが止まる。**
+
+        **1回に1塊だけ。** 送り切るまで回し続けると、その間**`alert` も周期処理も
+        動けない**（同じイベントループの上にある）——警告の出口と心拍の見張りが、
+        ログの回収に巻き込まれて止まる。
+
+        **ここから例外を出さない**（`_tick` と同じ）。抜けるとタイマーが外れ、
+        **`sending` のまま二度と進まない転送が残る。**
+        """
+        try:
+            chrc = self._log_chrc
+            transfer = self._transfer
+            if transfer is None or chrc is None or not chrc.is_notifying:
+                # **購読が外れたら中止する。**流し先が無いまま `sending` を続けない。
+                if transfer is not None:
+                    transfer.abort()
+                self._log_timer_running = False
+                self.push_status()
+                return False
+
+            chunk = transfer.next_chunk()
+            if chunk is None:
+                self._log_timer_running = False
+                # **送り切ったことを `status` にも出す**（完了の印は EOT の側で、
+                # これは人が見るためのもの）。
+                self.push_status()
+                return False
+            chrc.set_value(list(chunk))
+            return True
+        except Exception:
+            logger.exception("検知ログを流せなかった（転送を中止する）")
+            if self._transfer is not None:
+                self._transfer.abort()
+            self._log_timer_running = False
+            return False
+
     def _record_drop(self, result: AlertResult) -> None:
         """捨てたことをログに出す。**同じ理由が続く間は間引く。**
 
@@ -397,6 +531,11 @@ class BlePeripheral:
         # **`_status_chrc` は捨てない**（上の注記。捨てると再購読で戻ってこない）。
         logger.info("切断された: %s", device_address)
         self._remote = None
+        # **切断で転送を中止し、`idle` に戻す**（`../../../../../docs/interfaces/ble-gatt.md`
+        # 「`control`」）。戻さないと、**同期中に落ちた端末はつなぎ直しても
+        # 以後ずっと `read` を断られる。**
+        if self._transfer is not None:
+            self._transfer.abort()
         if self._on_disconnect_cb is not None:
             self._on_disconnect_cb()
 

@@ -70,7 +70,9 @@ BLE と GPIO のライブラリは **Linux 専用**で、開発機（Windows / m
 | `src/device/notify.py` | 検知の結果をどう出すかの調停（`../../docs/notifications/arbitration.md`）。ハードには触らない |
 | `src/device/main.py` | 起動と配線。どの部品の値をどの検知に渡し、結果をどこに出すかを決める |
 | `src/device/state.py` | 今の状態（`link` / 転送の進み具合 / 受け取った警告の数）と、それを `device-info` / `status` の JSON にする変換。**BLE を知らない** |
-| `src/device/identity.py` | `device_id` / `log_id` の生成と保存。アドバタイズの名前もここで作る |
+| `src/device/identity.py` | `device_id` の生成と保存。アドバタイズの名前もここで作る |
+| `src/device/log.py` | 検知ログを積む（リングバッファ）。**`log_id` と `seq` を持つのはここ**。**BLE を知らない** |
+| `src/device/transfer.py` | `control` を受けて `log` に流すバイト列を切り出す（#40）。**BLE を知らない** |
 | `src/device/config.py` | しきい値・**ピン番号**・失効やウォッチドッグの秒数などの設定。コードに直書きしない。**秘密値は置かない** — このファイルはコミットされる |
 | `src/device/` 直下 | どの層からも使う共通の計算（`geo.py` の距離計算など） |
 | `tools/` | 開発機で動かす道具。実機の代わりに「ラズパイのふり」をする BLE ペリフェラル（`mock_peripheral.py`） |
