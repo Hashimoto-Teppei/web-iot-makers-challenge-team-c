@@ -7,6 +7,7 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
+import type { DeviceDetection } from "../ble/log-transfer";
 import type { Warning } from "../detect/types";
 import type { SelfMessage } from "../v2v/messages";
 import { type AppDatabase, openAppDatabase } from "./node";
@@ -373,5 +374,109 @@ describe("走行が複数あるとき", () => {
     // **1回に1走行しか載せない**（点はその走行の行と一緒に送る、という約束を読んで分かる形にする）。
     logs.markSent(first, 5_000);
     expect(logs.pending(LIMITS)?.rides[0]?.logId).toBe(newer.logId);
+  });
+});
+
+describe("デバイスから回収した検知（#40）", () => {
+  /** 合成したレコード（デバイスの `log_id` は走行のものとは別の世代）。 */
+  function record(seq: number, overrides: Partial<DeviceDetection> = {}): DeviceDetection {
+    return { seq, t: 1_000 + seq, tEst: false, kind: "rear_object", lv: 2, ...overrides };
+  }
+
+  it("取り込んで、走行の行を載せずに送る", () => {
+    // デバイスは自分がどこにいるか知らない。どこで起きたかは Worker が `t` で突き合わせる。
+    const logs = store();
+
+    expect(logs.addDeviceDetections(DEVICE, "9a1c2b3d", [record(1), record(2)])).toBe(2);
+
+    expect(logs.pending(LIMITS)).toEqual({
+      deviceId: DEVICE,
+      rides: [],
+      points: [],
+      detections: [
+        { source: "device", logId: "9a1c2b3d", seq: 1, t: 1_001, kind: "rear_object", lv: 2 },
+        { source: "device", logId: "9a1c2b3d", seq: 2, t: 1_002, kind: "rear_object", lv: 2 },
+      ],
+    });
+  });
+
+  it("推定した時刻だけ tEst を載せる", () => {
+    // 無ければ実測、が約束（docs/interfaces/ble-log-transfer.md）。
+    const logs = store();
+    logs.addDeviceDetections(DEVICE, "9a1c2b3d", [record(1, { tEst: true })]);
+
+    expect(logs.pending(LIMITS)?.detections[0]).toMatchObject({ tEst: true });
+  });
+
+  it("同じものが再び届いても増えない", () => {
+    // 途中で切れて `since` から取り直すと、同じ区間がもう一度流れてくる。
+    const logs = store();
+    logs.addDeviceDetections(DEVICE, "9a1c2b3d", [record(1), record(2)]);
+
+    expect(logs.addDeviceDetections(DEVICE, "9a1c2b3d", [record(2), record(3)])).toBe(1);
+    expect(logs.pending(LIMITS)?.detections).toHaveLength(3);
+  });
+
+  it("送り直しても送信済みの印を消さない", () => {
+    // 上書きすると、送ったはずのものがもう一度送信の対象に戻る。
+    const logs = store();
+    logs.addDeviceDetections(DEVICE, "9a1c2b3d", [record(1)]);
+    const batch = logs.pending(LIMITS);
+    if (batch === null) throw new Error("送るものがある");
+    logs.markSent(batch, 5_000);
+
+    logs.addDeviceDetections(DEVICE, "9a1c2b3d", [record(1)]);
+
+    expect(logs.pending(LIMITS)).toBeNull();
+  });
+
+  it("既読位置は log_id ごとに持ち、前にしか進まない", () => {
+    // 世代が変われば seq は 1 に戻る。前の世代の位置を引き当てると、
+    // 新しいログが1件も取り込まれない（docs/interfaces/ble-log-transfer.md）。
+    const logs = store();
+    logs.addDeviceDetections(DEVICE, "9a1c2b3d", [record(1), record(2)]);
+
+    expect(logs.deviceLogSince(DEVICE, "9a1c2b3d")).toBe(2);
+    // 世代が違えば 0（= 全件取り直す）。
+    expect(logs.deviceLogSince(DEVICE, "0000ffff")).toBe(0);
+    // 取り直して古いぶんだけを渡しても、位置は戻らない。
+    logs.addDeviceDetections(DEVICE, "9a1c2b3d", [record(1)]);
+    expect(logs.deviceLogSince(DEVICE, "9a1c2b3d")).toBe(2);
+  });
+
+  it("掃除しても既読位置は残る", () => {
+    // 行から数え直していると、掃除のたびに位置が戻り、毎回まるごと取り直す。
+    const logs = store();
+    logs.addDeviceDetections(DEVICE, "9a1c2b3d", [record(1)]);
+    const batch = logs.pending(LIMITS);
+    if (batch === null) throw new Error("送るものがある");
+    logs.markSent(batch, 5_000);
+
+    expect(logs.purgeSent(6_000).detections).toBe(1);
+    expect(logs.deviceLogSince(DEVICE, "9a1c2b3d")).toBe(1);
+  });
+
+  it("送れていない件数に出る", () => {
+    // 回収したのに送れていないぶんが画面のどこにも出ないと、気づくのがデモの直前になる。
+    const logs = store();
+    logs.addDeviceDetections(DEVICE, "9a1c2b3d", [record(1), record(2)]);
+
+    expect(logs.summary().pendingDetections).toBe(2);
+  });
+
+  it("走行ぶんを送り切ってから送る", () => {
+    // 古いものから送る順序を、走行の側から崩さない。
+    const logs = store();
+    const ride = logs.startRide(DEVICE, 1_000);
+    ride.addPoint(fix(1_000));
+    ride.end(2_000);
+    logs.addDeviceDetections(DEVICE, "9a1c2b3d", [record(1)]);
+
+    const first = logs.pending(LIMITS);
+    expect(first?.rides).toHaveLength(1);
+    if (first === null) throw new Error("送るものがある");
+    logs.markSent(first, 5_000);
+
+    expect(logs.pending(LIMITS)?.detections[0]).toMatchObject({ source: "device" });
   });
 });

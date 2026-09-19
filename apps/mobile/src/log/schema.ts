@@ -85,18 +85,16 @@ export const points = sqliteTable(
  *
  * **`source` を入れないと、デバイス発の `log_id=1, seq=1` とスマホ発の `log_id=1, seq=1` が
  * 同じキーになる**——`device_id` を共有しているためである。
- * いま書くのはスマホ発（`phone`）だけで、**デバイスから BLE で回収した検知（`device`）は
- * #40 がこの表に足す。**
- *
- * **推定した時刻（`t_est`）の列はまだ置かない。**打つのはデバイスだけで
- * （`docs/interfaces/ble-log-transfer.md`）、**いまこの表に書く経路が無い。**
- * #40 が `device` の行と一緒に足す（そのための移行の仕組みが下にある）。
+ * **この表に入るのはスマホ発（`phone`）だけ。**#40 は
+ * {@link deviceDetections} を別に足した——**`t_est` の列が要る**のに、
+ * **`ALTER TABLE ... ADD COLUMN` は流し直せない**（SQLite に `IF NOT EXISTS` が無く、
+ * 移行の途中で落ちた端末は起動のたびに同じ文で落ちる。{@link APP_DB_MIGRATIONS}）。
  */
 export const detections = sqliteTable(
   "detections",
   {
     deviceId: text("device_id").notNull(),
-    /** 出どころ。いまは `"phone"` だけが入る（`"device"` は #40） */
+    /** 出どころ。**この表には `"phone"` しか入らない**（`"device"` は {@link deviceDetections}） */
     source: text("source").notNull(),
     logId: text("log_id").notNull(),
     seq: integer("seq").notNull(),
@@ -109,6 +107,40 @@ export const detections = sqliteTable(
   (table) => [
     primaryKey({ columns: [table.deviceId, table.source, table.logId, table.seq] }),
     index("detections_unsent").on(table.sentAt),
+  ],
+);
+
+/**
+ * デバイスから BLE で回収した検知（#40。`source = "device"` として送る）。
+ *
+ * **走行に結びつけない。**デバイスは自分がどこにいるか知らず、`log_id` も走行とは
+ * 別の世代である（`docs/interfaces/ble-log-transfer.md`）。
+ * **どこで起きたかは Worker が `t` で突き合わせる**ので、こちらは時刻だけを運ぶ。
+ *
+ * **`detections` と分けたのは `t_est` の列のため。**あちらへ足すには
+ * `ALTER TABLE ... ADD COLUMN` が要るが、**SQLite に `IF NOT EXISTS` が無い**ので
+ * 流し直せる形にできない（{@link APP_DB_MIGRATIONS} の「1文ずつが流し直せる形であること」）。
+ * **表を足すのは `CREATE TABLE IF NOT EXISTS` で済む。**
+ */
+export const deviceDetections = sqliteTable(
+  "device_detections",
+  {
+    deviceId: text("device_id").notNull(),
+    /** **デバイスが持つログの世代。**走行の `log_id` とは別物（上の注記） */
+    logId: text("log_id").notNull(),
+    seq: integer("seq").notNull(),
+    t: integer("t").notNull(),
+    /** `t` が単調時計からの推定なら 1。**取り込み側は実測と同じ確からしさで扱わない** */
+    tEst: integer("t_est").notNull(),
+    /** いまは `rear_object` だけ（`docs/interfaces/detectors.md`） */
+    kind: text("kind").notNull(),
+    lv: integer("lv").notNull(),
+    sentAt: integer("sent_at"),
+  },
+  (table) => [
+    // **`source` を持たない。**この表に入るものは全部 `device` である。
+    primaryKey({ columns: [table.deviceId, table.logId, table.seq] }),
+    index("device_detections_unsent").on(table.sentAt),
   ],
 );
 
@@ -132,6 +164,22 @@ export const appMeta = sqliteTable("app_meta", {
 
 /** 最後に送れた時刻（UTC ミリ秒）を入れておく鍵。 */
 export const LAST_SENT_AT_KEY = "last_sent_at";
+
+/**
+ * デバイスのログをどこまで取り込んだかを入れておく鍵（#40）。
+ *
+ * **行から数え直さない。**送り終えた行は保持期間を過ぎたら消えるので
+ * （`./store.ts` の `purgeSent`）、`max(seq)` から出していると**掃除のたびに
+ * 既読位置が戻り、デバイスが持っているぶんを毎回まるごと取り直す。**
+ *
+ * **`log_id` を鍵に含める。**世代が変われば `seq` は 1 に戻るので、
+ * **前の世代の既読位置を引き当てると、新しいログが1件も取り込まれない**
+ * （`docs/interfaces/ble-log-transfer.md`「転送済みログの扱い」）。
+ * 鍵が見つからない＝`since` なしで全件取り直す、が正しい振る舞いになる。
+ */
+export function deviceLogSeqKey(deviceId: string, logId: string): string {
+  return `device_seq:${deviceId}:${logId}`;
+}
 
 /**
  * `app.db` の移行。**1要素が1つの版で、中身は1文ずつ**に分ける。
@@ -209,6 +257,22 @@ export const APP_DB_MIGRATIONS: readonly (readonly string[])[] = [
        )
        HAVING max(sent_at) IS NOT NULL
      ON CONFLICT (key) DO NOTHING`,
+  ],
+  [
+    // デバイスから回収した検知（#40）。**`detections` に列を足さずに表を足した**
+    // 理由は {@link deviceDetections}（`ALTER TABLE` は流し直せない）。
+    `CREATE TABLE IF NOT EXISTS device_detections (
+       device_id TEXT NOT NULL,
+       log_id TEXT NOT NULL,
+       seq INTEGER NOT NULL,
+       t INTEGER NOT NULL,
+       t_est INTEGER NOT NULL,
+       kind TEXT NOT NULL,
+       lv INTEGER NOT NULL,
+       sent_at INTEGER,
+       PRIMARY KEY (device_id, log_id, seq)
+     )`,
+    `CREATE INDEX IF NOT EXISTS device_detections_unsent ON device_detections (sent_at)`,
   ],
 ];
 

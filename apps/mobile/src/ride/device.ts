@@ -3,8 +3,9 @@
  *
  * **ここに BLE の実装を書かない。**走行ループ（`./loop.ts`）が知ってよいのは
  * 「名乗る `device_id`」と「`alert` に1通書く」の2つだけで、スキャン・MTU・
- * サービス探索・再接続は `../ble/link.ts` にある。分けてあるおかげで、**実機も
- * Development Build も無いまま走行ループを Vitest で回せる**
+ * サービス探索・再接続は `../ble/link.ts` にある。
+ * **検知ログの回収（#40）もここには無い**——口だけを {@link DeviceLink.collectLogs} に置く。
+ * 分けてあるおかげで、**実機も Development Build も無いまま走行ループを Vitest で回せる**
  * （`docs/adr/0002-development-lifecycle.md`）。
  *
  * **実装に差し替えても `./loop.ts` は変わらない**——変わるなら、この境界の切り方が
@@ -12,7 +13,23 @@
  * 無い環境（Web）でだけ使う（`./use-device-link.ts`）。
  */
 
+import type { DeviceDetection } from "../ble/log-transfer";
 import type { AlertMessage } from "../v2v/alert";
+
+/**
+ * 検知ログを1回ぶん回収した結果（#40）。
+ *
+ * **`done` が `true` のときだけ「取り切った」と言える**——完了の印は EOT だけで、
+ * 件数でも `status` でも判定しない（`docs/interfaces/ble-log-transfer.md`「転送の約束」）。
+ */
+export type CollectOutcome = {
+  /** 受け取ったレコードの数（取り込みは呼び出し側が済ませている） */
+  received: number;
+  /** EOT まで届いたか。**途中で終わっていれば、次につないだときに続きから取り直す** */
+  done: boolean;
+  /** うまくいかなかった理由。**画面に出す**（黙って0件にしない） */
+  reason: string | null;
+};
 
 /**
  * 接続中のデバイス1台。
@@ -29,6 +46,13 @@ export type DeviceLink = {
   /** 端末ID（16進の小文字8文字） */
   deviceId: string;
   /**
+   * デバイスが持つログの世代（#40。`device-info` の `log_id`）。
+   *
+   * **走行の `log_id` とは別物。**既読位置はこれとの組で覚えるので、
+   * **変わったら全件を取り直す**（`docs/interfaces/ble-log-transfer.md`）。
+   */
+  logId: string;
+  /**
    * `alert` に1通書く。
    *
    * **返り値を待たない（`void`）。**呼ぶ側は書けたかを知らないし、知る必要もない。
@@ -40,6 +64,20 @@ export type DeviceLink = {
    * - **再送しない。**心拍は次の1秒後に、警告は次の測位で作り直される
    */
   writeAlert: (message: AlertMessage) => void;
+  /**
+   * 検知ログを回収する（#40）。**走行を終えたあとに1回だけ呼ぶ。**
+   *
+   * **走行中に呼ばない。**`alert` と同じ接続を使うので、**警告の書き込みと競る。**
+   *
+   * @param since ここまでは取り込み済み（0 なら全件）。
+   *   **呼び出し側が保存しているもの**を渡す（`../log/store.ts` の `deviceLogSince`）
+   * @param onRecords 届いたぶんを渡す先。**届いた端から取り込む**——
+   *   途中で切れても、そこまでは残る（既読位置もそこまで進む）
+   */
+  collectLogs: (
+    since: number,
+    onRecords: (records: readonly DeviceDetection[]) => void,
+  ) => Promise<CollectOutcome>;
 };
 
 /**
@@ -72,10 +110,15 @@ export function createMockDeviceLink(deviceId = MOCK_DEVICE_ID): MockDeviceLink 
   const written: AlertMessage[] = [];
   return {
     deviceId,
+    // **合成した値**（実在のログの世代ではない）。モックは検知ログを持たない。
+    logId: "a0000001",
     written,
     writeAlert: (message) => {
       written.push(message);
     },
+    // **0件で「取り切った」を返す。**モックにはデバイスが無いので、**回収するものが無いのが
+    // 正しい結果**である（失敗として画面を赤くしない。モックであることは点検に出ている）。
+    collectLogs: () => Promise.resolve({ received: 0, done: true, reason: null }),
     warns: () => written.filter((m) => m.k === "warn"),
     clear: () => {
       written.length = 0;

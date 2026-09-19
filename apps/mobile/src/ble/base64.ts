@@ -70,6 +70,17 @@ export function base64ToUtf8(text: string): string {
   return utf8String(base64ToBytes(text));
 }
 
+/**
+ * UTF-8 のバイト列を文字列に戻す。**壊れていても投げない。**
+ *
+ * **検知ログの転送（`./log-transfer.ts`）が使う。**あちらは `\n` で切ってから
+ * 1行ずつ文字にする——**塊の切れ目が多バイト文字の途中に来る**ので、
+ * 受け取った塊をそのまま文字にすると化ける。
+ */
+export function bytesToUtf8(bytes: Uint8Array): string {
+  return utf8String(bytes);
+}
+
 function utf8Bytes(text: string): Uint8Array {
   // `encodeURIComponent` は ASCII 以外を `%XX` に変える。**UTF-8 のバイト列そのもの**なので、
   // それを1バイトずつ戻せばエンコーダを自前で書かずに済む。
