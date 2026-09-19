@@ -175,7 +175,7 @@ pnpm install     # プロジェクトの依存を入れる
 ```sh
 node -v    # v24.x
 pnpm -v    # 11.x
-python -V  # Python 3.11.x
+python -V  # Python 3.13.x
 uv --version
 ```
 
@@ -243,7 +243,7 @@ VS Code に教える操作です（OS ごとにパスが違うため、設定フ
 
 ```sh
 cd apps/device
-uv sync          # Python 3.11 と依存を用意する
+uv sync          # Python 3.13 と依存を用意する
 uv run pytest    # テストが通れば OK
 ```
 

@@ -1,9 +1,9 @@
 # ラズパイへの投入手順
 
-**書いたプログラムを Raspberry Pi Zero W に載せて動かすまで**をここにまとめる。
+**書いたプログラムを Raspberry Pi Zero 2 W に載せて動かすまで**をここにまとめる。
 開発機（Windows / macOS）の環境構築は [`setup.md`](./setup.md) にあり、**そちらとは別**。
 
-- ステータス: **実機で通していない**（→ [`unverified.md`](./unverified.md) の 40 / 41 / 42）
+- ステータス: **実機で一部を通した**（2026-09-19。→ [`unverified.md`](./unverified.md) の 40 / 41 / 42）
 - 依存の入れ方をなぜこうするかは [`adr/0008-device-dependencies.md`](./adr/0008-device-dependencies.md)
 
 **実値を書かないこと。** Wi-Fi のパスワード・IP アドレス・ホスト名の実物はコミットしない
@@ -13,10 +13,10 @@
 
 | もの | 備考 |
 | --- | --- |
-| Raspberry Pi Zero W | **ARMv6**。この制約が以下のほぼ全部の理由になる |
+| Raspberry Pi Zero 2 W | **aarch64**（4コア）。手元の実機はこれ（`unverified.md` 40） |
 | microSD カード | 8GB 以上 |
-| USB 電源 | Zero W の **PWR** と書かれた側に挿す |
-| Wi-Fi | **2.4GHz のみ**。Zero W は 5GHz に繋がらない |
+| USB 電源 | **PWR** と書かれた側に挿す（もう片方は USB OTG） |
+| Wi-Fi | **2.4GHz のみ**。Zero W も Zero 2 W も 5GHz に繋がらない（無線チップが同じ CYW43438） |
 
 **画面もキーボードも要らない。** 最初から SSH で入る前提で書き込む。
 
@@ -24,34 +24,40 @@
 
 ### すでに CHIRIMEN が入った SD がある場合
 
-**まず版を見る。焼き直さずに済むこともある。**
+**まず版を見る。焼き直さずに済むことの方が多い。**
 
 ```sh
-cat /etc/os-release && python3 -V
+cat /proc/device-tree/model && cat /etc/os-release && python3 -V && uname -m
 ```
 
-**`VERSION_CODENAME=bookworm` かつ Python が 3.11 なら、そのまま使ってよい**（下の 2 へ進む）。
-CHIRIMEN Lite も Raspberry Pi OS Lite (32-bit) が土台なので、条件を満たせば違いは無い。
-**CHIRIMEN の Node.js は使わないが、消す必要も無い**（`AGENTS.md`）。
+**`pyproject.toml` の `requires-python` を満たす Python が入っていれば、そのまま使ってよい**
+（下の 2 へ進む）。**いまは `>=3.13,<3.14`** で、**Trixie のシステム Python 3.13 がこれに当たる。**
 
-**違っていたら、この節のとおり焼き直す。** バージョンを選べないのは
-**Zero W が ARMv6 で、`uv` が Python 3.11 を落としてこられない**ためである
-（`adr/0008-device-dependencies.md` / `unverified.md` 40）。
-**システムの Python がそのまま `uv sync` の前提になる。**
+**版を選べないのは、システムの Python がそのまま `uv sync` の前提になるため**である
+（`adr/0008-device-dependencies.md`。`PyGObject` の共有ライブラリを apt 側と噛み合わせる）。
+**実機の OS が変わったら、`pyproject.toml` と `mise.toml` の側を動かす**——
+過去に 3.12 → 3.11 → 3.13 と2回動かしている（`adr/0001-tech-stack.md`）。
+
+**手元の実機はこれで通った**（2026-09-19）:
+**Raspberry Pi Zero 2 W Rev 1.0 / aarch64 / Debian 13 (trixie) / Python 3.13.5**（CHIRIMEN Lite）。
+**CHIRIMEN の Node.js は使わないが、消す必要も無い**（`AGENTS.md`）。
 
 ### 新しく書き込む
 
 [Raspberry Pi Imager](https://www.raspberrypi.com/software/) を使う。
 
-1. **デバイス**: `Raspberry Pi Zero`
-2. **OS**: `Raspberry Pi OS (other)` → **`Raspberry Pi OS Lite (32-bit)`**（**Bookworm**）
+1. **デバイス**: 手元の機体に合わせる（`Raspberry Pi Zero 2 W`）
+2. **OS**: `Raspberry Pi OS (other)` → **`Raspberry Pi OS Lite`**
 3. **ストレージ**: microSD
 
-**64-bit を選ばない。** Zero W の ARMv6 では起動しない。
 **Lite（デスクトップ無し）を選ぶ。** RAM が 512MB しかなく、画面も使わない。
 
-**32-bit の Raspberry Pi OS でなければならない理由はもう1つある。**
-実機のホイールを配っている piwheels は **32-bit（armhf）の Raspberry Pi OS しかサポートしていない**
+**32-bit と 64-bit のどちらでもよい**——**ただし選んだ方のシステム Python に
+`pyproject.toml` を合わせること。** **Zero 2 W は aarch64 なので 64-bit が動く**
+（**Zero W（無印）は ARMv6 で、64-bit が起動しない。** 機体を間違えないこと）。
+
+**64-bit を選んだ場合、piwheels は使えないし、要らない。** あれは 32-bit（armhf）の
+Raspberry Pi OS 向けで、**aarch64 には PyPI の manylinux ホイールがそのまま降ってくる**
 （`adr/0008-device-dependencies.md`）。
 
 ### 書き込む前に設定を埋める
@@ -68,7 +74,7 @@ Imager の**歯車アイコン（OS カスタマイズ）**で、以下を入れ
 
 ## 2. 入れるところまで確認する
 
-電源を挿して1〜2分待つ（**Zero W は起動が遅い**）。開発機から:
+電源を挿して1〜2分待つ（**起動は速くない**）。開発機から:
 
 ```sh
 ssh <ユーザー名>@<ホスト名>.local
@@ -94,24 +100,12 @@ source ~/.bashrc
 uv --version
 ```
 
-**`uv` 本体は ARMv6 で動く**（armv7 向けのバイナリが ARMv6 互換のため）。
-**ただし `uv` が Python を落としてくることはできない**——後述。
+**`uv` に Python を用意させない。** aarch64 なら落としてくることはできるが、
+**`PyGObject` が要る共有ライブラリは apt がシステム Python 向けに置いている**ため、
+**別の Python から掴ませようとすると実機だけ別の入れ方になる**
+（`adr/0008-device-dependencies.md`）。次の手順で `--python /usr/bin/python3` を渡す。
 
-## 5. piwheels を見るようにする
-
-```sh
-mkdir -p ~/.config/uv
-cat > ~/.config/uv/uv.toml <<'CONF'
-# ARMv6 向けにビルド済みのホイールを配っている index。
-# これが無いと C 拡張をこの機体でコンパイルすることになり、事実上終わらない。
-extra-index-url = ["https://www.piwheels.org/simple"]
-CONF
-```
-
-**Raspberry Pi OS の `pip` は最初から piwheels を見ているが、`uv` は見ない。**
-ここで明示的に足す（`adr/0008-device-dependencies.md`）。
-
-## 6. コードを持ってくる
+## 5. コードを持ってくる
 
 ```sh
 git clone https://github.com/Hashimoto-Teppei/web-iot-makers-challenge-team-c.git
@@ -121,11 +115,10 @@ cd web-iot-makers-challenge-team-c/apps/device
 **public リポジトリなので鍵の設定が要らない。** 更新は `git pull` だけで済む。
 
 **実機の上でコードを書かないこと。** 編集は開発機で行い、実機へは `git pull` で運ぶ。
-**VS Code の Remote-SSH は ARMv6 に対応しておらず、Zero W には繋がらない**
-（`Unsupported architecture: armv6l` で失敗する）。
+**RAM 512MB は言語サーバーを常駐させる余裕が無い。**
 手元には Ruff / basedpyright / pytest が揃っていて、そちらの方が速く回る。
 
-## 7. 依存を入れる
+## 6. 依存を入れる
 
 ```sh
 uv sync --group device --python /usr/bin/python3
@@ -135,23 +128,23 @@ uv sync --group device --python /usr/bin/python3
 
 - **`--group device`** — BLE のライブラリはこのグループにしか入っていない。
   開発機と CI では入らないように隔離してある（`adr/0008-device-dependencies.md`）
-- **`--python /usr/bin/python3`** — **システムの Python 3.11 を使う。**
-  `uv` は ARMv6 向けの Python を配布していないので、自分で用意させようとすると失敗する
-- **`--locked` を付けない** — `uv.lock` は開発機（x86 / arm64）で作られており、
-  ARMv6 のホイールが記録されていない。固定するとソースビルドに落ちうる
+- **`--python /usr/bin/python3`** — **システムの Python を使う**（上の 4）
+- **`--locked` を付けない** — `uv.lock` は開発機で作られる。固定して外したときに
+  sdist のビルドへ落ちうる
 
-**`Building wheel for ...` が流れたら、そこで止めてよい。** piwheels が効いていない印で、
-そのまま待っても数時間かかる（`unverified.md` の 41）。
+**`Building wheel for ...` が長く流れたら、そこで止めてよい。**
+aarch64 ならホイールが降ってくるはずで、**落ちているのは何かが噛み合っていない印**である
+（`unverified.md` の 41）。
 
 確認:
 
 ```sh
-uv run python -V              # Python 3.11.x
+uv run python -V              # pyproject.toml の requires-python に入っていること
 uv run python -c "import bluezero; print('ok')"
 uv run python -c "import gpiozero, RPLCD; print('ok')"   # LED と LCD
 ```
 
-## 8. 部品をつないだなら、I2C を有効にする
+## 7. 部品をつないだなら、I2C を有効にする
 
 **LED だけなら要らない。** LCD1602A は I2C でつながるが、**Raspberry Pi OS は既定で I2C を切っている。**
 切ったままだと `/dev/i2c-1` が無く、**LCD だけが黙る**（起動はする。`apps/device/src/device/hw/lcd.py`
@@ -176,7 +169,7 @@ i2cdetect -y 1
 **部品を持っていないなら、`config.py` の末尾を `None` にする。** その部品は無いものとして動く
 （[`adr/0002-development-lifecycle.md`](./adr/0002-development-lifecycle.md)）。
 
-## 9. 動かす
+## 8. 動かす
 
 ```sh
 uv run python -m device.main
@@ -204,9 +197,9 @@ uv run python -m device.main
 | --- | --- |
 | 警告の LED（GPIO22） | **1秒だけ光って消える。** 光らなければ**その LED は切れている**——警告が出ないのと区別がつかないので、ここで直す |
 | `link` の LED（GPIO17） | **2Hz で点滅し続ける。** スマホが繋がるまで `link` は `down` である。繋ぐと点灯に変わる |
-| LCD | 上段は空、下段に `DOWN  -` が出る。**何も出ないなら 8 に戻ってアドレスを確かめる** |
+| LCD | 上段は空、下段に `DOWN  -` が出る。**何も出ないなら 7 に戻ってアドレスを確かめる** |
 
-## 10. 電源を入れたら勝手に走るようにする
+## 9. 電源を入れたら勝手に走るようにする
 
 **自転車に載せると手で起動できない。** systemd に登録する。
 
@@ -257,7 +250,7 @@ sudo usermod -aG i2c,gpio <ユーザー名>
 **まだ実機で通していない**（[`unverified.md`](./unverified.md) の 43）。
 `journalctl` に `org.freedesktop.DBus.Error.AccessDenied` が出ていたらこれ。
 
-## 11. ログを見る
+## 10. ログを見る
 
 **走行中は画面が無い。** 後から見る手段がこれしかない。
 
@@ -284,15 +277,16 @@ sudo systemctl restart bike-device
 | 症状 | 対処 |
 | --- | --- |
 | `ssh <ホスト名>.local` で見つからない | Windows は `.local` の名前解決が弱い。ルーターの管理画面で IP を調べて直接指定する |
-| Wi-Fi に繋がらない | **5GHz に繋ごうとしていないか。** Zero W は 2.4GHz のみ |
-| 起動しない（緑の LED が光らない） | 64-bit の OS を書き込んでいる可能性。**32-bit を書き直す** |
-| `uv sync` で `Building wheel for ...` が流れる | piwheels が効いていない。手順 5 の `~/.config/uv/uv.toml` を確認する |
+| Wi-Fi に繋がらない | **5GHz に繋ごうとしていないか。** 2.4GHz のみ |
+| 起動しない（緑の LED が光らない） | **Zero W（無印）に 64-bit を書き込んでいる**可能性。機体を確かめ、32-bit を書き直す |
+| `uv sync` が `requires-python` で落ちる | システム Python が `pyproject.toml` の範囲外。**`pyproject.toml` と `mise.toml` の側を実機に合わせる**（`adr/0001-tech-stack.md`） |
+| `hci0` が見つからない / アドバタイズが出ない | **rfkill でソフトブロックされていることがある**（手元の CHIRIMEN Lite がそうだった）。`rfkill list bluetooth` を見て、`sudo rfkill unblock bluetooth`（`unverified.md` 104） |
 | `uv sync` が Python を落とそうとして失敗する | `--python /usr/bin/python3` を付け忘れている |
 | `import bluezero` が落ちる | 手順 3 の apt が済んでいない |
-| BLE の広告が出ない | `bluetooth` グループと D-Bus のポリシー（手順 10） |
+| BLE の広告が出ない | rfkill（上の行）か、`bluetooth` グループと D-Bus のポリシー（手順 9） |
 | 広告は見えるが名前が `bg-` の途中で切れている | 広告が 31 バイトを超えている。**`Appearance` や `tx-power` を足していないか**（`interfaces/ble-gatt.md`） |
 | スキャンで見つからない | **他の人がつなぎっぱなしになっている可能性がある**（接続中はアドバタイズが止まる）。デバイスを再起動する |
-| LCD だけ出ない（LED は光る） | I2C が無効か、アドレスが違う（手順 8）。journalctl に `LCD が 0x27 に見つからない` が出ている |
+| LCD だけ出ない（LED は光る） | I2C が無効か、アドレスが違う（手順 7）。journalctl に `LCD が 0x27 に見つからない` が出ている |
 | SD カードが壊れた疑い | **書き直すのが一番速い。** 手順 1 からやり直す |
 
 **ここに無い症状に当たったら、この表に1行足すこと。** 次に同じ場所で止まる人を減らせる。

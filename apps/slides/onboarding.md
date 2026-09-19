@@ -374,7 +374,7 @@ layout: section
 
 <div class="mt-8 grid grid-cols-3 gap-4 text-xs">
   <div v-for="c in [
-    { layer: 'device', dir: 'apps/device', stack: 'Python 3.11 / uv / pytest' },
+    { layer: 'device', dir: 'apps/device', stack: 'Python 3.13 / uv / pytest' },
     { layer: 'mobile', dir: 'apps/mobile', stack: 'Expo (React Native) / TypeScript / Vitest' },
     { layer: 'cloud', dir: 'apps/web', stack: 'React / Vite / Hono / D1 / Durable Objects' },
   ]" :key="c.dir" class="overflow-hidden rounded-lg border border-gray-400/20"

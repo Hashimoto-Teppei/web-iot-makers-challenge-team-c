@@ -6,6 +6,7 @@
 
 いまつなぐのは BLE ペリフェラルと心拍のウォッチドッグ（#36）、
 心拍の来ない接続を切る判定（#126）、警告の調停（#35。`notify.py`）、
+後方物体検知（#152。`detect/rear_object.py` / `hw/rear_sensor.py`）、
 走行ごとのしきい値の上書き（#124。`tuning.py`）、
 調停の結果を LCD と LED ×2 に出すところ（#151。`hw/lcd.py` / `hw/led.py`）。
 センサーは、それぞれの Issue でここに1行ずつ足していく。
@@ -21,8 +22,10 @@ import time
 
 from device import config, identity, notify
 from device.alert import Beat, LinkStatus, LinkWatch, Warn
+from device.detect.rear_object import RearDetector
 from device.hw.lcd import open_lcd
 from device.hw.led import open_light
+from device.hw.rear_sensor import open_rear_sensor
 from device.idle import IdleDisconnect
 from device.notify import ActiveWarning, LightPattern
 from device.state import DeviceState
@@ -107,6 +110,14 @@ def main() -> None:
     # **切れていても走り出すまで分からない**
     # （`../../../../docs/notifications/arbitration.md`「起動直後に、光っていることを確かめる」）。
     warn_light.selftest()
+
+    # 後方物体検知（#152）。**デバイスに残る唯一の検知**で、BLE を通らない
+    # （`../../../../docs/adr/0006-decision-layer-on-mobile.md`）。
+    # **判定は `detect/rear_object.py` の中**で、ここがやるのは
+    # 「毎周期読む」「出たら `warnings` に混ぜる」だけ。
+    # `REAR_SENSOR_GPIO` が `None` なら常に偽が返り、**この検知ごと動かない。**
+    rear_sensor = open_rear_sensor(config.REAR_SENSOR_GPIO)
+    rear = RearDetector(config.REAR_CONFIG)
 
     def emit(now_ms: int, status: LinkStatus) -> None:
         """いま出すものを決めて、出す。**決めるのは `notify.py`** で、ここは渡すだけ。"""
@@ -196,6 +207,7 @@ def main() -> None:
     def on_tick() -> None:
         # **`beat` が来たときではなく、周期で見る。** 来なくなったことに気づくのが目的なので、
         # 到着を起点にすると**永久に気づけない。**
+        nonlocal warnings
         now_ms = _now_ms()
         status = watch.evaluate(now_ms)
 
@@ -220,6 +232,22 @@ def main() -> None:
             link=state.link, transfer_state=state.transfer_state, now_ms=now_ms
         ):
             ble.disconnect_central()
+
+        # **後方物体は `alert` ではなくここから入る**（BLE を通らないため）。
+        # 入り口は違うが、**合流したあとは他の4つと同じ扱い**である
+        # （`../../../../docs/notifications/arbitration.md`「優先順位」で先頭に置いてある）。
+        #
+        # **周期の最後に置く。** GPIO の読みが例外を出すと `_tick` がそれを握り潰すので、
+        # 前に置くと**表示も `link` の判定も切断の判定も、その周期ごと落ちる**
+        # （上の `emit()` と同じ理由——**走行中に届くのは光だけ**であり、
+        # センサー1個の道連れにしない）。
+        rear_warn = rear.update(rear_sensor.is_high(), now_ms)
+        if rear_warn is not None:
+            logger.info("後方に接近する物体を検知した（lv=%d）", rear_warn.lv)
+            warnings = notify.merge_warning(warnings, rear_warn, now_ms, tuning.notify_config)
+            # **周期を待たずにここで出す**（`on_alert` と同じ）。待つと、検知してから
+            # 光るまで1周期ぶん遅れる。
+            emit(now_ms, status)
 
     ble = ble_hw.BlePeripheral(
         state,
