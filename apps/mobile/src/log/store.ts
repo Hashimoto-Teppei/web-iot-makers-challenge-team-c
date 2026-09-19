@@ -155,6 +155,20 @@ export type PendingLimits = {
  * **走行そのものは止めない。**記録できないことより、**検知が動かないことの方が危険**である
  * （警告の出し先はデバイスで、そちらは `app.db` と関係なく動く）。
  */
+/**
+ * この走行を記録する保存層を選ぶ（#185）。
+ *
+ * **「デバイスを使わない」で走る端末は記録しない。** 中継（Durable Object）は数秒で
+ * 消えるが、**走行ログは D1 に永続する行**で、しかも**取り込みは上書きも削除もできない**
+ * （`../lib/mock-guard.ts`）。**実在しないデバイスの行を、誰にも消せない場所に残さない。**
+ *
+ * **ここで選ぶのは、選んだ結果を Vitest で確かめられるようにするため。**画面の中で
+ * 三項演算子1つにすると、**送らないつもりで送っていた**ことに誰も気づけない。
+ */
+export function rideLogStoreFor(standalone: boolean, store: RideLogStore): RideLogStore {
+  return standalone ? createDiscardingRideLogStore() : store;
+}
+
 export function createDiscardingRideLogStore(): RideLogStore {
   return {
     startRide: (deviceId) => ({

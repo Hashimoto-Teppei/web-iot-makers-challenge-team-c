@@ -11,7 +11,12 @@ import type { DeviceDetection } from "../ble/log-transfer";
 import type { Warning } from "../detect/types";
 import type { SelfMessage } from "../v2v/messages";
 import { type AppDatabase, openAppDatabase } from "./node";
-import { createDiscardingRideLogStore, type PendingLimits, type RideLogStore } from "./store";
+import {
+  createDiscardingRideLogStore,
+  type PendingLimits,
+  type RideLogStore,
+  rideLogStoreFor,
+} from "./store";
 
 const DEVICE = "a1000001";
 const LIMITS: PendingLimits = { maxPoints: 5_000, maxDetections: 2_000 };
@@ -231,6 +236,26 @@ describe("開けなかったときの保存層", () => {
       pendingDetections: 0,
       lastSentAt: null,
     });
+  });
+});
+
+describe("デバイスを使わないで走るとき（#185）", () => {
+  // **中継（Durable Object）は数秒で消えるが、走行ログは D1 に永続する行**で、
+  // しかも**取り込みは上書きも削除もできない**（`../lib/mock-guard.ts`）。
+  // **実在しないデバイスの行を、誰にも消せない場所に残さない。**
+  it("記録しない（送るものを持たない）", () => {
+    const logs = rideLogStoreFor(true, createDiscardingRideLogStore());
+    const ride = logs.startRide(DEVICE, 1_000);
+    ride.addPoint(fix(1_000));
+    ride.end(2_000);
+
+    expect(logs.pending(LIMITS)).toBeNull();
+  });
+
+  it("オフなら、渡した保存層をそのまま使う", () => {
+    const store = createDiscardingRideLogStore();
+
+    expect(rideLogStoreFor(false, store)).toBe(store);
   });
 });
 

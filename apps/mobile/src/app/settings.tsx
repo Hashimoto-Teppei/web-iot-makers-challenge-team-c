@@ -1,5 +1,5 @@
 import { Link, Stack } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   DEVICE_CONFIG_DEFAULTS,
@@ -16,6 +16,7 @@ import {
   useDeviceConfigOutcome,
 } from "@/ble/device-config-store";
 import { useRiding } from "@/ride/riding";
+import { setStandalone, useStandalone } from "@/ride/standalone";
 import {
   type SignsUpdateState,
   useSignStore,
@@ -98,6 +99,7 @@ export default function SettingsScreen() {
   const update = useSignsUpdateState();
   const deviceConfig = useDeviceConfig();
   const configOutcome = useDeviceConfigOutcome();
+  const standalone = useStandalone();
   // **走行中は触らせない。**走行はこの画面より寿命が長く、**走りながら保持時間を
   // 変えると、いま出ている警告の消え方が途中で変わる。**
   const riding = useRiding();
@@ -141,6 +143,31 @@ export default function SettingsScreen() {
         <Text style={styles.note}>
           標識は月に1回ほどしか変わりません。走行中には取りに行きません。
         </Text>
+
+        <Text style={styles.title}>デバイスを使わない</Text>
+        {/* **デモの2台目のスマホ用**（#185）。**既定はオフ。**
+            オンにした端末には警告が出ないので、**そのことをここに書く**
+            （走行前の点検にも出る。`@/ride/pre-ride`）。 */}
+        <Text style={styles.note}>
+          デバイスにつながずに走ります。位置の中継だけを行うので、
+          この端末には警告が出ません（相手役として走るための設定です）。
+        </Text>
+        <View style={styles.rows}>
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>デバイスを使わない</Text>
+            <Switch value={standalone} onValueChange={setStandalone} disabled={riding} />
+          </View>
+        </View>
+        {standalone && (
+          // **同じ ID を2台が名乗ると、近傍の中で互いを上書きし合う**
+          // （`@/ride/standalone`）。**人にしか守れないので、ここに出す。**
+          <Text style={styles.alert}>
+            この設定をオンにして走るスマホは、同時に1台までにしてください。
+          </Text>
+        )}
+        {riding && (
+          <Text style={styles.note}>走行中は変えられません。止まってから変えてください。</Text>
+        )}
 
         <Text style={styles.title}>デバイスのしきい値</Text>
         <Text style={styles.note}>

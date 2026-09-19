@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MOCK_DEVICE_ID } from "../ride/device";
+import { MOCK_DEVICE_ID, STANDALONE_DEVICE_ID } from "../ride/device";
 import { DEFAULT_API_BASE_URL } from "./api-base";
 import { blocksMockDevice, MOCK_PERIPHERAL_DEVICE_ID } from "./mock-guard";
 
@@ -32,5 +32,17 @@ describe("blocksMockDevice", () => {
   // `mock_peripheral.py` の `MOCK_PERIPHERAL_DEVICE_ID` が書き写している。
   it("2つの ID は別のもの", () => {
     expect(MOCK_PERIPHERAL_DEVICE_ID).not.toBe(MOCK_DEVICE_ID);
+  });
+
+  // **「デバイスを使わない」で走る端末は、ここで止めてはいけない**（#185）。
+  // **止めると中継が1通も飛ばず、デモの2台目が相手役として成立しない**
+  // ——しかも「塞がれている」と画面に出るので、**故障に見えるのに正常**という
+  // 一番わかりにくい形になる。
+  it("デバイスを使わない端末の ID は、共有のデプロイ先でも通す", () => {
+    expect(blocksMockDevice(STANDALONE_DEVICE_ID, DEFAULT_API_BASE_URL)).toBe(false);
+  });
+
+  it("3つの ID はどれも別のもの", () => {
+    expect(new Set([MOCK_DEVICE_ID, MOCK_PERIPHERAL_DEVICE_ID, STANDALONE_DEVICE_ID]).size).toBe(3);
   });
 });
