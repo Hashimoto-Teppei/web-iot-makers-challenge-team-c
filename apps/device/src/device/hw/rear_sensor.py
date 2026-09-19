@@ -14,8 +14,8 @@
 from typing import Protocol
 
 
-class InputDevice(Protocol):
-    """gpiozero の `DigitalInputDevice` のうち、ここで使う1つだけ。
+class PinInput(Protocol):
+    """gpiozero の `InputDevice` のうち、ここで使う1つだけ。
 
     **テストは偽物を渡す**——実機が無くても読み取りを確かめられるようにするため。
     """
@@ -27,7 +27,7 @@ class InputDevice(Protocol):
 class RearSensor:
     """接近検知出力の現在値。"""
 
-    def __init__(self, device: InputDevice | None) -> None:
+    def __init__(self, device: PinInput | None) -> None:
         # `None` は「そのセンサーが載っていない」という意味（`../config.py`）。
         self._device = device
 

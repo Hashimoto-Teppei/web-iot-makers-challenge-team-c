@@ -22,7 +22,7 @@ Python 3.13.5** で（`../unverified.md` 40）、**理由にしていた3つが�
 
 | 当初の前提 | 実機 | 結果 |
 | --- | --- | --- |
-| Zero W は **ARMv6**。ホイールが無ければソースビルドに落ちる | **aarch64** | **PyPI の manylinux ホイールがそのまま降ってくる** |
+| Zero W は **ARMv6**。ホイールが無ければソースビルドに落ちる | **aarch64** | **ソースビルドには落ちるが、4コアで現実的な時間に収まる**（下） |
 | **piwheels** が ARMv6 でソースビルドを避ける唯一の手段 | — | **piwheels は 32-bit（armhf）専用。使えないし、要らない** |
 | `uv` は実機に Python を用意できない（python-build-standalone は armv7 以上） | **aarch64 には有る** | **制約ごと消えた** |
 
@@ -131,9 +131,28 @@ Zero 2 W はネットに繋がるので、実機で `git clone` して動かす�
 **0.2 系は bleak 1.0 で消えた内部 module を import する**ので、`bleak<1.0` も一緒に縛っている。
 **どちらも `mock` グループだけの話**で、実機にも CI にも入らない。**上流が直ったら両方外す。**
 
+## ホイールは降ってこない。ビルドする（2026-09-19 に実機で確認）
+
+**「piwheels が要らなくなった」は「ホイールが降ってくる」ではなかった。**
+`uv sync --group device` は **`pycairo` と `PyGObject` をソースからビルドする**
+（`../unverified.md` 41）。PyPI に aarch64 / cp313 のホイールが無いためである。
+
+**それでも方針は変わらない。** **Zero 2 W は4コアで、ビルドが数分で終わった**——
+**ARMv6 で「事実上終わらない」ことが piwheels に頼る理由だった**ので、
+**その理由ごと消えている。**
+
+**代わりに apt の開発パッケージが要る**（`../deploy-device.md` の 3）:
+`libcairo2-dev` / `libgirepository1.0-dev` / `pkg-config` / `python3-dev` / `build-essential`。
+**ランタイムのライブラリだけでは足りない。**
+
+**`libgirepository1.0-dev`（2.0 ではない）。** `PyGObject` 3.50 が pkg-config で探すのは
+`gobject-introspection-1.0` である（2.0 を見るのは 3.52 以降）。**2.0 だけを入れると
+`Dependency 'gobject-introspection-1.0' is required but not found` で落ちる**
+——実際に一度踏んだ。**`PyGObject` の版を上げるときはここを一緒に見ること。**
+
 ## 結果
 
 - 開発機の `uv sync` は依存が増えても壊れない。**「実機なしで開発する」が維持される**（`0002`）
-- 実機で C 拡張をコンパイルしない（**aarch64 にはホイールが有る**）
+- 実機で C 拡張をコンパイルする。**4コアなので現実的な時間で終わる**（上）
 - **Python の版は実機のシステム Python に従う。** 実機の OS を替えるときは
   `0001-tech-stack.md` とこの ADR を一緒に読むこと
