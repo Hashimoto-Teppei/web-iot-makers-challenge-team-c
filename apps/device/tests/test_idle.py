@@ -179,6 +179,17 @@ def test_主が切れたら次の1台が入れる() -> None:
     assert central.accept(OTHER) is True
 
 
+def test_主を知らないまま切断が来たら片付けを通す() -> None:
+    """**bluezero は接続を取り逃すことがある**（`publish()` の時点で既につながっていた相手）。
+
+    そのとき `accept()` は一度も呼ばれない。**ここで断ると、転送が `sending` のまま残り、
+    以後つないだ誰もが `read` を断られる。**
+    """
+    central = SingleCentral()
+
+    assert central.release(OWNER) is True
+
+
 def test_主でない相手の切断では何もしない() -> None:
     """**2台目が切れただけで、主の転送を止めたり設定を戻したりしない。**"""
     central = SingleCentral()

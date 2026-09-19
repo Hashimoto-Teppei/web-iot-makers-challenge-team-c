@@ -125,8 +125,15 @@ class SingleCentral:
 
         呼ぶ側は、`False` のときに**転送の中止も設定の初期化もしないこと**
         ——2台目が切れただけで、主の走行が巻き添えになる。
+
+        **主を知らないまま切断が来たら `True` を返す。** bluezero が接続を取り逃すこと
+        （`publish()` の時点で既につながっていた相手は `Connected` の変化を出さない）が
+        あり、そのとき `accept()` は一度も呼ばれない。**ここで `False` を返すと、
+        転送が `sending` のまま残り、以後つないだ誰もが `read` を断られる**
+        ——切断のたびに片付けていたものが、丸ごと走らなくなる。
+        **知らない相手を片付けて困ることは無い**（主はいないので、巻き添えも無い）。
         """
-        if self._owner != address:
+        if self._owner is not None and self._owner != address:
             return False
         self._owner = None
         return True
