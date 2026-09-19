@@ -75,7 +75,7 @@ BLE と GPIO のライブラリは **Linux 専用**で、開発機（Windows / m
 | `src/device/transfer.py` | `control` を受けて `log` に流すバイト列を切り出す（#40）。**BLE を知らない** |
 | `src/device/config.py` | しきい値・**ピン番号**・失効やウォッチドッグの秒数などの設定。コードに直書きしない。**秘密値は置かない** — このファイルはコミットされる |
 | `src/device/` 直下 | どの層からも使う共通の計算（`geo.py` の距離計算など） |
-| `tools/` | 開発機で動かす道具。実機の代わりに「ラズパイのふり」をする BLE ペリフェラル（`mock_peripheral.py`） |
+| `tools/` | 開発機で動かす道具。実機の代わりに「ラズパイのふり」をする BLE ペリフェラル（`mock_peripheral.py`）と、**その逆に「スマホのふり」をして本物のラズパイに書き込む**セントラル（`poke_device.py`） |
 | `tests/` | テスト |
 
 `detect/` にあるのは **後方物体検知（`rear_object.py`。#152）だけ**です。
@@ -162,6 +162,18 @@ Android のアプリから電波で本当につながります。**判断のコ�
 **確かめられないのは BlueZ の挙動です。** 相手が CoreBluetooth（macOS）なので、
 [`docs/unverified.md`](../../docs/unverified.md) の 88 と 91、44 は**これでは消えません。**
 **ここで通ることは、実機で通ることの根拠になりません。**
+
+**逆向きの道具もある。** `poke_device.py` は開発機をセントラルにして、**本物のラズパイの
+`alert` / `config` / `control` に書き込む。****屋内では警告が一度も出ない**
+（アプリは自車の測位が無いと検知を1つも呼ばない）ので、
+**LCD の上段と警告 LED が動くことを確かめる手段がこれである。**
+**セントラルは1台しか繋がらない**ので、**先にスマホのアプリを終了させること。**
+
+```sh
+uv run --group mock python tools/poke_device.py scan        # アドバタイズを見る
+uv run --group mock python tools/poke_device.py warn        # 警告を1通（LED を見る）
+uv run --group mock python tools/poke_device.py all         # 端から全部
+```
 
 実機での起動は `uv run python -m device.main`（ラズパイ上でのみ動きます）。
 起動すると BLE のアドバタイズが出て、スマホの汎用 BLE アプリから `bg-xxxx` として見えます
