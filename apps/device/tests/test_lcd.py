@@ -22,11 +22,11 @@ def test_上段と下段がそれぞれの行に出る() -> None:
     display = FakeDisplay()
     lcd = Lcd(display)
 
-    lcd.show("!!  REAR        ", "DOWN  >         ")
+    lcd.show("!!  ｺｳﾎｳ        ", "NG  | →         ")
 
     assert display.writes == [
-        ((0, 0), "!!  REAR        "),
-        ((1, 0), "DOWN  >         "),
+        ((0, 0), "!!  ｺｳﾎｳ        "),
+        ((1, 0), "NG  | →         "),
     ]
 
 
@@ -35,20 +35,20 @@ def test_変わった行だけ書き直す() -> None:
     display = FakeDisplay()
     lcd = Lcd(display)
 
-    lcd.show("!!  REAR        ", "DOWN  >         ")
+    lcd.show("!!  ｺｳﾎｳ        ", "NG  | →         ")
     display.writes.clear()
-    lcd.show("!!  REAR        ", "OK    >         ")
+    lcd.show("!!  ｺｳﾎｳ        ", "OK  * →         ")
 
-    assert display.writes == [((1, 0), "OK    >         ")]
+    assert display.writes == [((1, 0), "OK  * →         ")]
 
 
 def test_同じ2行が続く間は触らない() -> None:
     display = FakeDisplay()
     lcd = Lcd(display)
 
-    lcd.show("                ", "DOWN  -         ")
+    lcd.show("                ", "NG  | →         ")
     display.writes.clear()
-    lcd.show("                ", "DOWN  -         ")
+    lcd.show("                ", "NG  | →         ")
 
     assert display.writes == []
 
@@ -58,7 +58,7 @@ def test_アドレスが_None_なら何も触らずに動く() -> None:
     # （`../../../docs/adr/0002-development-lifecycle.md`）。
     lcd = open_lcd(None)
 
-    lcd.show("!!! STOP        ", "NOFIX -         ")
+    lcd.show("!!! ﾄﾏﾚ         ", "GPS ^ →         ")
 
 
 class BrokenDisplay(FakeDisplay):
@@ -79,12 +79,12 @@ def test_書けなくても落ちない_し戻ったら書き直す() -> None:
     display = BrokenDisplay()
     lcd = Lcd(display)
 
-    lcd.show("!!! STOP        ", "OK    >         ")
+    lcd.show("!!! ﾄﾏﾚ         ", "OK  * →         ")
     display.broken = False
-    lcd.show("!!! STOP        ", "OK    >         ")
+    lcd.show("!!! ﾄﾏﾚ         ", "OK  * →         ")
 
     # 書けなかった行は「出した」ことにせず、戻った周期で書き直す。
     assert display.writes == [
-        ((0, 0), "!!! STOP        "),
-        ((1, 0), "OK    >         "),
+        ((0, 0), "!!! ﾄﾏﾚ         "),
+        ((1, 0), "OK  * →         "),
     ]

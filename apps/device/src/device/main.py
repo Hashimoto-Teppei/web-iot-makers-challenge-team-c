@@ -21,7 +21,7 @@ import logging
 import time
 
 from device import config, identity, notify
-from device.alert import Beat, LinkStatus, LinkWatch, Warn
+from device.alert import Beat, Link, LinkStatus, LinkWatch, Warn
 from device.detect.rear_object import RearDetector
 from device.hw.lcd import open_lcd
 from device.hw.led import open_light
@@ -112,7 +112,7 @@ def main() -> None:
     # **`notify.py` が育てる値**で、ここは持ち回るだけ。**判定をここに書かない。**
     warnings: list[ActiveWarning] = []
     # 直前に出した表示。**変わったときだけログに出す**ため（毎周期出すと journalctl が埋まる）。
-    shown: tuple[str, str, LightPattern, LightPattern] | None = None
+    shown: tuple[str, Link, bool, LightPattern, LightPattern] | None = None
 
     # 出力先（#151）。**`config.py` の値が `None` なら、その部品は載っていないものとして動く。**
     # ピンとアドレスは `config.py` の末尾、配線の正本は `../../../../docs/hardware.md`。
@@ -152,7 +152,12 @@ def main() -> None:
 
         # **走行中に読めるのは journalctl だけ**なので、出したものはここにも残す。
         # **4つとも状態**なので、変わったときだけ1行出せばよい。
-        current = (output.line1, output.line2, output.warn_light, output.link_light)
+        #
+        # **比べるのは下段の文字列ではなく `link` と `mv`。** 下段には毎秒進むコマが入っており
+        # （`notify.py` の `link_frames`）、**文字列で比べると毎秒1行 journalctl に出る**
+        # ——`beat` をログに出さないことにした理由をこちらから壊す（`config.py`）。
+        # **出す行は実際に出した文字列のまま**なので、後から追えるものは減らない。
+        current = (output.line1, status.link, status.moving, output.warn_light, output.link_light)
         if current != shown:
             shown = current
             logger.info(

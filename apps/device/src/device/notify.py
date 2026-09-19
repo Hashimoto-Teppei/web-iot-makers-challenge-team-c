@@ -27,11 +27,21 @@ LCD_COLUMNS = 16
 INFO_LINE2_START = 8
 INFO_CAPACITY = LCD_COLUMNS + (LCD_COLUMNS - INFO_LINE2_START)
 
-# `link` を下段の 0〜4 桁に出すときの文字列。**5桁に固定する。**
+# 上段の `kind` の記号に開放する桁数。**桁 4 から左詰めで、ここまで。**
 #
-# **`up` のときも `OK` を出し続け、空白にしない。** 空白は「壊れて何も出ていない」と
-# 区別できない（`../../../../docs/notifications/arbitration.md`「下段」）。
-_LINK_LABELS: dict[Link, str] = {"up": "OK", "nofix": "NOFIX", "down": "DOWN"}
+# **6桁ある理由は、濁点と半濁点がそれぞれ1マスを食うから**である
+# ——`ﾌﾞﾚｰｷ` は5マス、`ﾀｲｺｳｼｬ` は6マスで、**4桁固定では収まらない**
+# （`../../../../docs/notifications/arbitration.md`「上段 — 警告」）。
+# **左端（桁 4）は動かさない。** 長さが違うのは構わないが、始まる場所が動くと探すことになる。
+SYMBOL_WIDTH = 6
+
+# 下段の `link` のラベルの桁数（桁 0〜2）。**絶対に動かさない**（同じファイルの「下段」）。
+LINK_LABEL_WIDTH = 3
+
+# 下段の桁 4（生存のコマ）と桁 6（`mv`）。**桁を動かさないことが決定事項**なので、
+# 数字を式の中に散らさずここに置く。
+ANIM_COLUMN = 4
+MOVING_COLUMN = 6
 
 
 @dataclass(frozen=True)
@@ -65,7 +75,20 @@ class NotifyConfig:
     # 区別できず、**LED が切れていることに誰も気づけない**
     # （`../../../../docs/notifications/arbitration.md`「`link` の光」）。
     link_lights: dict[Link, LightPattern]
-    # `kind` ごとの4文字の記号。**英大文字に揃え、半角カタカナを混ぜない。**
+    # `link` ごとのラベル（下段の桁 0〜2）。**`up` のときも空白にしない**
+    # ——空白は「壊れて何も出ていない」と区別できない（同じファイルの「下段」）。
+    link_labels: dict[Link, str]
+    # `link` ごとの、下段の桁 4 に出すコマ。**`anim_step_ms` ごとに次のコマへ進む。**
+    #
+    # **止まっていたら、周期処理そのものが死んでいる。** LED の点滅は gpiozero の裏スレッドで
+    # 回るので（`hw/led.py`）、**`main.py` の `on_tick` が死んでも光は同じリズムで続く。**
+    # **固まったことを人が拾える出力はここだけ**である（`AGENTS.md`「静かに黙る故障」）。
+    link_frames: dict[Link, tuple[str, ...]]
+    # コマを1つ進める間隔（ms）。**周期処理の間隔より短くしてもコマは速くならない**
+    # ——出すのは `main.py` の `on_tick` の中だけなので（`config.py` の `LINK_TICK_INTERVAL_S`）。
+    anim_step_ms: int
+    # `kind` ごとの記号（`SYMBOL_WIDTH` 桁まで）。**5つとも同じ文字種に揃える**
+    # ——1つだけ文字種が違うと、そこだけ「読む」動作が要る。
     symbols: dict[str, str]
     # 同じ `lv` が並んだときの `kind` の順（強い順）。**ここに無い `kind` は一番弱い扱い。**
     priority: tuple[str, ...]
@@ -159,7 +182,7 @@ def arbitrate(
 
     return Output(
         line1=_line1(selected, shown, config),
-        line2=_line2(link, moving, shown),
+        line2=_line2(link, moving, shown, now_ms, config),
         warn_light=warn_light,
         # **警告の有無に関わらず、毎周期そのまま出す。**警告に譲らせない
         # ——譲らせると、一番消してはいけないものが警告のたびに消える。
@@ -179,7 +202,7 @@ def _priority_index(kind: str, config: NotifyConfig) -> int:
 def _line1(selected: ActiveWarning | None, info: str | None, config: NotifyConfig) -> str:
     """上段。**警告。**優先順位で選ばれた1件だけ（`arbitration.md`「上段 — 警告」）。
 
-    桁 0〜2 が `lv` のバー、4〜7 が `kind` の記号、8〜15 は常に空白。
+    桁 0〜2 が `lv` のバー、**4 から `SYMBOL_WIDTH` 桁**が `kind` の記号、残りは空白。
     **`lv` を数字で出さない**——`!` の本数は長さとして見えるので、読まずに量が伝わる。
     """
     if selected is None:
@@ -190,25 +213,72 @@ def _line1(selected: ActiveWarning | None, info: str | None, config: NotifyConfi
     return _fit(f"{bar:<3} {_symbol(selected.kind, config)}")
 
 
-def _line2(link: Link, moving: bool, info: str | None) -> str:
-    """下段。**状態。**`link` と `mv`。**警告に譲らない**（`arbitration.md`「下段」）。
+def _line2(link: Link, moving: bool, info: str | None, now_ms: int, config: NotifyConfig) -> str:
+    """下段。**状態。**`link` と `mv` と生存のコマ。**警告に譲らない**（`arbitration.md`「下段」）。
 
-    桁 0〜4 が `link`、6 が `mv`、8〜15 は停止中の情報のみ。
+    桁 0〜2 が `link` のラベル、`ANIM_COLUMN` が生存のコマ、`MOVING_COLUMN` が `mv`、
+    8〜15 は停止中の情報のみ。
     **`link` の桁は絶対に動かさない**——ここが動くと、探すために画面を見ることになる。
     """
-    head = f"{_LINK_LABELS[link]:<5} {'>' if moving else '-'} "
+    # **桁の位置を定数から組み立てる。** 空白の数を数えて書くと、桁が1つずれても気づけない。
+    label = config.link_labels[link][:LINK_LABEL_WIDTH]
+    head = f"{label:<{ANIM_COLUMN}}{_frame(link, now_ms, config)}"
+    head = f"{head:<{MOVING_COLUMN}}{'→' if moving else '-'}"
     tail = info[LCD_COLUMNS:] if info is not None else ""
-    return _fit(head + tail[: LCD_COLUMNS - INFO_LINE2_START])
+    return _fit(f"{head} " + tail[: LCD_COLUMNS - INFO_LINE2_START])
+
+
+def _frame(link: Link, now_ms: int, config: NotifyConfig) -> str:
+    """下段の桁 4 に出す1マス。**`anim_step_ms` ごとに次のコマへ進む。**
+
+    **`now_ms` から出すので、前の呼び出しを覚えない**（`arbitrate()` の約束）。
+    **ここが動かなくなったら、周期処理そのものが死んでいる**
+    ——LED は裏のスレッドで点滅し続けるので、光では気づけない（`NotifyConfig.link_frames`）。
+    """
+    frames = config.link_frames[link]
+    return frames[(now_ms // config.anim_step_ms) % len(frames)][:1]
 
 
 def _symbol(kind: str, config: NotifyConfig) -> str:
-    """`kind` の4文字の記号。**知らない `kind` は先頭4文字を大文字にして出す。**
+    """`kind` の記号（`SYMBOL_WIDTH` 桁まで）。**知らない `kind` は識別子の先頭を大文字で出す。**
 
     黙って空欄にすると、**何かが起きているのに何も出ていない画面**になる。
+    **知らないものだけ英字になるのは構わない**——`config.py` の表に無い `kind` は
+    そもそも想定外であり、そこで文字種を揃えることに意味がない。
     """
-    return config.symbols.get(kind) or f"{kind[:4].upper():<4}"
+    return (config.symbols.get(kind) or kind.upper())[:SYMBOL_WIDTH]
 
 
 def _fit(text: str) -> str:
     """16桁に切り揃える。**右は空白で埋める**（前の表示が残らないように）。"""
     return f"{text:<{LCD_COLUMNS}}"[:LCD_COLUMNS]
+
+
+# LCD に出せる文字。**A00 ROM に載っているものだけ**が出る（`hw/lcd.py` が `charmap="A00"`）。
+#
+# **載っていない文字は、RPLCD が例外を投げずに空白へ落とす**（あちらの `replacement_char`）。
+# つまり**漢字やひらがなを書くと、そこだけ静かに欠けた画面**になり、ログにも何も出ない。
+# **`config.py` の表を書き間違えたときに気づけるように**、判定だけここに置く
+# （`AGENTS.md`「静かに黙る故障」。回すのは `tests/test_notify.py`）。
+#
+# **A00 にしか無い文字をここへ足さないこと。** ROM が A02 だったときに
+# （`../../../../docs/unverified.md` 113）**そこだけ黙って空白になる** ——
+# `→` と `←` は A00 と A02 の両方にある（RPLCD 1.4.0 で確認。位置は違うが、
+# 変換はあちらが `charmap` ごとにやる）。
+_LCD_EXTRA_CHARS = "→←"
+
+
+def unsupported_lcd_chars(text: str) -> list[str]:
+    """`text` のうち LCD に出せない文字。**空なら全部出せる。**"""
+    return [ch for ch in text if not _is_lcd_char(ch)]
+
+
+def _is_lcd_char(ch: str) -> bool:
+    if ch in _LCD_EXTRA_CHARS:
+        return True
+    # 半角カタカナ（A00 の 0xA1〜0xDF）。**全角のカナ・ひらがな・漢字は載っていない。**
+    if "\uff61" <= ch <= "\uff9f":
+        return True
+    # ASCII。**`\` と `~` を除く**——A00 ではその位置が `¥` と `→` で、
+    # RPLCD の表にも無いため、書いても空白になる。
+    return " " <= ch <= "}" and ch != "\\"

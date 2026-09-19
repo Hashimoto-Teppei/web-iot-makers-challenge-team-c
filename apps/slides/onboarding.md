@@ -188,7 +188,7 @@ Web×IoT メイカーズチャレンジ チームC
       </div>
     </div>
     <div class="mt-1.5 text-[0.6rem] opacity-50">色はまだ決めていない。<br/>決まっているのは<strong>「2つを違う色にする」</strong>ことだけ</div>
-    <div class="mt-4"><LcdScreen line1="!!! REAR" line2="OK    >" /></div>
+    <div class="mt-4"><LcdScreen line1="!!! ｺｳﾎｳ" line2="OK  * →" /></div>
     <div class="mt-2 text-[0.6rem] opacity-50">「後ろから何か来ている・かなり危ない」<br/>「仕組みは生きている・走行中」</div>
   </div>
 
@@ -464,28 +464,29 @@ layout: section
 
 <div class="mt-5 grid grid-cols-[auto_1fr] items-start gap-8">
   <div>
-    <LcdScreen line1="!!! REAR" line2="OK    >" ruler />
+    <LcdScreen line1="!!! ｺｳﾎｳ" line2="OK  * →" ruler />
     <div class="mt-3 space-y-1 text-[0.65rem] leading-relaxed opacity-70">
-      <div><strong>上段</strong> 0〜2 危険の強さ（<code>!</code> の本数）／ 4〜7 種類の記号</div>
-      <div><strong>下段</strong> 0〜4 <code>link</code> ／ 6 走行中か（<code>&gt;</code> / <code>-</code>）</div>
+      <div><strong>上段</strong> 0〜2 危険の強さ（<code>!</code> の本数）／ 4〜9 種類の記号</div>
+      <div><strong>下段</strong> 0〜2 <code>link</code> ／ 4 生きている印（毎秒動く）／ 6 走行中か（<code>→</code> / <code>-</code>）</div>
       <div><strong>停止中だけ</strong>、上段の全桁と下段の 8〜15 を情報に開放する</div>
     </div>
   </div>
 
   <div class="space-y-4">
     <div>
-      <div class="text-sm font-bold">種類は4文字の記号に揃える</div>
+      <div class="text-sm font-bold">種類は半角カタカナに揃える（6マスまで）</div>
       <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
         <div v-for="k in [
-          ['REAR', '後方の物体'], ['APPR', '急接近'], ['BRK', '前方の急ブレーキ'],
-          ['CRNR', '曲がり角の対向車'], ['STOP', '一時停止が近い'],
+          ['ｺｳﾎｳ', '後方の物体'], ['ｾｯｷﾝ', '急接近'], ['ﾌﾞﾚｰｷ', '前方の急ブレーキ'],
+          ['ﾀｲｺｳｼｬ', '曲がり角の対向車'], ['ﾄﾏﾚ', '一時停止が近い'],
         ]" :key="k[0]" class="flex items-baseline gap-1.5">
           <code>{{ k[0] }}</code><span class="opacity-50">{{ k[1] }}</span>
         </div>
       </div>
       <div class="mt-1.5 text-[0.65rem] leading-relaxed opacity-55">
-        <strong>この画面に漢字は出せない。</strong>内蔵フォントに無く、
-        「止まれ」と出す方法を探すと時間が溶ける
+        <strong>漢字は出せない。</strong>内蔵フォントに無く、「止まれ」と出す方法を探すと時間が溶ける。
+        <strong>半角カタカナは出せる</strong>ので、そこまでは日本語にしてある
+        （<strong>濁点は1マスを食う</strong>ので <code>ﾌﾞﾚｰｷ</code> は5マス）
       </div>
     </div>
     <div>
