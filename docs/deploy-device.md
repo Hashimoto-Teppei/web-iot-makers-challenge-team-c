@@ -296,11 +296,12 @@ sudo systemctl restart bike-device
 | Wi-Fi に繋がらない | **5GHz に繋ごうとしていないか。** 2.4GHz のみ |
 | 起動しない（緑の LED が光らない） | **Zero W（無印）に 64-bit を書き込んでいる**可能性。機体を確かめ、32-bit を書き直す |
 | `uv sync` が `requires-python` で落ちる | システム Python が `pyproject.toml` の範囲外。**`pyproject.toml` と `mise.toml` の側を実機に合わせる**（`adr/0001-tech-stack.md`） |
-| `hci0` が見つからない / アドバタイズが出ない | **rfkill でソフトブロックされていることがある**（手元の CHIRIMEN Lite がそうだった）。`rfkill list bluetooth` を見て、`sudo rfkill unblock bluetooth`（`unverified.md` 104） |
+| `hci0` が見つからない / アドバタイズが出ない | **rfkill でソフトブロックされていることがある**（手元の CHIRIMEN Lite が初回そうだった。**再起動では戻らないことを 2026-09-19 に確認**）。`/usr/sbin/rfkill list` を見て、`sudo rfkill unblock bluetooth`。**`rfkill` は ssh 越しだと `$PATH` に無い**ので、フルパスで呼ぶ |
 | `uv sync` が Python を落とそうとして失敗する | `--python /usr/bin/python3` を付け忘れている |
 | `import bluezero` が落ちる | 手順 3 の apt が済んでいない |
 | BLE の広告が出ない | rfkill（上の行）か、`bluetooth` グループと D-Bus のポリシー（手順 9） |
 | 広告は見えるが名前が `bg-` の途中で切れている | 広告が 31 バイトを超えている。**`Appearance` や `tx-power` を足していないか**（`interfaces/ble-gatt.md`） |
+| 誰も繋げない（journal に `接続を切れなかった` が 30 秒ごとに出る） | **切断が知らされないまま主が残っている**（`unverified.md` 110）。**直してあるが、古い版が動いていれば起きる** —— `git pull` して入れ直す。その場しのぎは `device.main` の再起動 |
 | 見つかるのに繋がらない | **他の人が先に繋いでいる。** デバイスは**先着優先で2台目を切る**（#184。`interfaces/ble-gatt.md`「前提」）。**接続中もアドバタイズは出ている**ので、見つかること自体は正常。先着が心拍を書かなければ 30 秒で手放すので、**繋ぎ直して待つ**（再起動は最後の手段） |
 | LCD だけ出ない（LED は光る） | I2C が無効か、アドレスが違う（手順 7）。journalctl に `LCD が 0x27 に見つからない` が出ている |
 | ログインのユーザー名 / パスワードが分からない | **リポジトリには書かない**（public なので。`AGENTS.md`「機密情報の扱い」）。**CHIRIMEN Lite をそのまま焼いたなら、配布元の既定がそのまま生きている** —— 値は [CHIRIMEN のチュートリアル](https://chirimen.org/pizero/chapter_2-2.html) に載っている。**Imager の OS カスタマイズで上書きした場合はその値。** どちらでもないときは、**SD を開発機に挿して boot パーティションで作り直す** —— `echo "<user>:$(openssl passwd -6 '<パスワード>')" > /Volumes/bootfs/userconf.txt`。**同じときに `touch /Volumes/bootfs/ssh` も置く**と、以降はシリアルが要らない |
