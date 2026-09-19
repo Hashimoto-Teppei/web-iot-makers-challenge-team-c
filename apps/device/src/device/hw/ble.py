@@ -589,11 +589,25 @@ class BlePeripheral:
         remote = self._remote
         if remote is None:
             return
-        # **失敗しても手放さない。** 切れていなければ相手はつないだままなので、
-        # もう一度試せる相手を捨てない（切れれば `_on_disconnect` が None に戻す）。
-        # 何度も投げ続けないようにするのは `../idle.py` 側の仕事。
         try:
             logger.warning("心拍が来ないので、こちらから接続を切る")
             remote.disconnect()
         except Exception:
-            logger.exception("接続を切れなかった（アドバタイズはそのまま続ける）")
+            # **切れなかったのではなく、もう居ないことがある。**
+            # BlueZ がデバイスのオブジェクトごと消すと `InterfacesRemoved` になるが、
+            # **bluezero は `PropertiesChanged` の `Connected` からしか `on_disconnect` を
+            # 呼ばない**（upstream の `bluezero/adapter.py`）。そのとき切断は誰にも
+            # 知らされず、**主が残ったまま `Disconnect()` だけが失敗し続ける。**
+            #
+            # **残すと、誰も繋げなくなる。** `SingleCentral` は新しい相手を
+            # **すべて2台目として断る**ので、電源を入れ直すまで戻らない
+            # （2026-09-19 に実機で発生。`../../../../../docs/unverified.md` 109）。
+            # **切ったつもりで、締め出していた。**
+            #
+            # **手放す方に倒す。** 相手が本当に残っていたなら、次に来た誰かを
+            # 受け入れてしまう（#184 より前の状態）が、**それは「2台つながる」だけで、
+            # 「1台も繋がらない」より軽い。**
+            logger.exception("接続を切れなかった（もう居ないものとして主を手放す）")
+            owner = self._central.owner
+            if owner is not None:
+                self._on_disconnect("", owner)
