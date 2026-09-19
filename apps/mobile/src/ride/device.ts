@@ -104,6 +104,22 @@ export type MockDeviceLink = DeviceLink & {
 export const MOCK_DEVICE_ID = "a1000001";
 
 /**
+ * 「デバイスを使わない」で走る端末が名乗る ID（#185。`./standalone.ts`）。
+ *
+ * **{@link MOCK_DEVICE_ID} とは別の値にする。**あちらは `../lib/mock-guard.ts` が
+ * 共有のデプロイ先に対して塞ぐので、名乗ると中継が止まり、**この設定の目的そのものが
+ * 果たせない。**同じ理由で **`MOCK_DEVICE_IDS` に足さない**（`../lib/mock-guard.test.ts` が見張っている）。
+ *
+ * **固定値である。**毎回作ると、**近傍に毎回別の自転車が現れる。**
+ * 裏を返すと、**同時に2台がこのモードで走ると同じ ID を名乗る**ので、
+ * 1台までにすること（設定画面が出している）。
+ *
+ * **ここに置いてあるのは、`./standalone.ts` が `expo-sqlite` を読むため。**
+ * あちらから import すると、Vitest がこの値を見るだけで落ちる。
+ */
+export const STANDALONE_DEVICE_ID = "a1000003";
+
+/**
  * @param deviceId 名乗る端末ID。既定は合成した値（実在の機器の ID ではない）
  */
 export function createMockDeviceLink(deviceId = MOCK_DEVICE_ID): MockDeviceLink {

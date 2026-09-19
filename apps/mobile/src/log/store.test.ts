@@ -11,7 +11,12 @@ import type { DeviceDetection } from "../ble/log-transfer";
 import type { Warning } from "../detect/types";
 import type { SelfMessage } from "../v2v/messages";
 import { type AppDatabase, openAppDatabase } from "./node";
-import { createDiscardingRideLogStore, type PendingLimits, type RideLogStore } from "./store";
+import {
+  createDiscardingRideLogStore,
+  type PendingLimits,
+  type RideLogStore,
+  rideLogStoreFor,
+} from "./store";
 
 const DEVICE = "a1000001";
 const LIMITS: PendingLimits = { maxPoints: 5_000, maxDetections: 2_000 };
@@ -231,6 +236,48 @@ describe("開けなかったときの保存層", () => {
       pendingDetections: 0,
       lastSentAt: null,
     });
+  });
+});
+
+describe("デバイスを使わないで走るとき（#185）", () => {
+  // **中継（Durable Object）は数秒で消えるが、走行ログは D1 に永続する行**で、
+  // しかも**取り込みは上書きも削除もできない**（`../lib/mock-guard.ts`）。
+  // **実在しないデバイスの行を、誰にも消せない場所に残さない。**
+  //
+  // **本物の保存層を渡して確かめる。**捨てる方を渡すと、どちらの分岐でも空になり、
+  // **何もしない実装（`return store`）でも通ってしまう。**
+  it("新しい走行を記録しない", () => {
+    const real = store();
+    const logs = rideLogStoreFor(true, real);
+
+    const ride = logs.startRide(DEVICE, 1_000);
+    ride.addPoint(fix(1_000));
+    ride.end(2_000);
+
+    expect(logs.pending(LIMITS)).toBeNull();
+    // **本物の側にも入っていない**（同じ `app.db` を見ている）。
+    expect(real.pending(LIMITS)).toBeNull();
+  });
+
+  // **塞ぐのは書く側だけ。** 丸ごと差し替えると、**すでに溜まっている走行が
+  // 「送っていないもの: なし」に見え**、**保持期限の掃除まで止まる**
+  // （`./use-ride-log-sync.ts`）——設定を1つ入れただけで、別の走行のログが道連れになる。
+  it("すでに溜まっている走行は、そのまま見えて送れる", () => {
+    const real = store();
+    const before = real.startRide(DEVICE, 1_000);
+    before.addPoint(fix(1_000));
+    before.end(2_000);
+
+    const logs = rideLogStoreFor(true, real);
+
+    expect(logs.pending(LIMITS)?.points).toHaveLength(1);
+    expect(logs.summary().pendingRides).toBe(1);
+  });
+
+  it("オフなら、渡した保存層をそのまま使う（包まない）", () => {
+    const real = store();
+
+    expect(rideLogStoreFor(false, real)).toBe(real);
   });
 });
 

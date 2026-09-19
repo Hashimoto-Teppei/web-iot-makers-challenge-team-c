@@ -24,6 +24,7 @@ const ready: PreRideInput = {
   deviceReason: null,
   deviceChecking: false,
   deviceLink: "up",
+  standalone: false,
   locationReason: null,
   locationChecking: false,
   signsMeta: meta,
@@ -115,6 +116,16 @@ describe("preRideChecks", () => {
     const device = check({ ...ready, deviceIsMock: true }, "device");
     expect(device.state).toBe("ok");
     expect(device.detail).toContain("モック");
+  });
+
+  it("デバイスを使わない設定なら、つながっていなくても走り出せる", () => {
+    // **デモの2台目のスマホ**（#185）。中継だけを担うので、デバイスが無いのが正しい。
+    const input: PreRideInput = { ...ready, deviceId: null, deviceLink: null, standalone: true };
+
+    expect(check(input, "device").state).toBe("ok");
+    // **緑にするが、隠さない。** この端末には警告が出ない。
+    expect(check(input, "device").detail).toContain("警告が出ません");
+    expect(canStartRide(preRideChecks(input))).toBe(true);
   });
 
   // **「持っていない」と「0 件」で直し方が違う**ので、同じ文にしない。

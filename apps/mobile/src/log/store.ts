@@ -147,6 +147,26 @@ export type PendingLimits = {
 };
 
 /**
+ * 「デバイスを使わない」で走るとき、**新しい走行だけを記録しない**（#185）。
+ *
+ * **中継（Durable Object）は数秒で消えるが、走行ログは D1 に永続する行**で、しかも
+ * **取り込みは上書きも削除もできない**（`../lib/mock-guard.ts`）。
+ * **実在しないデバイスの行を、誰にも消せない場所に残さない。**
+ *
+ * **塞ぐのは書く側（`startRide`）だけ。** 丸ごと差し替えると、
+ * **すでに溜まっている走行が「送っていないもの: なし」に見え**（`./use-ride-log-sync.ts`
+ * が `summary()` を読む）、**保持期限の掃除まで止まる**（同じファイルの `purgeRideLogs`）
+ * ——設定を1つ入れただけで、**別の走行のログが黙って消えないまま残り続ける。**
+ *
+ * **オフなら、渡されたものをそのまま返す**（包まない）。
+ */
+export function rideLogStoreFor(standalone: boolean, store: RideLogStore): RideLogStore {
+  if (!standalone) return store;
+  // **`this` を使っていない**ので、展開して1つだけ差し替えてよい（`createRideLogStore`）。
+  return { ...store, startRide: createDiscardingRideLogStore().startRide };
+}
+
+/**
  * 何も残さない保存層。**`app.db` を開けなかったときだけ使う**（`./expo.ts`）。
  *
  * **黙って成功にしない。**使う側は必ず開けなかった旨を画面に出すこと

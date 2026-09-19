@@ -1,5 +1,5 @@
 import { Link } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PreRideChecklist } from "@/components/pre-ride-checklist";
@@ -7,9 +7,11 @@ import { apiBaseUrl } from "@/lib/api";
 import { blocksMockDevice } from "@/lib/mock-guard";
 import { collectDeviceLogs } from "@/log/collect";
 import { getRideLogStore } from "@/log/expo";
+import { rideLogStoreFor } from "@/log/store";
 import { useRideLogSync } from "@/log/use-ride-log-sync";
 import { stopStaleRideLocationUpdates } from "@/ride/location";
 import { canStartRide, preRideChecks } from "@/ride/pre-ride";
+import { useStandalone } from "@/ride/standalone";
 import { useDeviceLink } from "@/ride/use-device-link";
 import { useLocationReady } from "@/ride/use-location-ready";
 import { useRideLoop } from "@/ride/use-ride-loop";
@@ -31,7 +33,14 @@ import { useSignStore, useSignsMeta, useSignsUpdate } from "@/signs/expo";
 export default function HomeScreen() {
   const signs = useSignStore();
   // **走行ログの置き場所は `signs.db` と別のファイル**（`docs/adr/0009-on-device-storage.md`）。
-  const { store: logs, error: logsError } = getRideLogStore();
+  const { store: rideLogs, error: logsError } = getRideLogStore();
+  // **「デバイスを使わない」で走る端末は、走行ログを送らない**（#185）。
+  // 中継（Durable Object）は数秒で消えるが、**走行ログは D1 に永続する行**で、
+  // しかも**取り込みは上書きも削除もできない**（`@/lib/mock-guard`）。
+  // **実在しないデバイスの行を残さない。**
+  const standalone = useStandalone();
+  // **毎 render 作り直さない**——`useRideLoop` の依存に入っている。
+  const logs = useMemo(() => rideLogStoreFor(standalone, rideLogs), [standalone, rideLogs]);
   // **デバイスは走行ループの外で持つ。**接続は走行より寿命が長く、走り出す前に
   // つながっていることを確かめられなければ点検が成り立たない（`@/ble/link`）。
   const deviceLink = useDeviceLink();
@@ -75,6 +84,7 @@ export default function HomeScreen() {
     deviceReason: deviceLink.reason,
     deviceChecking: deviceLink.searching,
     deviceLink: deviceLink.link,
+    standalone: deviceLink.standalone,
     locationReason: location.reason,
     locationChecking: location.checking,
     signsMeta,
