@@ -44,10 +44,16 @@ def open_rear_sensor(gpio: int | None) -> RearSensor:
     """
     if gpio is None:
         return RearSensor(None)
-    from gpiozero import DigitalInputDevice
+    # **`DigitalInputDevice` を使わない。** あちらは `when_activated` のために
+    # **エッジ検出を有効にし、その実装が sysfs の `/sys/class/gpio/export` を叩く**が、
+    # **いまのカーネルに sysfs GPIO は無い** ——`OSError: [Errno 22] Invalid argument` になり、
+    # **`main.py` の起動ごと止まる**（2026-09-19 に実機で踏んだ。
+    # `../../../../../docs/unverified.md` 99）。
+    # **ここは毎秒読むだけでエッジが要らない**ので、`InputDevice` で足りる。
+    from gpiozero import InputDevice
 
     # **`pull_up=False`**（内部プルダウン）。**線が外れたときに L へ落ちる**ので、
     # 抜けたジャンパが「検知しっぱなし」に化けない。内部プルダウンの約 50kΩ は、
     # データシートが求める負荷抵抗 10k〜100kΩ の中に入る。H のときは VDD 近くまで出るので、
     # **VDD は 3.3V であること**（`../../../../../docs/hardware.md`）。
-    return RearSensor(DigitalInputDevice(gpio, pull_up=False))
+    return RearSensor(InputDevice(gpio, pull_up=False))
