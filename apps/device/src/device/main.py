@@ -141,7 +141,8 @@ def main() -> None:
             warnings,
             link=status.link,
             moving=status.moving,
-            # 停止中に出す情報はまだ無い（走行の要約は #40 以降）。
+            # 停止中に出す情報はまだ無い。**検知ログはここに出さない**（#40 は回収であって、
+            # 走行の要約ではない）——出すなら、何を見せるかを決めるところから始める。
             info=None,
             now_ms=now_ms,
             # **上書きの当たったものを渡す**（`tuning.py`）。`config.NOTIFY_CONFIG` を
@@ -219,8 +220,8 @@ def main() -> None:
         rejected = tuning.apply(raw)
         # **成功したら消す。**`last_error` は「直近で断った書き込みの理由」であって、
         # 起動してから一度でも断ったことの記録ではない（`ble-gatt.md`「`status`」）。
-        # **残すと、直したあともずっと赤い理由が出続ける**——`read` で消える経路は
-        # まだ無い（#40）ので、消す場所はここしかない。
+        # **残すと、直したあともずっと赤い理由が出続ける。**`read` を受けても消えるが
+        # （`transfer.py`）、**回収しない走行では一度も通らない**ので、ここでも消す。
         # **断った理由は `last_error` へ。**`dropped` に混ぜない（あれは `alert` 用）。
         state.last_error = rejected.short if rejected is not None else None
         if rejected is not None:

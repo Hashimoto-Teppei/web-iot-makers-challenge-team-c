@@ -30,11 +30,11 @@ __all__ = ["PROTO_VERSION", "DeviceState", "Link", "TransferState"]
 class DeviceState:
     """今のデバイスの状態。
 
-    **いま埋まるのは `device_id` / `log_id` / `state` と、`warns` / `dropped`（#35）。**
-    `link` は #36（心拍のウォッチドッグ）、
-    `sent` / `remaining` / `oldest_seq` / `latest_seq` / `last_error` は #40（ログの転送）で埋まる。
-    **埋まる前から項目を出しておく**のは、セントラル側が形を先に実装できるようにするため
-    （知らないキーは無視する約束なので、後から増えても壊れない）。
+    **項目はすべて埋まっている。**値を決めるのはそれぞれ別の場所で、ここは持つだけである
+    ——`link` は `alert.py` の `LinkWatch`、`cfg` は `tuning.py`、
+    `sent` / `remaining` / `last_error` と `state` は `transfer.py`、
+    `oldest_seq` / `latest_seq` は `log.py`（`main.py` が入れ直す）。
+    **判定をここに書かない。**
     """
 
     device_id: str
