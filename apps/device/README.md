@@ -1,6 +1,6 @@
 # apps/device
 
-自転車に載せるデバイス（Raspberry Pi Zero W）のプログラム。Python で書く。
+自転車に載せるデバイス（Raspberry Pi Zero 2 W）のプログラム。Python で書く。
 
 **このデバイスが担うのは2つだけです。**「センサーで後方の物体を検知すること」と、
 「スマホから指示されたものを表示・再生すること」（[ADR 0006](../../docs/adr/0006-decision-layer-on-mobile.md)）。
@@ -20,7 +20,7 @@
 uv sync
 ```
 
-`uv` が Python 3.11 と依存パッケージを用意します。`pip` や `venv` を自分で触る必要はありません。
+`uv` が Python 3.13 と依存パッケージを用意します。`pip` や `venv` を自分で触る必要はありません。
 
 ## コマンド
 
@@ -41,7 +41,7 @@ BLE と GPIO のライブラリは **Linux 専用**で、開発機（Windows / m
 | --- | --- | --- |
 | 開発機 | `uv sync` | **入らない** |
 | CI | `uv sync --locked` | **入らない** |
-| 実機（Zero W） | `uv sync --group device --python /usr/bin/python3` | 入る |
+| 実機（Zero 2 W） | `uv sync --group device --python /usr/bin/python3` | 入る |
 
 **新しく実機専用の依存が要るときも `dependencies` へは移さないでください。**
 移した瞬間、開発機の `uv sync` が失敗して全員の手が止まります。
@@ -76,8 +76,10 @@ BLE と GPIO のライブラリは **Linux 専用**で、開発機（Windows / m
 | `tools/` | 開発機で動かす道具。実機の代わりに「ラズパイのふり」をする BLE ペリフェラル（`mock_peripheral.py`） |
 | `tests/` | テスト |
 
-`detect/` はまだありません。**中身ができる前にディレクトリだけ先に作らないでください。**
-最初のファイルを置く人が、そのときに作ります。
+`detect/` にあるのは **後方物体検知（`rear_object.py`。#152）だけ**です。
+**車車間の3検知はここにありません**——スマホへ移りました
+（`../../docs/adr/0006-decision-layer-on-mobile.md`）。**デバイスに残るのは、
+通信に依存しない検知だけ**です。
 
 **`geo.py`（緯度経度の距離計算）は、いまこのアプリから使われていません。**
 書いた時点ではデバイスが車車間の判断をする前提でしたが、
@@ -109,6 +111,13 @@ BLE の接続枠は1つで、**つないでいる相手から枠を奪う手段�
 他人がつなぎっぱなしにすると持ち主のスマホが接続できず、
 **電源を切るしか戻す方法がなくなる**ためです（`../../docs/interfaces/ble-gatt.md`「前提」）。
 持ち主のアプリは接続したら必ず心拍を毎秒書くので、**心拍を書かない接続は持ち主のものではありません。**
+
+**後方から近づく物体を検知します**（#152。`detect/rear_object.py` / `hw/rear_sensor.py`）。
+読むのは GPIO 1本の H / L だけで（AE-NJR4265 J1。`../../docs/hardware.md`）、
+**何 ms 続いたら接近とみなすかを決めるのは `detect/rear_object.py`** です。
+**スマホが落ちても電波が無くても屋内でも動く、唯一の検知**です
+（`../../docs/adr/0004-v2v-transport.md` のローカル層）。
+出たあとは `alert` から届く4つと合流し、**同じ `notify.py` が1つを選びます。**
 
 **警告は LCD と LED ×2 に出ます**（#151。`hw/lcd.py` / `hw/led.py`）。
 何を出すかを決めるのは `notify.py` で、**値を返すだけでハードウェアに触りません。**

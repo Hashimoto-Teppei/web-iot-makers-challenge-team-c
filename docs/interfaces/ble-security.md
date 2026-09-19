@@ -112,14 +112,15 @@ Characteristic に暗号化のフラグ（`encrypt-read` / `encrypt-write` / `en
 
 **戻すときに要るのは3つ。GATT の構造は変わらない**（手順と完了条件は #122）。
 
-- Zero W の BlueZ に Agent を `NoInputNoOutput` で登録する（Just Works を無人で受けるため）。
+- ラズパイの BlueZ に Agent を `NoInputNoOutput` で登録する（Just Works を無人で受けるため）。
 - `device-info` 以外に暗号化フラグを付ける。**Notify は `encrypt-read` では効かず `encrypt-notify`**
   （`log` は `read` プロパティを持たないため。付け間違えると CCCD が保護されず、ボンドなしで購読できる）。
 - モバイルはボンド完了（`ACTION_BOND_STATE_CHANGED`）を待って購読を張り直す。
 
-なお **Zero W の Bluetooth は 4.1 で LE Secure Connections（4.2 以降）が使えない**ため、
-戻したとしても Just Works になり、**中間者攻撃には守られない**。防げるのは
-「ボンドしていない端末からの読み書き」まで。
+**実機の Bluetooth は 4.2 で、LE Secure Connections が使える**（2026-09-19 に実測。
+`hciconfig` の HCI / LMP Version が 4.2。**Zero W（4.1）を前提に「使えない」と書いていたのを直した**）。
+**ただし画面もボタンも無いので、どのみち Just Works になり、中間者攻撃には守られない。**
+防げるのは「ボンドしていない端末からの読み書き」まで —— **結論は変わらない。**
 
 ### 書き込みを受ける側の約束
 

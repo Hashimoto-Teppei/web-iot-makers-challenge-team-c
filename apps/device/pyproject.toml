@@ -1,8 +1,8 @@
 [project]
 name = "device"
 version = "0.1.0"
-description = "自転車に載せるデバイス（Raspberry Pi Zero W）の危険検知プログラム"
-requires-python = ">=3.11,<3.12"
+description = "自転車に載せるデバイス（Raspberry Pi Zero 2 W）の危険検知プログラム"
+requires-python = ">=3.13,<3.14"
 # 実行時の依存はまだない。BLE や GPS のライブラリは必要になった時点で追加する。
 dependencies = []
 
@@ -22,7 +22,7 @@ device = [
   # （→ `src/device/hw/led.py`。周期処理を止めずに点滅させるため）。
   "gpiozero>=2.0",
   # LCD1602A を I2C 変換基板（PCF8574）越しに叩く。どちらも純 Python なので
-  # ARMv6 でもソースビルドにならない（→ docs/adr/0008-device-dependencies.md）。
+  # アーキテクチャを問わない（→ docs/adr/0008-device-dependencies.md）。
   "RPLCD>=1.3",
   "smbus2>=0.4",
 ]
@@ -32,9 +32,25 @@ device = [
 # **`dependencies` へ移さないこと。** bless は macOS では CoreBluetooth（pyobjc）を、
 # Linux では BlueZ を掴むので、**CI の Linux で入れると意味の違うものが入る。**
 # 模擬は開発機で人が動かすものなので、CI では要らない。
+#
+# **0.3 系は入らない。** `bless` 0.3.0 は `bleak>=1.1.1`（これ自体が `winrt-* >= 3.1` を要求する）と
+# `winrt-* == 2.0.0b1` の**両方**を宣言していて、**どの環境でも解決できない**（2026-09-19 に確認）。
+# **Python の版とは無関係**で、bleak が 1.1.1 を出した時点から踏む状態にあった
+# （3.13 へ上げてロックを取り直したときに再解決が走って表に出た）。
+# **マーカーで Windows だけ外しても効かない** ——uv は全プラットフォームぶんを一度に解くため。
+#
+# そこで **0.2 系に固定した。** あちらは bleak 1.0 で消えた内部 module を import するので、
+# 下の `[tool.uv]` で bleak も一緒に縛っている。**2つで1組**であり、片方だけ外さないこと。
+# 上流が直ったら両方外す（`../../docs/adr/0008-device-dependencies.md`）。
 mock = [
-  "bless>=0.3",
+  "bless>=0.2,<0.3",
 ]
+
+[tool.uv]
+# **`bless` 0.2.6 は bleak 1.0 で消えた内部 module を import する**
+# （`bleak.backends.corebluetooth.service`）。上げると `mock_peripheral.py` が起動しない。
+# **`mock` グループだけの話**で、実機にも CI にも入らない。上の `bless` と一緒に外すこと。
+constraint-dependencies = ["bleak<1.0"]
 
 [build-system]
 requires = ["hatchling"]
@@ -46,7 +62,7 @@ packages = ["src/device"]
 [tool.ruff]
 # Biome（TypeScript 側）と揃える。片方だけ違うと読むときに引っかかる。
 line-length = 100
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = [
@@ -63,7 +79,7 @@ include = ["src", "tests"]
 # 既定の "recommended" は指摘が非常に多く、開発が初めての人が手を止めてしまう。
 # まずは "standard" で始め、必要になったら段階的に上げる。
 typeCheckingMode = "standard"
-pythonVersion = "3.11"
+pythonVersion = "3.13"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

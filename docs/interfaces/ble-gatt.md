@@ -116,7 +116,7 @@ Flags(3) + 128bit UUID(2+16) + 名前(2+7) = 30 バイトで、ぎりぎり収�
 
 **Scan Response に逃がす案は採らない。** BlueZ の `LEAdvertisement1` で scan response を指定する
 プロパティ（`ScanResponseData` など）は experimental で、`bluetoothd --experimental` が要る。
-デモ環境の前提を増やしたくない。Zero W の Bluetooth は 4.1 で Extended Advertising も使えない。
+デモ環境の前提を増やしたくない。**実機の Bluetooth は 4.2 で、Extended Advertising（5.0 以降）も使えない**（2026-09-19 に実測）。
 
 モバイルアプリは Service UUID でスキャンし、名前は人が見分けるためだけに使う。
 

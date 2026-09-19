@@ -19,7 +19,7 @@ Web×IoT メイカーズチャレンジ（ハッカソン）チームCのリポ�
                                                     他の自転車のスマホ（同じ経路）
 ```
 
-- **デバイス（Raspberry Pi Zero W / Python）**: **後方物体検知**（センサー）と**表示・音**。
+- **デバイス（Raspberry Pi Zero 2 W / Python）**: **後方物体検知**（センサー）と**表示・音**。
   **測位はしない。車車間の判断もしない**（`docs/adr/0006-decision-layer-on-mobile.md`）。
 - **モバイルアプリ（Expo）**: 測位（GNSS）、**車車間の3つの検知**、**一時停止の事前通知の判断**、中継。
 - **Worker**: 画面と API を兼ねる。収集データの蓄積と活用。
@@ -50,7 +50,7 @@ Web×IoT メイカーズチャレンジ（ハッカソン）チームCのリポ�
   **中継のリクエストの中で D1 に書かない**（リアルタイム経路の遅延に永続化を載せない）。
   走行中でも蓄積は取れるが、DO のアラームか `ctx.waitUntil()` で非同期に流すこと
   （`docs/adr/0005-realtime-transport.md`）。
-- Raspberry Pi Zero W はリソースが厳しい。BLE の常時接続・検知・表示制御の負荷配分に注意する。
+- Raspberry Pi Zero 2 W は RAM 512MB でリソースが厳しい（**CPU は4コア**）。BLE の常時接続・検知・表示制御の負荷配分に注意する。
 - ラズパイには CHIRIMEN（Node.js 環境）が入っているが**使わない**。組み込み側は Python で実装する。
   ラズパイ上の Node.js に関する提案は不要。
 
@@ -58,7 +58,7 @@ Web×IoT メイカーズチャレンジ（ハッカソン）チームCのリポ�
 
 | 領域 | 採用 |
 | --- | --- |
-| デバイス | Python 3.11 / uv / Ruff / basedpyright / pytest |
+| デバイス | Python 3.13 / uv / Ruff / basedpyright / pytest |
 | Web + API | React / Vite / Hono / Cloudflare Workers / D1 / Durable Objects / Drizzle / Wrangler |
 | モバイル | Expo (SDK 57, React Native) — iOS 主 / Android 従 |
 | 共通 | pnpm workspaces / Turborepo / Biome / Vitest / Zod |

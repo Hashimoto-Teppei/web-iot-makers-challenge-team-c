@@ -22,7 +22,7 @@ const tech = {
       icon: "i-tabler-bike",
       layer: "device",
       title: "自転車デバイス",
-      subtitle: "Raspberry Pi Zero W",
+      subtitle: "Raspberry Pi Zero 2 W",
       items: ["後方センサー", "LCD と LED ×2"],
       folder: "apps/device",
     },
