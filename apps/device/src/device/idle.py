@@ -83,3 +83,50 @@ class IdleDisconnect:
         # 数え直せば、失敗しても `idle_ms` 後にまた試す。
         self._down_since_ms = now_ms
         return True
+
+
+class SingleCentral:
+    """つながってよいセントラルを1台に限る。**先着優先。切る操作はしない。**
+
+    **なぜ要るか。** コードは「つながるのは1台」の前提で書かれているのに、
+    **2台目を防ぐ仕組みが無かった**（`../../../../docs/interfaces/ble-gatt.md`「前提」）。
+    2台つながると、**2台目が切れただけで1台目の転送が止まり、設定が既定へ戻る。**
+
+    **奪わせない。** 先着が他人でも、心拍を書かなければ `IdleDisconnect` が 30 秒で手放す
+    ——**これが「先着優先でよい」ことの根拠**である。
+
+    **アドレスの文字列しか持たない。** BLE も D-Bus も知らないので pytest で回せる
+    （`IdleDisconnect` と同じ）。実際に切るのは `hw/ble.py` 側。
+    """
+
+    def __init__(self) -> None:
+        # いまの主のアドレス。**誰もいなければ `None`。**
+        self._owner: str | None = None
+
+    @property
+    def owner(self) -> str | None:
+        """いまの主。**ログに出す用**で、判断には使わない。"""
+        return self._owner
+
+    def accept(self, address: str) -> bool:
+        """つないできた相手を受け入れてよいか。**受け入れるなら、その場で主にする。**
+
+        **同じアドレスがもう一度来たら受け入れる。** bluezero は1つの接続に対して
+        `InterfacesAdded` と `PropertiesChanged` の**両方から `on_connect` を呼びうる**
+        （upstream の `bluezero/adapter.py`）。ここで断ると、**自分で自分の主を切る。**
+        """
+        if self._owner is None or self._owner == address:
+            self._owner = address
+            return True
+        return False
+
+    def release(self, address: str) -> bool:
+        """切れた相手が主だったか。**主でなければ何もせず `False`。**
+
+        呼ぶ側は、`False` のときに**転送の中止も設定の初期化もしないこと**
+        ——2台目が切れただけで、主の走行が巻き添えになる。
+        """
+        if self._owner != address:
+            return False
+        self._owner = None
+        return True

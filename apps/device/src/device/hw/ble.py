@@ -19,6 +19,7 @@ from typing import Any
 from bluezero import adapter, async_tools, peripheral
 
 from device.alert import AlertResult, Beat, Warn, parse_alert
+from device.idle import SingleCentral
 from device.state import DeviceState
 from device.transfer import LogTransfer
 
@@ -118,9 +119,12 @@ class BlePeripheral:
             tick_interval_s: `on_tick` を呼ぶ間隔（秒）
             tick_error_log_every: `on_tick` が例外で落ち続けるとき、何回に1本ログを出すか
             on_connect: セントラルがつないできたときに呼ぶ先。
-                **相手が誰かは渡さない** —— 枠は1つなので、区別する相手がいない
-                （`../idle.py`）
-            on_disconnect: 切れたときに呼ぶ先
+                **受け入れたときだけ呼ぶ**（2台目は切るので呼ばない。`../idle.py` の
+                `SingleCentral`）。**相手が誰かは渡さない** —— 受け入れるのは1台だけなので、
+                区別する相手がいない
+            on_disconnect: **主が**切れたときに呼ぶ先。
+                **主でない相手の切断では呼ばない** —— 呼ぶと、2台目が切れただけで
+                主の設定が既定へ戻る（`main.py` の `on_disconnect`）
         """
         self._state = state
         self._interval_s = status_notify_interval_s
@@ -138,6 +142,9 @@ class BlePeripheral:
         # bluezero は引数が1つのコールバックに `device.Device` を渡す
         # （upstream の `adapter.py` `_properties_changed` で確認済み）。
         self._remote: Any | None = None
+        # つながってよいのは1台だけ。**誰を主にするかの判断は `../idle.py` 側**で、
+        # ここは言われたとおりに切るだけである（このファイルは判断しない）。
+        self._central = SingleCentral()
         # 周期処理が例外で落ちた回数。**毎回ログに出さないため**（`_tick`）。
         self._tick_errors = 0
         # 直近で捨てた理由と、そのあと同じ理由で捨てた数。**毎通ログに出さないため**（下）。
@@ -516,8 +523,29 @@ class BlePeripheral:
             logger.warning("alert を捨て続けている（%d 通目）: %s", self._drop_repeats + 1, reason)
 
     def _on_connect(self, remote: Any) -> None:
+        # **アドレスは1回だけ読む。** `device.Device.address` は**読むたびに D-Bus を叩く**ので、
+        # 持ち回さずにここで文字列にする。
+        #
+        # **大文字小文字を正規化しない。** `on_connect` に来るアドレスも `on_disconnect` に
+        # 来るアドレスも、**どちらも BlueZ が返す大文字**である（upstream の
+        # `bluezero/adapter.py` と `dbus_tools.get_device_address_from_dbus_path`）。
+        address = str(remote.address)
+        # **受け入れてよいかはここで決めない**（`../idle.py` の `SingleCentral`。先着優先）。
+        if not self._central.accept(address):
+            # **2台目。つないでから切るしか手が無い** —— アドバタイズを止めても、
+            # アドレスを知っていれば接続できる
+            # （`../../../../../docs/interfaces/ble-gatt.md`「前提」）。
+            logger.warning("2台目を切る（主は %s）: %s", self._central.owner, address)
+            try:
+                remote.disconnect()
+            except Exception:
+                # **主の接続を巻き添えにしない。** 切れなくても、こちらは主を持ったまま動き続ける
+                # （`disconnect_central` と同じ理由で、例外を外に出さない）。
+                logger.exception("2台目を切れなかった（主の接続はそのまま続ける）")
+            return
         logger.info("接続された: %s", remote)
         # **持っておく。** 心拍の来ない接続をこちらから切るのに要る（`disconnect_central`）。
+        # **主のものしか入らない**ので、切るつもりで持ち主を切ることはない。
         self._remote = remote
         if self._on_connect_cb is not None:
             self._on_connect_cb()
@@ -529,6 +557,11 @@ class BlePeripheral:
         # `register_advertisement` を呼ぶだけで、切断のたびに登録し直さない）。
         # **外れていたらここで登録し直す。**
         # **`_status_chrc` は捨てない**（上の注記。捨てると再購読で戻ってこない）。
+        if not self._central.release(device_address):
+            # **主でない相手が切れただけ。** ここで片付けると、**2台目が切れただけで
+            # 主の転送が止まり、設定が既定へ戻る**（これが #184 で直したかったもの）。
+            logger.info("主でない相手が切れた（何もしない）: %s", device_address)
+            return
         logger.info("切断された: %s", device_address)
         self._remote = None
         # **切断で転送を中止し、`idle` に戻す**（`../../../../../docs/interfaces/ble-gatt.md`
