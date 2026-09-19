@@ -33,7 +33,11 @@ npx expo prebuild --platform ios   # ios/ を生成する
 ```
 
 `pnpm --filter mobile ios`（＝ `expo run:ios`）は、この2つも中でやってくれます。
-実機に入れるときは `npx expo run:ios --device` です。
+
+**実機に入れるときは `expo run:ios --device` を使いません**——新しい端末では署名で落ち、
+ビルドが通ってもインストールで固まることがあります。**手順は
+[`../../docs/deploy-mobile.md`](../../docs/deploy-mobile.md)「3-3. TestFlight を通さずに、
+手元の端末へ直接入れる」**（`xcodebuild` と `devicectl` に分ける）。
 
 **初回だけ、Xcode で署名を設定します。** `ios/C.xcworkspace` を開き
 （**`.xcodeproj` ではありません**——CocoaPods を使うと workspace 側が正になります）、

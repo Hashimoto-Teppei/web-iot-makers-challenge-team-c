@@ -191,6 +191,80 @@ TestFlight ▸ 「内部テスト」のグループ ▸ **テスター**に自�
 
 **ビルドの有効期限は内部・外部とも 90 日。**
 
+### 3-3. TestFlight を通さずに、手元の端末へ直接入れる
+
+**審査も配布も待たずに、USB で繋いだ端末へ入れる。** デモ直前の 1 本や、
+**その端末でしか確かめられないこと**（背景常駐・測位精度。[`unverified.md`](./unverified.md) 95 / 21）を
+見るときに使う。**配るのではなく、自分の手元の端末に入れる手順**である。
+
+**`npx expo run:ios --device` は使わない。** 2 か所で止まる（下の「なぜ分けるか」）。
+
+#### 手順
+
+**1. 端末側でデベロッパモードをオンにする。**
+設定 ▸ プライバシーとセキュリティ ▸ **デベロッパモード**。
+**一度 Mac に繋いでビルドを試みるまで、この項目は出てこない。**
+オンにすると再起動を求められ、再起動後にもう一度確認される。
+
+**2. UDID を調べる。**
+
+```sh
+xcrun devicectl list devices
+```
+
+`available (paired)` かつ `physical` の行が実機。**`simulated` の行と取り違えない。**
+
+**3. ビルドする。**
+
+```sh
+cd apps/mobile
+xcodebuild -workspace ios/C.xcworkspace -configuration Release -scheme C \
+  -destination id=<UDID> \
+  -allowProvisioningUpdates -allowProvisioningDeviceRegistration
+```
+
+**`-allowProvisioningDeviceRegistration` が要る。** 初めて使う端末は
+プロビジョニングプロファイルに入っていないので、これが無いと
+
+```
+Provisioning profile "iOS Team Provisioning Profile: *" doesn't include
+the currently selected device
+```
+
+で落ちる。**このフラグを付けると、Apple 側への端末登録まで自動で済む**
+（Xcode を開く必要は無い）。
+
+**`Release` にする。** `Debug` だと Metro に繋がり、**ソースを触るたびにアプリが再起動する**
+——背景常駐を測っている最中にそれが起きると、**計測だけが静かに止まる。**
+
+**4. 入れる。**
+
+```sh
+APP=$(ls -dt ~/Library/Developer/Xcode/DerivedData/C-*/Build/Products/Release-iphoneos/C.app | head -1)
+xcrun devicectl device install app --device <UDID> "$APP"
+```
+
+**5. 起動する。**
+
+```sh
+xcrun devicectl device process launch --device <UDID> jp.teamc.bikealert
+```
+
+#### なぜ分けるか（`expo run:ios` を使わない理由）
+
+- **新しい端末で必ず落ちる。** `expo run:ios` は
+  `-allowProvisioningDeviceRegistration` を渡さない
+- **ビルドが通ったあと、インストール段階で無反応になることがある。**
+  2026-09-19 に **32 分**待って何も起きなかった。`.expo/xcodebuild.log` は
+  `** BUILD SUCCEEDED **` で止まっており、**子プロセスも無く、端末もロックされていなかった**
+  （`xcrun devicectl device info lockState` で確認）。
+  **上の 4 を直接叩いたら数秒で入った。**
+- **分けておくと、どちらで止まったかが分かる。** まとめて 1 本のコマンドにすると、
+  **ビルドで失敗したのかインストールで固まったのかが、出力からは区別できない。**
+
+**入れ直すときもこの手順でよい。** ビルド成果物は再利用されるので、
+2 回目以降は 3 と 4 だけで済む。
+
 ## 4. 出るが、無視してよいもの
 
 - **`Upload Symbols Failed`（dSYM が無い）** —— `React.framework` /
