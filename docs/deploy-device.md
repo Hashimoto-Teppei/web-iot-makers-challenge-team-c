@@ -303,7 +303,7 @@ sudo systemctl restart bike-device
 | 広告は見えるが名前が `bg-` の途中で切れている | 広告が 31 バイトを超えている。**`Appearance` や `tx-power` を足していないか**（`interfaces/ble-gatt.md`） |
 | 見つかるのに繋がらない | **他の人が先に繋いでいる。** デバイスは**先着優先で2台目を切る**（#184。`interfaces/ble-gatt.md`「前提」）。**接続中もアドバタイズは出ている**ので、見つかること自体は正常。先着が心拍を書かなければ 30 秒で手放すので、**繋ぎ直して待つ**（再起動は最後の手段） |
 | LCD だけ出ない（LED は光る） | I2C が無効か、アドレスが違う（手順 7）。journalctl に `LCD が 0x27 に見つからない` が出ている |
-| ログインのユーザー名 / パスワードが分からない | **リポジトリには無い**（public なので伏せてある）。手順 1-3 で Imager に入れた値である。思い出せなければ、**SD を開発機に挿して boot パーティションで作り直す** —— `echo "<user>:$(openssl passwd -6 '<パスワード>')" > /Volumes/bootfs/userconf.txt`。**同じときに `touch /Volumes/bootfs/ssh` も置く**と、以降はシリアルが要らない |
+| ログインのユーザー名 / パスワードが分からない | **リポジトリには書かない**（public なので。`AGENTS.md`「機密情報の扱い」）。**CHIRIMEN Lite をそのまま焼いたなら、配布元の既定がそのまま生きている** —— 値は [CHIRIMEN のチュートリアル](https://chirimen.org/pizero/chapter_2-2.html) に載っている。**Imager の OS カスタマイズで上書きした場合はその値。** どちらでもないときは、**SD を開発機に挿して boot パーティションで作り直す** —— `echo "<user>:$(openssl passwd -6 '<パスワード>')" > /Volumes/bootfs/userconf.txt`。**同じときに `touch /Volumes/bootfs/ssh` も置く**と、以降はシリアルが要らない |
 | SD カードが壊れた疑い | **書き直すのが一番速い。** 手順 1 からやり直す |
 
 **ここに無い症状に当たったら、この表に1行足すこと。** 次に同じ場所で止まる人を減らせる。
