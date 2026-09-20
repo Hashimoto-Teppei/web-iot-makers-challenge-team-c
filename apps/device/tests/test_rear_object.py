@@ -83,6 +83,30 @@ def test_GPIO_の値をそのまま返す() -> None:
     assert sensor.is_high() is True
 
 
+def test_読むより前に消えた_H_を取りこぼさない() -> None:
+    """**裏スレッドが見た H は、次に読むまで残る**（2026-09-20 の実測。`docs/unverified.md` 103）。
+
+    ドップラーの出力は 0.2〜1.3 秒しか続かないのに、読むのは毎秒1回である。
+    **掛け金が無いと、周期の合間に立って消えた H はそのまま落ちる。**
+    """
+
+    class FakeInput:
+        def __init__(self) -> None:
+            self.is_active = False
+
+    pin = FakeInput()
+    sensor = RearSensor(pin)
+
+    # 周期と周期の間に H が立って、読む前に消えた。
+    pin.is_active = True
+    sensor.sample()
+    pin.is_active = False
+
+    assert sensor.is_high() is True
+    # **読んだら倒す。** 残したままだと、1回の H が毎周期の警告に化ける。
+    assert sensor.is_high() is False
+
+
 def test_クールダウンが保持時間より短い() -> None:
     """**実値どうしの関係だけを見る。**値そのものは実地で動かしてよい。
 
