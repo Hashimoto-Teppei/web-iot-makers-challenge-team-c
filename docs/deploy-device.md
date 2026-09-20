@@ -3,7 +3,9 @@
 **書いたプログラムを Raspberry Pi Zero 2 W に載せて動かすまで**をここにまとめる。
 開発機（Windows / macOS）の環境構築は [`setup.md`](./setup.md) にあり、**そちらとは別**。
 
-- ステータス: **実機で一部を通した**（2026-09-19。→ [`unverified.md`](./unverified.md) の 40 / 41 / 42）
+- ステータス: **実機で一部を通した**（2026-09-19。→ [`unverified.md`](./unverified.md) の 40 / 41 / 42）。
+  **手順 9（systemd での自動起動）は 2026-09-20 に実機で通した** ——再起動から手を触れずに
+  BLE の広告まで上がる
 - 依存の入れ方をなぜこうするかは [`adr/0008-device-dependencies.md`](./adr/0008-device-dependencies.md)
 
 **実値を書かないこと。** Wi-Fi のパスワード・IP アドレス・ホスト名の実物はコミットしない
@@ -223,15 +225,16 @@ uv run python -m device.main
 sudo tee /etc/systemd/system/bike-device.service > /dev/null <<'UNIT'
 [Unit]
 Description=bike device
-# BLE を使うので bluetooth が上がってから起動する
-After=bluetooth.target network-online.target
-Wants=bluetooth.target
+# BLE を使うので bluetoothd が上がってから起動する
+After=bluetooth.service
+Wants=bluetooth.service
 
 [Service]
 Type=simple
 User=<ユーザー名>
 WorkingDirectory=/home/<ユーザー名>/web-iot-makers-challenge-team-c/apps/device
-ExecStart=/home/<ユーザー名>/.local/bin/uv run python -m device.main
+# --no-sync: 走行中はネットが無い。毎回 lock と同期しようとさせない
+ExecStart=/home/<ユーザー名>/.local/bin/uv run --no-sync python -m device.main
 # 落ちても勝手に上がってくる。走行中に人が直せないため
 Restart=always
 RestartSec=5
@@ -247,8 +250,18 @@ systemctl status bike-device
 
 **`<ユーザー名>` を3か所とも置き換えること。**
 
-**BLE のペリフェラルとして広告を出すには権限が要る。**
-`User=` のユーザーが `bluetooth` グループに入っていない場合は D-Bus に弾かれる:
+**`network-online.target` を待たない。** デバイスが使うのは BLE だけで、ネットは要らない。
+待たせると、**Wi-Fi の無いところで起動が数十秒遅れる**（`NetworkManager-wait-online` が
+有効な場合）。自転車に載せた状態ではそれが「起動しない」に見える。
+
+**`uv run` に `--no-sync` を付ける。** 付けないと毎回 `uv.lock` との同期を試みる。
+**走行中はネットが無い**ので、ここで待たされる理由を作らない。
+依存を足したときは手順どおり `uv sync` を自分で回す（→「更新のしかた」）。
+
+**BLE のペリフェラルとして広告を出すには権限が要ることがある。**
+`User=` のユーザーが `bluetooth` グループに入っていないと D-Bus に弾かれる、とされる。
+**ただし手元の CHIRIMEN Lite では、`pi` が `bluetooth` グループに入っていないまま広告まで通った**
+（2026-09-20）。**弾かれてから足せばよい**——先回りして足さない:
 
 ```sh
 sudo usermod -aG bluetooth <ユーザー名>
@@ -263,8 +276,9 @@ sudo usermod -aG i2c,gpio <ユーザー名>
 ```
 
 **それでも弾かれる場合は BlueZ の D-Bus ポリシーを足すことになる。**
-**まだ実機で通していない**（[`unverified.md`](./unverified.md) の 43）。
-`journalctl` に `org.freedesktop.DBus.Error.AccessDenied` が出ていたらこれ。
+**手元では要らなかった**（2026-09-20。`bluetooth` グループも D-Bus ポリシーも無しで、
+systemd から起動して広告まで通った）。`journalctl` に
+`org.freedesktop.DBus.Error.AccessDenied` が出ていたらこれ。
 
 ## 10. ログを見る
 
