@@ -28,6 +28,22 @@ logger = logging.getLogger(__name__)
 # 転送の終わりを表す1バイト（EOT）。**完了の印はこれだけ**で、`status` では判定させない。
 EOT = b"\x04"
 
+# 1回の Notify に載せられる属性値の上限（バイト）。
+#
+# **MTU から引いた値がこれを超えたら、こちらで頭を打たせる。** ATT の属性値は
+# **仕様上 512 バイトが上限**で、Notify もその属性値を運ぶ。**MTU がそれより大きくても、
+# 513 バイト目から先は運ばれない。**
+#
+# **超えて渡すと、BlueZ が黙って 512 で切る。** こちらは切られた前提で位置を進めないので、
+# **塊の継ぎ目にまたがったレコードが1件ずつ壊れる**——**壊れた行はセントラルが捨て、
+# 既読位置は読めた行まで進むので、そのレコードは二度と送られてこない。**
+#
+# **2026-09-20 に実機で踏んだ。** MTU 517（→ 514 バイト送る）で 22 件を流し、
+# **届いたのは 512 バイトずつ**で、**継ぎ目の 3 件（seq 7 / 13 / 19）が消えた**
+# （`../../../../docs/unverified.md` 107）。**1塊で収まる転送では起きない**ので、
+# 件数が増えるまで見えなかった。
+MAX_ATT_VALUE = 512
+
 
 @dataclass(frozen=True)
 class ControlOutcome:
@@ -173,7 +189,11 @@ class LogTransfer:
         self._pos = 0
         # **1パケットは `MTU - 3` バイト以内**（`ble-log-transfer.md` の 6）。
         # 分からなければ小さい方に倒す（上の `fallback_chunk`）。
-        self._chunk = mtu - 3 if mtu is not None and mtu - 3 >= 1 else self._fallback_chunk
+        #
+        # **`MAX_ATT_VALUE` で頭を打たせる。** MTU がいくら大きくても、
+        # **属性値そのものが 512 バイトを超えて運ばれることはない**（下の定数）。
+        limit = min(mtu - 3, MAX_ATT_VALUE) if mtu is not None else 0
+        self._chunk = limit if limit >= 1 else self._fallback_chunk
         self._update_counts()
 
     def _finish(self) -> None:

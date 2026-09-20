@@ -88,6 +88,27 @@ def test_塊はMTUマイナス3に収まる(tmp_path: Path) -> None:
     assert b"".join(chunks).endswith(EOT)
 
 
+def test_塊は512バイトを超えない(tmp_path: Path) -> None:
+    """**MTU がいくら大きくても 512 バイトで頭打ち**（`transfer.MAX_ATT_VALUE`）。
+
+    ATT の属性値の上限が 512 バイトなので、**`MTU - 3` がそれを超えても運ばれない。**
+    超えて渡すと BlueZ が黙って切り、**塊の継ぎ目にまたがったレコードが1件ずつ消える**
+    ——2026-09-20 に実機で踏んだ（MTU 517 で 22 件中 3 件が落ちた）。
+    """
+    _, _, transfer = _setup(tmp_path, records=40)
+    payload, _ = _read()
+
+    transfer.handle_control(payload, mtu=517, can_notify=True)
+    chunks: list[bytes] = []
+    while (chunk := transfer.next_chunk()) is not None:
+        chunks.append(chunk)
+
+    assert max(len(chunk) for chunk in chunks) == 512
+    # **つなげば元のまま。**間引かれたぶんが出ないこと。
+    assert b"".join(chunks).endswith(EOT)
+    assert b"".join(chunks).count(b"\n") == 40
+
+
 def test_MTUが分からなければ小さい方に倒す(tmp_path: Path) -> None:
     _, _, transfer = _setup(tmp_path, records=2)
     payload, _ = _read()
